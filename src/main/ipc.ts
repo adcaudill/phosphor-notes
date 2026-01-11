@@ -2,7 +2,7 @@ import { ipcMain, dialog, BrowserWindow, app } from 'electron';
 import * as fsp from 'fs/promises';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { startIndexing, stopIndexing, getLastGraph } from './indexer';
+import { startIndexing, stopIndexing, getLastGraph, performSearch } from './indexer';
 
 // Store the active vault path in memory for this session
 let activeVaultPath: string | null = null;
@@ -78,6 +78,21 @@ export function setupIPC(mainWindow: BrowserWindow): void {
   // Return last in-memory graph if available (sent recently by indexer)
   ipcMain.handle('graph:get', async () => {
     return getLastGraph();
+  });
+
+  // Search handler
+  ipcMain.handle('vault:search', async (_, query: string) => {
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        console.warn('Search timeout for query:', query);
+        resolve([]);
+      }, 5000);
+
+      performSearch(query, (results) => {
+        clearTimeout(timeout);
+        resolve(results);
+      });
+    });
   });
 
   // 2. Read Note

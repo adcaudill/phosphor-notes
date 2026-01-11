@@ -59,6 +59,9 @@ async function tryStartWorkerFromFile(
           console.error('Failed to persist graph cache:', err);
         }
       })();
+    } else if (msg?.type === 'search-results') {
+      console.debug('Received search results:', msg.data);
+      searchResultsCallback?.(msg.data as unknown[]);
     } else if (msg?.type === 'graph-error') {
       console.error('Indexer error:', msg.error);
     }
@@ -151,6 +154,8 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
                 console.error('Failed to persist graph cache:', err);
               }
             })();
+          } else if (msg?.type === 'search-results') {
+            searchResultsCallback?.(msg.data as unknown[]);
           } else if (msg?.type === 'graph-error') {
             console.error('Indexer error:', msg.error);
           }
@@ -186,4 +191,30 @@ export function stopIndexing(): void {
 
 export function getLastGraph(): Record<string, string[]> | null {
   return lastGraph;
+}
+
+let searchResultsCallback: ((results: unknown[]) => void) | null = null;
+
+export function performSearch(query: string, callback: (results: unknown[]) => void): void {
+  if (!indexerWorker) {
+    console.warn('Search called but no indexer worker available');
+    callback([]);
+    return;
+  }
+  console.debug('Performing search for:', query);
+  searchResultsCallback = callback;
+  indexerWorker.postMessage({ type: 'search', query });
+}
+
+export function setSearchResultsHandler(handler: (results: unknown[]) => void): void {
+  searchResultsCallback = handler;
+}
+
+export function registerSearchResponseHandler(mainWindow: BrowserWindow): void {
+  if (!indexerWorker) return;
+  indexerWorker.on('message', (msg: WorkerMessage) => {
+    if (msg?.type === 'search-results') {
+      searchResultsCallback?.(msg.data as unknown[]);
+    }
+  });
 }

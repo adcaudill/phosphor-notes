@@ -2,10 +2,58 @@ import { parentPort } from 'worker_threads';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
+// MiniSearch can have import issues in worker context
+// Load it dynamically to handle both ESM and CommonJS contexts
+let MiniSearch: any;
+try {
+  const imported = require('minisearch');
+  MiniSearch = imported.default || imported;
+} catch {
+  // Fallback if require fails
+  MiniSearch = require('minisearch');
+}
+
 type Graph = Record<string, string[]>;
 
-parentPort?.on('message', async (vaultPath: string) => {
+let searchEngine: any = null;
+
+// Initialize MiniSearch
+const initSearch = (): void => {
+  searchEngine = new MiniSearch({
+    fields: ['title', 'content'],
+    storeFields: ['title', 'filename'],
+    searchOptions: {
+      boost: { title: 2 },
+      fuzzy: 0.2
+    }
+  });
+};
+
+parentPort?.on('message', async (msg: string | { type: string; query: string }) => {
+  // Handle search queries
+  if (typeof msg === 'object' && msg.type === 'search') {
+    if (!searchEngine) {
+      // Return empty results if search engine not ready yet
+      parentPort?.postMessage({
+        type: 'search-results',
+        data: []
+      });
+      return;
+    }
+    const results = searchEngine.search(msg.query, { prefix: true });
+    parentPort?.postMessage({
+      type: 'search-results',
+      data: results.slice(0, 20)
+    });
+    return;
+  }
+
+  // Handle initial indexing (vaultPath is a string)
+  const vaultPath = typeof msg === 'string' ? msg : null;
+  if (!vaultPath) return;
+
   const graph: Graph = {};
+  initSearch();
 
   try {
     const files = await getFilesRecursively(vaultPath);
@@ -26,6 +74,16 @@ parentPort?.on('message', async (vaultPath: string) => {
           }
 
           graph[filename] = links;
+
+          // Add to search index
+          if (searchEngine) {
+            searchEngine.add({
+              id: filename,
+              title: filename.replace('.md', ''),
+              filename: filename,
+              content: content
+            });
+          }
         } catch (err) {
           // ignore file read errors for robustness
           console.error('Indexer read error for', filePath, err);

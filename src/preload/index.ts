@@ -35,7 +35,9 @@ const api = {
   // Load cached graph from the currently opened vault (if any)
   getCachedGraph: () => ipcRenderer.invoke('graph:load-cache'),
   // Get last graph in memory from main (if any)
-  getLatestGraph: () => ipcRenderer.invoke('graph:get')
+  getLatestGraph: () => ipcRenderer.invoke('graph:get'),
+  // Search vault
+  search: (query: string) => ipcRenderer.invoke('vault:search', query)
 };
 
 // Expose it to the main world (Renderer)

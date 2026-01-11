@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Editor } from './components/Editor';
 import { Sidebar } from './components/Sidebar';
 import StatusBar from './components/StatusBar';
+import { CommandPalette } from './components/CommandPalette';
 
 declare global {
   interface Window {
@@ -30,6 +31,7 @@ function App(): React.JSX.Element {
   const skipSaveRef = useRef<boolean>(false);
   const [status, setStatus] = useState<{ type: string; message: string } | null>(null);
   const statusTimerRef = useRef<number | null>(null);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
   useEffect(() => {
     const init = async (): Promise<void> => {
@@ -92,7 +94,17 @@ function App(): React.JSX.Element {
       statusTimerRef.current = window.setTimeout(() => setStatus(null), 4000) as unknown as number;
     });
 
+    // Handle Cmd+K / Ctrl+K to open command palette
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setCommandPaletteOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
     return () => {
+      window.removeEventListener('keydown', handleKeyDown);
       if (unsubscribe) unsubscribe();
       if (unsubscribeStatus) unsubscribeStatus();
       if (statusTimerRef.current) window.clearTimeout(statusTimerRef.current);
@@ -197,6 +209,12 @@ function App(): React.JSX.Element {
             </div>
             <StatusBar status={status} />
           </div>
+
+          <CommandPalette
+            isOpen={commandPaletteOpen}
+            onClose={() => setCommandPaletteOpen(false)}
+            onSelect={handleFileSelect}
+          />
         </>
       ) : (
         <div className="welcome-screen">
