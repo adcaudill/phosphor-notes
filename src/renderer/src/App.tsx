@@ -86,10 +86,55 @@ function App(): React.JSX.Element {
     };
     window.addEventListener('keydown', handleKeyDown);
 
+    // Menu event listeners
+    const unsubscribeNewNote = window.phosphor.onMenuEvent?.('menu:new-note', async () => {
+      const timestamp = new Date().toISOString().split('T')[0];
+      let index = 1;
+      let filename = `Untitled ${timestamp}.md`;
+
+      // Try numbered names if file exists
+      while (true) {
+        try {
+          await window.phosphor.readNote(filename);
+          index++;
+          filename = `Untitled ${timestamp} ${index}.md`;
+        } catch {
+          // File doesn't exist, use this name
+          break;
+        }
+      }
+
+      const newContent = '---\ntags: []\n---\n\n';
+      await window.phosphor.saveNote(filename, newContent);
+      setCurrentFile(filename);
+      setContent(newContent);
+      skipSaveRef.current = false;
+      setFilesVersion((v) => v + 1);
+    });
+
+    const unsubscribeSave = window.phosphor.onMenuEvent?.('menu:save', () => {
+      if (currentFile) {
+        window.phosphor.saveNote(currentFile, content);
+      }
+    });
+
+    const unsubscribeSearch = window.phosphor.onMenuEvent?.('menu:search', () => {
+      setCommandPaletteOpen(true);
+    });
+
+    const unsubscribeToggleSidebar = window.phosphor.onMenuEvent?.('menu:toggle-sidebar', () => {
+      // Sidebar toggle logic will be added here
+      console.log('Toggle sidebar requested');
+    });
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       if (unsubscribe) unsubscribe();
       if (unsubscribeStatus) unsubscribeStatus();
+      if (unsubscribeNewNote) unsubscribeNewNote();
+      if (unsubscribeSave) unsubscribeSave();
+      if (unsubscribeSearch) unsubscribeSearch();
+      if (unsubscribeToggleSidebar) unsubscribeToggleSidebar();
       if (statusTimerRef.current) window.clearTimeout(statusTimerRef.current);
     };
   }, []);

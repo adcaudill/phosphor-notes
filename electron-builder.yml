@@ -1,4 +1,4 @@
-appId: com.electron.app
+appId: com.adamcaudill.phosphor-notes
 productName: phosphor-notes
 directories:
   buildResources: build
@@ -33,7 +33,7 @@ linux:
     - AppImage
     - snap
     - deb
-  maintainer: electronjs.org
+  maintainer: adamcaudill.com
   category: Utility
 appImage:
   artifactName: ${name}-${version}.${ext}

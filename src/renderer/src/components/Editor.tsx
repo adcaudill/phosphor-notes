@@ -6,6 +6,7 @@ import { markdown } from '@codemirror/lang-markdown';
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import { wikiLinkPlugin } from '../editor/extensions/wikiLinks';
 import { imagePreviewPlugin } from '../editor/extensions/imagePreview';
+import { frontmatterPlugin } from '../editor/extensions/frontmatter';
 
 interface EditorProps {
   initialDoc: string;
@@ -66,6 +67,7 @@ export const Editor: React.FC<EditorProps> = ({ initialDoc, onChange, onLinkClic
         // Wiki link plugin and click handler
         wikiLinkPlugin,
         imagePreviewPlugin,
+        frontmatterPlugin,
         EditorView.domEventHandlers({
           paste: (event, view) => {
             const items = event.clipboardData?.items;

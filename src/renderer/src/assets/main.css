@@ -217,7 +217,7 @@ body {
   gap: var(--spacing-sm);
 }
 
-.linked-footer > div {
+.linked-footer>div {
   display: flex;
   align-items: center;
   gap: var(--spacing-md);
@@ -369,6 +369,38 @@ body {
 .cm-image-widget:hover {
   transform: scale(1.02);
   box-shadow: var(--shadow-lg);
+}
+
+/* ============================================
+   FRONTMATTER WIDGET
+   ============================================ */
+
+.cm-frontmatter-pill {
+  display: inline-block;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+  color: var(--text-on-primary);
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  box-shadow: var(--shadow-sm);
+  margin: var(--spacing-md) 0;
+}
+
+.cm-frontmatter-pill:hover {
+  transform: scale(1.05);
+  box-shadow: var(--shadow-md);
+}
+
+@media (prefers-color-scheme: dark) {
+  .cm-frontmatter-pill {
+    background: linear-gradient(135deg, #5a7aff, #7095ff);
+    color: #fff;
+  }
 }
 
 /* ============================================

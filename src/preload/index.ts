@@ -29,6 +29,13 @@ const api = {
     return () => ipcRenderer.removeListener('phosphor:status', handler);
   },
 
+  // Event subscription for menu events
+  onMenuEvent: (eventName: string, cb: () => void) => {
+    const handler = () => cb();
+    ipcRenderer.on(eventName, handler);
+    return () => ipcRenderer.removeListener(eventName, handler);
+  },
+
   getDailyNoteFilename: () => {
     const today = new Date();
     // Format: YYYY-MM-DD.md

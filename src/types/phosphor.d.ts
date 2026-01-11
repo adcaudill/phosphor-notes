@@ -16,6 +16,7 @@ export interface PhosphorAPI {
   listFiles: () => Promise<string[]>;
   onGraphUpdate: (cb: (graph: Record<string, string[]>) => void) => () => void;
   onStatusUpdate: (cb: (status: { type: string; message: string }) => void) => () => void;
+  onMenuEvent: (eventName: string, cb: () => void) => () => void;
   getLatestGraph: () => Promise<Record<string, string[]> | null>;
   search: (query: string) => Promise<Array<{ id: string; title: string; filename: string }>>;
 }

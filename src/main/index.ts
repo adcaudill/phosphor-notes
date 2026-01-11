@@ -1,18 +1,9 @@
-import {
-  app,
-  shell,
-  BrowserWindow,
-  Menu,
-  MenuItemConstructorOptions,
-  MenuItem,
-  protocol,
-  net
-} from 'electron';
+import { app, shell, BrowserWindow, protocol, net } from 'electron';
 import { join } from 'path';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import icon from '../../resources/icon.png?asset';
 import { setupIPC, getSavedVaultPath, openVaultPath, getActiveVaultPath } from './ipc';
-import { openVaultFromMenu } from './menuHelpers';
+import { createMenu } from './menu';
 
 // Custom protocol for secure asset serving
 function setupProtocol(): void {
@@ -103,6 +94,7 @@ app.whenReady().then(async () => {
 
   const mainWindow = createWindow();
   setupIPC(mainWindow);
+  createMenu(mainWindow);
 
   // Try to auto-open the last used vault if present
   try {
@@ -122,65 +114,6 @@ app.whenReady().then(async () => {
   } catch (err) {
     console.error('Failed to auto-open last vault', err);
   }
-
-  // Add menu item to open a different vault
-  const template: (MenuItemConstructorOptions | MenuItem)[] = [];
-
-  // App menu (macOS)
-  if (process.platform === 'darwin') {
-    template.push({
-      label: app.name,
-      submenu: [
-        { role: 'about' },
-        { type: 'separator' },
-        { role: 'services' },
-        { type: 'separator' },
-        { role: 'hide' },
-        { role: 'hideOthers' },
-        { role: 'unhide' },
-        { type: 'separator' },
-        { role: 'quit' }
-      ]
-    });
-  }
-
-  // File menu with our Open Vault action
-  template.push({
-    label: 'File',
-    submenu: [
-      {
-        label: 'Open Vault...',
-        accelerator: 'CmdOrCtrl+O',
-        click: () => {
-          // use helper
-          openVaultFromMenu(mainWindow).catch((e) => console.error(e));
-        }
-      },
-      { type: 'separator' },
-      process.platform === 'darwin' ? { role: 'close' } : { role: 'quit' }
-    ]
-  });
-
-  // Standard Edit, View, Window menus
-  template.push({ role: 'editMenu' });
-  template.push({ role: 'viewMenu' });
-  template.push({ role: 'windowMenu' });
-
-  // Help menu
-  template.push({
-    role: 'help',
-    submenu: [
-      {
-        label: 'Learn More',
-        click: async () => {
-          await shell.openExternal('https://github.com/adcaudill/phosphor-notes');
-        }
-      }
-    ]
-  });
-
-  const menu = Menu.buildFromTemplate(template);
-  Menu.setApplicationMenu(menu);
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the

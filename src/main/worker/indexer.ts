@@ -17,13 +17,47 @@ type Graph = Record<string, string[]>;
 
 let searchEngine: any = null;
 
+// Parse YAML frontmatter and extract tags
+function extractTags(content: string): string[] {
+  const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!frontmatterMatch) return [];
+
+  const frontmatter = frontmatterMatch[1];
+  const tags: string[] = [];
+
+  // Match tags in multiple formats:
+  // 1. tags: [tag1, tag2] or tags: [tag1, tag2, tag3]
+  const arrayMatch = frontmatter.match(/tags:\s*\[(.*?)\]/);
+  if (arrayMatch) {
+    const tagList = arrayMatch[1].split(',').map((t) => t.trim());
+    tags.push(...tagList);
+  }
+
+  // 2. tags: tag1, tag2, tag3 (comma-separated)
+  const csvMatch = frontmatter.match(/tags:\s*([^\n]+)/);
+  if (csvMatch && !arrayMatch) {
+    const tagList = csvMatch[1].split(',').map((t) => t.trim());
+    tags.push(...tagList);
+  }
+
+  // 3. #tag1 #tag2 (hashtag format)
+  const hashtagMatches = frontmatter.matchAll(/#(\w+)/g);
+  for (const match of hashtagMatches) {
+    if (!tags.includes(match[1])) {
+      tags.push(match[1]);
+    }
+  }
+
+  return tags;
+}
+
 // Initialize MiniSearch
 const initSearch = (): void => {
   searchEngine = new MiniSearch({
-    fields: ['title', 'content'],
-    storeFields: ['title', 'filename'],
+    fields: ['title', 'content', 'tags'],
+    storeFields: ['title', 'filename', 'tags'],
     searchOptions: {
-      boost: { title: 2 },
+      boost: { title: 2, tags: 1.5 },
       fuzzy: 0.2
     }
   });
@@ -77,11 +111,13 @@ parentPort?.on('message', async (msg: string | { type: string; query: string }) 
 
           // Add to search index
           if (searchEngine) {
+            const tags = extractTags(content);
             searchEngine.add({
               id: filename,
               title: filename.replace('.md', ''),
               filename: filename,
-              content: content
+              content: content,
+              tags: tags.join(' ')
             });
           }
         } catch (err) {
