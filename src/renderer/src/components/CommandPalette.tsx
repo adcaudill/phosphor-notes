@@ -1,23 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-
-interface SearchResult {
-  id: string;
-  title: string;
-  filename: string;
-}
+import { flushSync } from 'react-dom';
+import { SearchResult } from '../../../types/phosphor';
 
 interface CommandPaletteProps {
   isOpen: boolean;
   onClose: () => void;
   onSelect: (filename: string) => void;
-}
-
-declare global {
-  interface Window {
-    phosphor: {
-      search: (query: string) => Promise<SearchResult[]>;
-    };
-  }
 }
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose, onSelect }) => {
@@ -30,20 +18,22 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
   // 1. Focus input when opened and reset state
   useEffect(() => {
     if (isOpen) {
-      setQuery('');
-      setResults([]);
-      setSelectedIndex(0);
+      flushSync(() => {
+        setQuery('');
+        setResults([]);
+        setSelectedIndex(0);
+      });
       // Focus after state is reset
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 0);
+      inputRef.current?.focus();
     }
   }, [isOpen]);
 
   // 2. Handle Typing (Search)
   useEffect(() => {
     if (!query) {
-      setResults([]);
+      flushSync(() => {
+        setResults([]);
+      });
       return;
     }
 
@@ -54,8 +44,10 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
     debounceTimer.current = window.setTimeout(async () => {
       try {
         const hits = await window.phosphor.search(query);
-        setResults(hits || []);
-        setSelectedIndex(0);
+        flushSync(() => {
+          setResults(hits || []);
+          setSelectedIndex(0);
+        });
       } catch (err) {
         console.error('Search failed:', err);
         setResults([]);

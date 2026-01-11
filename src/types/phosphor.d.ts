@@ -24,3 +24,9 @@ declare global {
     phosphor: PhosphorAPI;
   }
 }
+
+interface SearchResult {
+  id: string;
+  title: string;
+  filename: string;
+}

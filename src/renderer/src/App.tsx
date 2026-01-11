@@ -3,23 +3,7 @@ import { Editor } from './components/Editor';
 import { Sidebar } from './components/Sidebar';
 import StatusBar from './components/StatusBar';
 import { CommandPalette } from './components/CommandPalette';
-
-declare global {
-  interface Window {
-    phosphor: {
-      selectVault: () => Promise<string | null>;
-      getCurrentVault?: () => Promise<string | null>;
-      getCachedGraph?: () => Promise<Record<string, string[]> | null>;
-      getDailyNoteFilename: () => Promise<string>;
-      readNote: (filename: string) => Promise<string>;
-      saveNote: (filename: string, content: string) => Promise<void>;
-      onGraphUpdate: (cb: (graph: Record<string, string[]>) => void) => (() => void) | void;
-      onStatusUpdate: (
-        cb: (s: { type: string; message: string } | null) => void
-      ) => (() => void) | void;
-    };
-  }
-}
+import {} from '../../types/phosphor';
 
 function App(): React.JSX.Element {
   const [content, setContent] = useState('');
@@ -95,7 +79,7 @@ function App(): React.JSX.Element {
     });
 
     // Handle Cmd+K / Ctrl+K to open command palette
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = (e: KeyboardEvent): void => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         setCommandPaletteOpen(true);
