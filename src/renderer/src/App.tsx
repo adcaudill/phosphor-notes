@@ -3,7 +3,6 @@ import { Editor } from './components/Editor';
 import { Sidebar } from './components/Sidebar';
 import StatusBar from './components/StatusBar';
 import { CommandPalette } from './components/CommandPalette';
-import {} from '../../types/phosphor';
 
 function App(): React.JSX.Element {
   const [content, setContent] = useState('');

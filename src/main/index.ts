@@ -8,10 +8,16 @@ import { openVaultFromMenu } from './menuHelpers';
 function createWindow(): BrowserWindow {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
+    width: 1100,
+    height: 800,
     show: false,
     autoHideMenuBar: true,
+    // macOS native window styling
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    vibrancy: process.platform === 'darwin' ? 'sidebar' : undefined,
+    visualEffectState: 'active',
+    backgroundColor: '#00000000', // Transparent background for vibrancy effect
+    trafficLightPosition: process.platform === 'darwin' ? { x: 15, y: 12 } : undefined,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

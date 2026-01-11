@@ -3,36 +3,37 @@ import React from 'react';
 export type Status = { type: string; message: string } | null;
 
 export function StatusBar({ status }: { status: Status }): React.JSX.Element {
-  const baseStyle: React.CSSProperties = {
-    width: '100%',
-    minHeight: 36,
-    padding: '8px 12px',
-    borderTop: '1px solid #eee',
-    display: 'flex',
-    alignItems: 'center',
-    fontSize: 13,
-    background: '#fafafa',
-    color: '#333'
-  };
+    const getIcon = (type?: string): string => {
+        switch (type) {
+            case 'indexing-started':
+                return '⟳';
+            case 'indexing-complete':
+                return '✓';
+            case 'cache-loaded':
+                return '📦';
+            case 'vault-opened':
+                return '📁';
+            case 'error':
+                return '⚠';
+            default:
+                return '';
+        }
+    };
 
-  const getHighlight = (type?: string): React.CSSProperties => {
-    switch (type) {
-      case 'indexing-started':
-        return { background: '#fff8e1' };
-      case 'indexing-complete':
-        return { background: '#e8f5e9' };
-      case 'error':
-        return { background: '#ffebee', color: '#a00' };
-      default:
-        return {};
-    }
-  };
+    const statusClass = status ? status.type : 'idle';
 
-  return (
-    <div style={{ ...baseStyle, ...(status ? getHighlight(status.type) : {}) }}>
-      {status ? <span>{status.message}</span> : <span style={{ opacity: 0.6 }}> </span>}
-    </div>
-  );
+    return (
+        <div className={`status-bar ${statusClass}`}>
+            {status ? (
+                <>
+                    <span className="status-bar-icon">{getIcon(status.type)}</span>
+                    <span className="status-bar-message">{status.message}</span>
+                </>
+            ) : (
+                <span className="status-bar-message">Ready</span>
+            )}
+        </div>
+    );
 }
 
 export default StatusBar;

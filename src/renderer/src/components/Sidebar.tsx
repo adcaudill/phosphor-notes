@@ -20,6 +20,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onFileSelect, activeFile, refr
 
   return (
     <div className="sidebar">
+      <div className="sidebar-drag-area" />
       <h2>Notes</h2>
       <ul>
         {files.map((file) => (
@@ -29,7 +30,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onFileSelect, activeFile, refr
             onClick={() => {
               try {
                 console.debug('Sidebar click:', file);
-              } catch {}
+              } catch { }
               onFileSelect(file);
             }}
           >

@@ -4,7 +4,6 @@ import {
   EditorView,
   ViewPlugin,
   ViewUpdate,
-  WidgetType,
   MatchDecorator
 } from '@codemirror/view';
 

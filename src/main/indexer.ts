@@ -210,7 +210,7 @@ export function setSearchResultsHandler(handler: (results: unknown[]) => void): 
   searchResultsCallback = handler;
 }
 
-export function registerSearchResponseHandler(mainWindow: BrowserWindow): void {
+export function registerSearchResponseHandler(): void {
   if (!indexerWorker) return;
   indexerWorker.on('message', (msg: WorkerMessage) => {
     if (msg?.type === 'search-results') {

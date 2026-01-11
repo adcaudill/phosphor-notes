@@ -115,5 +115,11 @@ export const Editor: React.FC<EditorProps> = ({ initialDoc, onChange, onLinkClic
     }
   }, [initialDoc]);
 
-  return <div ref={editorRef} style={{ flex: 1, minHeight: 0, overflow: 'hidden' }} />;
+  return (
+    <div
+      ref={editorRef}
+      style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}
+      className="editor-container"
+    />
+  );
 };
