@@ -3,9 +3,10 @@ import React, { useState, useEffect } from 'react';
 interface SidebarProps {
   onFileSelect: (filename: string) => void;
   activeFile: string | null;
+  refreshSignal?: number;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ onFileSelect, activeFile }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ onFileSelect, activeFile, refreshSignal }) => {
   const [files, setFiles] = useState<string[]>([]);
 
   useEffect(() => {
@@ -15,7 +16,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onFileSelect, activeFile }) =>
     };
 
     fetchFiles();
-  }, []);
+  }, [refreshSignal]);
 
   return (
     <div className="sidebar">

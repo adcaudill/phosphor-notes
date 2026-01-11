@@ -7,7 +7,7 @@
   width: 250px;
   background-color: #f0f0f0;
   padding: 20px;
-  box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
   overflow-y: auto;
 }
 
@@ -49,4 +49,19 @@
   justify-content: center;
   align-items: center;
   height: 100vh;
+}
+
+/* Wiki link styles for CodeMirror matches */
+.cm-wiki-link {
+  color: #7e57c2;
+  /* Phosphor purple */
+  text-decoration: none;
+  cursor: pointer;
+  font-weight: 500;
+  transition: opacity 0.15s;
+}
+
+.cm-wiki-link:hover {
+  text-decoration: underline;
+  opacity: 0.85;
 }

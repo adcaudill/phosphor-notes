@@ -1,16 +1,18 @@
 import React, { useEffect, useRef } from 'react';
 import { EditorState } from '@codemirror/state';
-import { EditorView, keymap } from '@codemirror/view';
+import { EditorView, keymap, lineWrapping } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
+import { wikiLinkPlugin } from '../editor/extensions/wikiLinks';
 
 interface EditorProps {
   initialDoc: string;
   onChange: (doc: string) => void;
+  onLinkClick?: (link: string) => void;
 }
 
-export const Editor: React.FC<EditorProps> = ({ initialDoc, onChange }) => {
+export const Editor: React.FC<EditorProps> = ({ initialDoc, onChange, onLinkClick }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView>();
 
@@ -22,24 +24,41 @@ export const Editor: React.FC<EditorProps> = ({ initialDoc, onChange }) => {
       doc: initialDoc,
       extensions: [
         keymap.of([...defaultKeymap, ...historyKeymap]), // Cmd+Z, Enter, etc.
-        EditorView.lineWrapping, // Soft wrap long lines
+        lineWrapping, // Soft wrap long lines
         markdown(), // Markdown syntax support
         history(), // Undo/Redo stack
         syntaxHighlighting(defaultHighlightStyle), // Colors
-        
+
         // 2. Listener for changes
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             onChange(update.state.doc.toString());
           }
         }),
-        
+
         // 3. Visual Styling (Minimalist Theme)
         EditorView.theme({
           "&": { height: "100%", fontSize: "16px" },
           ".cm-scroller": { fontFamily: "Menlo, Monaco, 'Courier New', monospace" },
           ".cm-content": { caretColor: "#569cd6", maxWidth: "800px", margin: "0 auto", padding: "40px" },
           "&.cm-focused": { outline: "none" }
+        })
+        ,
+        // Wiki link plugin and click handler
+        wikiLinkPlugin,
+        EditorView.domEventHandlers({
+          mousedown: (event) => {
+            const target = event.target as HTMLElement;
+            if (target && target.matches && target.matches('.cm-wiki-link')) {
+              const linkTarget = target.getAttribute('data-link-target') || undefined;
+              if (linkTarget && typeof onLinkClick === 'function') {
+                event.preventDefault();
+                onLinkClick(linkTarget);
+                return true;
+              }
+            }
+            return false;
+          }
         })
       ],
     });

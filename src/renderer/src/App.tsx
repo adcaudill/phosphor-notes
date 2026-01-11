@@ -6,6 +6,7 @@ function App(): React.JSX.Element {
   const [content, setContent] = useState('')
   const [vaultName, setVaultName] = useState<string | null>(null)
   const [currentFile, setCurrentFile] = useState<string | null>(null)
+  const [filesVersion, setFilesVersion] = useState<number>(0)
   const debounceTimer = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
@@ -44,13 +45,25 @@ function App(): React.JSX.Element {
     setCurrentFile(filename);
   }
 
+  const handleLinkClick = async (linkText: string) => {
+    const filename = linkText.endsWith('.md') ? linkText : `${linkText}.md`;
+    // readNote will create the file if missing (per main IPC behavior)
+    const content = await window.phosphor.readNote(filename);
+    setCurrentFile(filename);
+    setContent(content);
+    // Trigger a save to ensure it appears in sidebar immediately
+    await window.phosphor.saveNote(filename, content);
+    // Bump filesVersion so Sidebar re-fetches
+    setFilesVersion(v => v + 1);
+  }
+
   return (
     <div className="app-container">
       {vaultName ? (
         <>
-          <Sidebar onFileSelect={handleFileSelect} activeFile={currentFile} />
+          <Sidebar onFileSelect={handleFileSelect} activeFile={currentFile} refreshSignal={filesVersion} />
           <main className="main-content">
-            <Editor initialDoc={content} onChange={handleContentChange} />
+            <Editor initialDoc={content} onChange={handleContentChange} onLinkClick={handleLinkClick} />
           </main>
         </>
       ) : (
