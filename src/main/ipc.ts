@@ -2,7 +2,7 @@ import { ipcMain, dialog, BrowserWindow, app } from 'electron';
 import * as fsp from 'fs/promises';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { startIndexing, stopIndexing } from './indexer';
+import { startIndexing, stopIndexing, getLastGraph } from './indexer';
 
 // Store the active vault path in memory for this session
 let activeVaultPath: string | null = null;
@@ -61,6 +61,23 @@ export function setupIPC(mainWindow: BrowserWindow): void {
   ipcMain.handle('vault:current', async () => {
     if (!activeVaultPath) return null;
     return path.basename(activeVaultPath);
+  });
+
+  // Return cached graph if present (read from vault .phosphor/graph.json)
+  ipcMain.handle('graph:load-cache', async () => {
+    if (!activeVaultPath) return null;
+    try {
+      const cachePath = path.join(activeVaultPath, '.phosphor', 'graph.json');
+      const raw = await fsp.readFile(cachePath, 'utf-8');
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  });
+
+  // Return last in-memory graph if available (sent recently by indexer)
+  ipcMain.handle('graph:get', async () => {
+    return getLastGraph();
   });
 
   // 2. Read Note

@@ -11,6 +11,7 @@ interface WorkerMessage {
 }
 
 let indexerWorker: Worker | null = null;
+let lastGraph: Record<string, string[]> | null = null;
 
 async function tryStartWorkerFromFile(
   workerPath: string,
@@ -31,8 +32,9 @@ async function tryStartWorkerFromFile(
 
   indexerWorker.on('message', (msg: WorkerMessage) => {
     if (msg?.type === 'graph-complete') {
-      const graph = msg.data as object;
+      const graph = msg.data as object as Record<string, string[]>;
       console.log('Graph indexing complete. Nodes:', Object.keys(graph).length);
+      lastGraph = graph as Record<string, string[]>;
       mainWindow.webContents.send('phosphor:graph-update', graph);
       try {
         mainWindow.webContents.send('phosphor:status', {
@@ -79,8 +81,10 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
       indexerWorker = null;
     }
 
+    console.log('Indexer: workerPath=', workerPath, 'exists?', fs.existsSync(workerPath));
     if (fs.existsSync(workerPath)) {
       // Normal: run compiled worker
+      console.log('Indexer: starting compiled worker');
       await tryStartWorkerFromFile(workerPath, vaultPath, mainWindow);
       return;
     }
@@ -89,6 +93,10 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
     const possibleSrc = resolve(process.cwd(), 'src', 'main', 'worker', 'indexer.ts');
     if (fs.existsSync(possibleSrc)) {
       try {
+        console.log(
+          'Indexer: compiled worker missing, using runtime TS fallback from',
+          possibleSrc
+        );
         const tsCode = fs.readFileSync(possibleSrc, 'utf-8');
         // Transpile with Typescript at runtime to CommonJS
         // Import lazily to avoid top-level dependency when not needed
@@ -116,8 +124,9 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
 
         indexerWorker.on('message', (msg: WorkerMessage) => {
           if (msg?.type === 'graph-complete') {
-            const graph = msg.data as object;
+            const graph = msg.data as object as Record<string, string[]>;
             console.log('Graph indexing complete. Nodes:', Object.keys(graph).length);
+            lastGraph = graph as Record<string, string[]>;
             mainWindow.webContents.send('phosphor:graph-update', graph);
             try {
               mainWindow.webContents.send('phosphor:status', {
@@ -127,6 +136,21 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
             } catch (err) {
               console.warn('Failed to send status to renderer:', err);
             }
+            // Persist the graph atomically into the vault
+            (async () => {
+              try {
+                if (!vaultPath) return;
+                const cacheDir = join(vaultPath, '.phosphor');
+                await fsp.mkdir(cacheDir, { recursive: true });
+                const tmpPath = join(cacheDir, 'graph.json.tmp');
+                const outPath = join(cacheDir, 'graph.json');
+                await fsp.writeFile(tmpPath, JSON.stringify(graph), 'utf-8');
+                await fsp.rename(tmpPath, outPath);
+                console.log('Graph cache saved to', outPath);
+              } catch (err) {
+                console.error('Failed to persist graph cache:', err);
+              }
+            })();
           } else if (msg?.type === 'graph-error') {
             console.error('Indexer error:', msg.error);
           }
@@ -135,6 +159,7 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
         indexerWorker.on('error', (err) => console.error('Indexer worker error:', err));
 
         indexerWorker.postMessage(vaultPath);
+        console.log('Indexer: runtime-transpiled worker started');
         return;
       } catch (err) {
         console.error('Runtime transpile failed:', err);
@@ -157,4 +182,8 @@ export function stopIndexing(): void {
     }
     indexerWorker = null;
   }
+}
+
+export function getLastGraph(): Record<string, string[]> | null {
+  return lastGraph;
 }

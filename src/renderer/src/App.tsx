@@ -8,6 +8,7 @@ declare global {
     phosphor: {
       selectVault: () => Promise<string | null>;
       getCurrentVault?: () => Promise<string | null>;
+      getCachedGraph?: () => Promise<Record<string, string[]> | null>;
       getDailyNoteFilename: () => Promise<string>;
       readNote: (filename: string) => Promise<string>;
       saveNote: (filename: string, content: string) => Promise<void>;
@@ -48,10 +49,31 @@ function App(): React.JSX.Element {
       } else {
         console.log('No vault selected');
       }
+
+      // Load cached graph (in case main sent it before renderer subscribed)
+      try {
+        const cached = await window.phosphor.getCachedGraph?.();
+        console.debug('Cached graph loaded (raw):', cached ? Object.keys(cached).length : 0);
+        if (cached) {
+          const bl: Record<string, string[]> = {};
+          Object.entries(cached).forEach(([source, links]) => {
+            links.forEach((target) => {
+              if (!bl[target]) bl[target] = [];
+              bl[target].push(source);
+            });
+          });
+          setBacklinks(bl);
+          console.debug('Backlinks computed from cached graph, keys:', Object.keys(bl).length);
+        }
+      } catch (e) {
+        console.warn('Failed to load cached graph', e);
+      }
     };
     init();
+
     // subscribe to graph updates
     const unsubscribe = window.phosphor.onGraphUpdate((graph) => {
+      console.debug('Received graph update, raw keys:', Object.keys(graph).length, graph);
       const bl: Record<string, string[]> = {};
       Object.entries(graph).forEach(([source, links]) => {
         links.forEach((target) => {
@@ -60,6 +82,7 @@ function App(): React.JSX.Element {
         });
       });
       setBacklinks(bl);
+      console.debug('Backlinks keys:', Object.keys(bl).slice(0, 50));
     });
 
     // subscribe to status updates
@@ -107,6 +130,18 @@ function App(): React.JSX.Element {
       console.error('Failed to read note', filename, err);
     }
   };
+
+  useEffect(() => {
+    console.debug('Current file changed ->', currentFile);
+    if (currentFile) {
+      const list = backlinks[currentFile] || [];
+      console.debug(`Backlinks for ${currentFile}:`, list.length, list);
+    }
+  }, [currentFile]);
+
+  useEffect(() => {
+    console.debug('Backlinks changed ->', backlinks);
+  }, [backlinks]);
 
   const handleLinkClick = async (linkText: string): Promise<void> => {
     const filename = linkText.endsWith('.md') ? linkText : `${linkText}.md`;

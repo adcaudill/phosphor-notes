@@ -10,6 +10,7 @@ export interface PhosphorAPI {
   saveNote: (filename: string, content: string) => Promise<boolean>;
 
   getDailyNoteFilename: () => Promise<string>; // Returns 'YYYY-MM-DD.md'
+  getCachedGraph: () => Promise<Record<string, string[]> | null>;
 
   listFiles: () => Promise<string[]>;
   onGraphUpdate: (cb: (graph: Record<string, string[]>) => void) => () => void;

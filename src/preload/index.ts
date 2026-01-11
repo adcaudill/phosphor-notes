@@ -31,7 +31,11 @@ const api = {
     // Format: YYYY-MM-DD.md
     const filename = today.toISOString().split('T')[0] + '.md';
     return Promise.resolve(filename);
-  }
+  },
+  // Load cached graph from the currently opened vault (if any)
+  getCachedGraph: () => ipcRenderer.invoke('graph:load-cache'),
+  // Get last graph in memory from main (if any)
+  getLatestGraph: () => ipcRenderer.invoke('graph:get')
 };
 
 // Expose it to the main world (Renderer)
