@@ -133,6 +133,31 @@ export function setupIPC(mainWindow: BrowserWindow): void {
     }
   });
 
+  // Save Asset (image/media) - returns filename
+  ipcMain.handle('asset:save', async (_, buffer: ArrayBuffer, originalName: string) => {
+    if (!activeVaultPath) throw new Error('No vault selected');
+
+    try {
+      // Ensure _assets folder exists
+      const assetsPath = path.join(activeVaultPath, '_assets');
+      await fsp.mkdir(assetsPath, { recursive: true });
+
+      // Generate filename: timestamp + sanitized original name
+      const timestamp = Date.now();
+      const ext = path.extname(originalName);
+      const safeName = `${timestamp}${ext}`;
+      const filePath = path.join(assetsPath, safeName);
+
+      // Write the buffer to file
+      await fsp.writeFile(filePath, Buffer.from(buffer));
+
+      return safeName; // Return just the filename, not the full path
+    } catch (err) {
+      console.error('Failed to save asset:', err);
+      throw err;
+    }
+  });
+
   // 4. List Files
   ipcMain.handle('vault:list', async () => {
     if (!activeVaultPath) return [];
@@ -207,4 +232,8 @@ export async function openVaultPath(vaultPath: string, mainWindow: BrowserWindow
 
 export async function getSavedVaultPath(): Promise<string | null> {
   return loadLastVault();
+}
+
+export function getActiveVaultPath(): string | null {
+  return activeVaultPath;
 }

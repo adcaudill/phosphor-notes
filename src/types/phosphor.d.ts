@@ -8,6 +8,7 @@ export interface PhosphorAPI {
   // File Operations
   readNote: (filename: string) => Promise<string>;
   saveNote: (filename: string, content: string) => Promise<boolean>;
+  saveAsset: (buffer: ArrayBuffer, originalName: string) => Promise<string>; // Returns filename
 
   getDailyNoteFilename: () => Promise<string>; // Returns 'YYYY-MM-DD.md'
   getCachedGraph: () => Promise<Record<string, string[]> | null>;

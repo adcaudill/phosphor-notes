@@ -1,9 +1,48 @@
-import { app, shell, BrowserWindow, Menu, MenuItemConstructorOptions, MenuItem } from 'electron';
+import {
+  app,
+  shell,
+  BrowserWindow,
+  Menu,
+  MenuItemConstructorOptions,
+  MenuItem,
+  protocol,
+  net
+} from 'electron';
 import { join } from 'path';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import icon from '../../resources/icon.png?asset';
-import { setupIPC, getSavedVaultPath, openVaultPath } from './ipc';
+import { setupIPC, getSavedVaultPath, openVaultPath, getActiveVaultPath } from './ipc';
 import { openVaultFromMenu } from './menuHelpers';
+
+// Custom protocol for secure asset serving
+function setupProtocol(): void {
+  protocol.handle('phosphor', async (request) => {
+    const vaultPath = getActiveVaultPath();
+    if (!vaultPath) {
+      return new Response('No vault active', { status: 404 });
+    }
+
+    // Strip the protocol and get the file path relative to vault
+    const filePath = request.url.slice('phosphor://'.length);
+
+    // Security: Ensure the path is within the vault and _assets folder
+    const fullPath = join(vaultPath, '_assets', filePath);
+    const normalized = join(fullPath);
+    const vaultAssetsPath = join(vaultPath, '_assets');
+
+    // Ensure the resolved path is within _assets
+    if (!normalized.startsWith(vaultAssetsPath)) {
+      return new Response('Access denied', { status: 403 });
+    }
+
+    try {
+      return await net.fetch(new URL(`file://${normalized}`).href);
+    } catch (err) {
+      console.error('Failed to serve asset:', filePath, err);
+      return new Response('Not found', { status: 404 });
+    }
+  });
+}
 
 function createWindow(): BrowserWindow {
   // Create the browser window.
@@ -51,6 +90,9 @@ function createWindow(): BrowserWindow {
 app.whenReady().then(async () => {
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron');
+
+  // Register custom phosphor:// protocol for asset serving
+  setupProtocol();
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.

@@ -217,7 +217,7 @@ body {
   gap: var(--spacing-sm);
 }
 
-.linked-footer>div {
+.linked-footer > div {
   display: flex;
   align-items: center;
   gap: var(--spacing-md);
@@ -340,6 +340,35 @@ body {
   color: var(--color-primary-dark);
   background: rgba(124, 58, 237, 0.15);
   text-decoration: underline;
+}
+
+/* ============================================
+   IMAGE PREVIEW WIDGET
+   ============================================ */
+
+.cm-image-widget-wrapper {
+  display: block;
+  margin: var(--spacing-md) 0;
+  width: 100%;
+}
+
+.cm-image-widget {
+  max-width: 100%;
+  max-height: 500px;
+  width: auto;
+  height: auto;
+  display: block;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.cm-image-widget:hover {
+  transform: scale(1.02);
+  box-shadow: var(--shadow-lg);
 }
 
 /* ============================================

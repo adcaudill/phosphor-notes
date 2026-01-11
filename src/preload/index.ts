@@ -10,6 +10,9 @@ const api = {
   saveNote: (filename: string, content: string) =>
     ipcRenderer.invoke('note:save', filename, content),
 
+  saveAsset: (buffer: ArrayBuffer, originalName: string) =>
+    ipcRenderer.invoke('asset:save', buffer, originalName),
+
   listFiles: () => ipcRenderer.invoke('vault:list'),
 
   // Event subscription for graph updates

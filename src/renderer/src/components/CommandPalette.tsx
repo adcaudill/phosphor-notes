@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { flushSync } from 'react-dom';
 import { SearchResult } from '../../../types/phosphor';
 
 interface CommandPaletteProps {
@@ -18,22 +17,20 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
   // 1. Focus input when opened and reset state
   useEffect(() => {
     if (isOpen) {
-      flushSync(() => {
-        setQuery('');
-        setResults([]);
-        setSelectedIndex(0);
+      setQuery('');
+      setResults([]);
+      setSelectedIndex(0);
+      // Focus after render (micro-task)
+      queueMicrotask(() => {
+        inputRef.current?.focus();
       });
-      // Focus after state is reset
-      inputRef.current?.focus();
     }
   }, [isOpen]);
 
   // 2. Handle Typing (Search)
   useEffect(() => {
     if (!query) {
-      flushSync(() => {
-        setResults([]);
-      });
+      setResults([]);
       return;
     }
 
@@ -44,10 +41,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
     debounceTimer.current = window.setTimeout(async () => {
       try {
         const hits = await window.phosphor.search(query);
-        flushSync(() => {
-          setResults(hits || []);
-          setSelectedIndex(0);
-        });
+        setResults(hits || []);
+        setSelectedIndex(0);
       } catch (err) {
         console.error('Search failed:', err);
         setResults([]);

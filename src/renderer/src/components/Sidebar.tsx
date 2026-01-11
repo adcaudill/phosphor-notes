@@ -30,7 +30,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onFileSelect, activeFile, refr
             onClick={() => {
               try {
                 console.debug('Sidebar click:', file);
-              } catch { }
+              } catch {}
               onFileSelect(file);
             }}
           >

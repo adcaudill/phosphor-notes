@@ -5,6 +5,7 @@ import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import { wikiLinkPlugin } from '../editor/extensions/wikiLinks';
+import { imagePreviewPlugin } from '../editor/extensions/imagePreview';
 
 interface EditorProps {
   initialDoc: string;
@@ -64,7 +65,67 @@ export const Editor: React.FC<EditorProps> = ({ initialDoc, onChange, onLinkClic
         }),
         // Wiki link plugin and click handler
         wikiLinkPlugin,
+        imagePreviewPlugin,
         EditorView.domEventHandlers({
+          paste: (event, view) => {
+            const items = event.clipboardData?.items;
+            if (!items) return false;
+
+            for (const item of items) {
+              if (item.type.startsWith('image/')) {
+                event.preventDefault();
+
+                const file = item.getAsFile();
+                if (!file) return true;
+
+                // Read file as ArrayBuffer and save via IPC
+                file.arrayBuffer().then(async (buffer) => {
+                  try {
+                    const filename = await window.phosphor.saveAsset(buffer, file.name);
+                    const text = `![[${filename}]]`;
+                    view.dispatch(view.state.replaceSelection(text));
+                  } catch (err) {
+                    console.error('Failed to save asset:', err);
+                  }
+                });
+
+                return true;
+              }
+            }
+            return false;
+          },
+          drop: (event, view) => {
+            const files = event.dataTransfer?.files;
+            if (!files) return false;
+
+            for (const file of files) {
+              if (file.type.startsWith('image/')) {
+                event.preventDefault();
+
+                // Get drop position
+                const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+                if (pos === null) return true;
+
+                file.arrayBuffer().then(async (buffer) => {
+                  try {
+                    const filename = await window.phosphor.saveAsset(buffer, file.name);
+                    const text = `![[${filename}]]`;
+                    view.dispatch({
+                      changes: {
+                        from: pos,
+                        insert: text
+                      }
+                    });
+                  } catch (err) {
+                    console.error('Failed to save asset:', err);
+                  }
+                });
+
+                return true;
+              }
+            }
+            return false;
+          },
           click: (event) => {
             try {
               const target = event.target as HTMLElement | null;
