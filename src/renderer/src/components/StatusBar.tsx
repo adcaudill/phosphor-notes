@@ -4,6 +4,7 @@ export type Status = { type: string; message: string } | null;
 
 export function StatusBar({ status }: { status: Status }): React.JSX.Element {
   const baseStyle: React.CSSProperties = {
+    width: '100%',
     minHeight: 36,
     padding: '8px 12px',
     borderTop: '1px solid #eee',

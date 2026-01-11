@@ -117,21 +117,23 @@ function App(): React.JSX.Element {
     <div className="app-container">
       {vaultName ? (
         <>
-          <Sidebar
-            onFileSelect={handleFileSelect}
-            activeFile={currentFile}
-            refreshSignal={filesVersion}
-          />
-          <main className="main-content">
-            <Editor
-              initialDoc={content}
-              onChange={handleContentChange}
-              onLinkClick={handleLinkClick}
+          <div className="content-wrap">
+            <Sidebar
+              onFileSelect={handleFileSelect}
+              activeFile={currentFile}
+              refreshSignal={filesVersion}
             />
-            <StatusBar status={status} />
-            <footer
-              style={{ padding: '12px 20px', borderTop: '1px solid #eee', background: '#fafafa' }}
-            >
+            <main className="main-content">
+              <Editor
+                initialDoc={content}
+                onChange={handleContentChange}
+                onLinkClick={handleLinkClick}
+              />
+            </main>
+          </div>
+
+          <div className="app-footer">
+            <div className="linked-footer">
               {currentFile ? (
                 <div>
                   <strong>Linked from:</strong>{' '}
@@ -150,8 +152,9 @@ function App(): React.JSX.Element {
                   )}
                 </div>
               ) : null}
-            </footer>
-          </main>
+            </div>
+            <StatusBar status={status} />
+          </div>
         </>
       ) : (
         <div className="welcome-screen">
