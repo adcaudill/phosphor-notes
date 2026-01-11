@@ -3,10 +3,16 @@ import React, { useState, useEffect } from 'react';
 interface SidebarProps {
   onFileSelect: (filename: string) => void;
   activeFile: string | null;
+  isDirty: boolean;
   refreshSignal?: number;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ onFileSelect, activeFile, refreshSignal }) => {
+export const Sidebar: React.FC<SidebarProps> = ({
+  onFileSelect,
+  activeFile,
+  isDirty,
+  refreshSignal
+}) => {
   const [files, setFiles] = useState<string[]>([]);
 
   useEffect(() => {
@@ -35,6 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onFileSelect, activeFile, refr
             }}
           >
             {file}
+            {file === activeFile && isDirty && <span className="dirty-indicator">•</span>}
           </li>
         ))}
       </ul>

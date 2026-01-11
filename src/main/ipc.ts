@@ -3,6 +3,7 @@ import * as fsp from 'fs/promises';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { startIndexing, stopIndexing, getLastGraph, performSearch } from './indexer';
+import { setupWatcher, stopWatcher, markInternalSave } from './watcher';
 
 // Store the active vault path in memory for this session
 let activeVaultPath: string | null = null;
@@ -125,6 +126,7 @@ export function setupIPC(mainWindow: BrowserWindow): void {
     const filePath = path.join(activeVaultPath, safeName);
 
     try {
+      markInternalSave(); // Mark this as an internal save to avoid false conflict detection
       await fs.writeFile(filePath, content, 'utf-8');
       return true;
     } catch (err) {
@@ -178,14 +180,22 @@ export function setupIPC(mainWindow: BrowserWindow): void {
 
 // Programmatically open a vault path (used on startup or from menu)
 export async function openVaultPath(vaultPath: string, mainWindow: BrowserWindow): Promise<void> {
-  // Stop any existing indexer before switching vaults
+  // Stop any existing indexer and watcher before switching vaults
   try {
     stopIndexing();
+    stopWatcher();
   } catch (err) {
-    console.warn('Error stopping previous indexer (continuing):', err);
+    console.warn('Error stopping previous indexer/watcher (continuing):', err);
   }
 
   activeVaultPath = vaultPath;
+
+  // Start file watcher for this vault
+  try {
+    setupWatcher(activeVaultPath, mainWindow);
+  } catch (err) {
+    console.error('Failed to start watcher:', err);
+  }
 
   // send cached graph if available
   try {

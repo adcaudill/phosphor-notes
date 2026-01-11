@@ -15,6 +15,8 @@ function App(): React.JSX.Element {
   const [status, setStatus] = useState<{ type: string; message: string } | null>(null);
   const statusTimerRef = useRef<number | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [conflict, setConflict] = useState<string | null>(null); // Filename that has a conflict
+  const [isDirty, setIsDirty] = useState(false); // Whether current file has unsaved changes
 
   useEffect(() => {
     const init = async (): Promise<void> => {
@@ -127,6 +129,58 @@ function App(): React.JSX.Element {
       console.log('Toggle sidebar requested');
     });
 
+    // File change watchers - external file modifications
+    const unsubscribeFileChanged = window.phosphor.onFileChanged?.((filename: string) => {
+      console.debug('[FileWatcher] File changed externally:', filename);
+
+      // Check if this is the currently open file
+      if (filename === currentFile) {
+        if (isDirty) {
+          // User has unsaved changes - show conflict banner
+          console.warn('[FileWatcher] Conflict detected for:', filename);
+          setConflict(filename);
+        } else {
+          // Safe to reload - just update content silently
+          console.debug('[FileWatcher] Reloading content for:', filename);
+          window.phosphor.readNote(filename).then((newContent) => {
+            skipSaveRef.current = true;
+            setContent(newContent);
+            setTimeout(() => {
+              skipSaveRef.current = false;
+            }, 100);
+          });
+        }
+      }
+      // If it's a different file, refresh sidebar to show updated state
+      setFilesVersion((v) => v + 1);
+    });
+
+    const unsubscribeFileDeleted = window.phosphor.onFileDeleted?.((filename: string) => {
+      console.debug('[FileWatcher] File deleted externally:', filename);
+
+      // If currently open file was deleted, clear it
+      if (filename === currentFile) {
+        setContent('');
+        setCurrentFile(null);
+        setConflict(null);
+        setStatus({ type: 'warning', message: `File deleted: ${filename}` });
+      }
+
+      // Refresh sidebar
+      setFilesVersion((v) => v + 1);
+    });
+
+    const unsubscribeFileAdded = window.phosphor.onFileAdded?.((filename: string) => {
+      console.debug('[FileWatcher] File added externally:', filename);
+      // Refresh sidebar to show new file
+      setFilesVersion((v) => v + 1);
+    });
+
+    // Listen for app quit check and respond with unsaved status
+    const unsubscribeCheckUnsaved = window.phosphor.onCheckUnsavedChanges?.(() => {
+      return isDirty; // Return whether there are unsaved changes
+    });
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       if (unsubscribe) unsubscribe();
@@ -135,12 +189,17 @@ function App(): React.JSX.Element {
       if (unsubscribeSave) unsubscribeSave();
       if (unsubscribeSearch) unsubscribeSearch();
       if (unsubscribeToggleSidebar) unsubscribeToggleSidebar();
+      if (unsubscribeFileChanged) unsubscribeFileChanged();
+      if (unsubscribeFileDeleted) unsubscribeFileDeleted();
+      if (unsubscribeFileAdded) unsubscribeFileAdded();
+      if (unsubscribeCheckUnsaved) unsubscribeCheckUnsaved();
       if (statusTimerRef.current) window.clearTimeout(statusTimerRef.current);
     };
   }, []);
 
   const handleContentChange = (newContent: string): void => {
     setContent(newContent);
+    setIsDirty(true); // Mark as having unsaved changes
     if (skipSaveRef.current) return; // skip saving when content is being programmatically loaded
     if (currentFile) {
       if (debounceTimer.current) {
@@ -149,6 +208,7 @@ function App(): React.JSX.Element {
       debounceTimer.current = window.setTimeout(() => {
         if (currentFile) {
           window.phosphor.saveNote(currentFile, newContent);
+          setIsDirty(false); // Mark as saved
         }
       }, 500) as unknown as number;
     }
@@ -162,6 +222,8 @@ function App(): React.JSX.Element {
       skipSaveRef.current = true;
       setContent(noteContent);
       setCurrentFile(filename);
+      setConflict(null); // Clear conflict if switching files
+      setIsDirty(false); // New file is not dirty
       // Allow saves after the debounce window
       setTimeout(() => {
         skipSaveRef.current = false;
@@ -203,9 +265,45 @@ function App(): React.JSX.Element {
             <Sidebar
               onFileSelect={handleFileSelect}
               activeFile={currentFile}
+              isDirty={isDirty}
               refreshSignal={filesVersion}
             />
             <main className="main-content">
+              {conflict && (
+                <div className="conflict-banner">
+                  ⚠️ File changed on disk. You have unsaved changes.
+                  <div>
+                    <button
+                      onClick={() => {
+                        // Load disk version (discard local changes)
+                        window.phosphor.readNote(conflict).then((diskContent) => {
+                          skipSaveRef.current = true;
+                          setContent(diskContent);
+                          setConflict(null);
+                          setIsDirty(false);
+                          setTimeout(() => {
+                            skipSaveRef.current = false;
+                          }, 100);
+                        });
+                      }}
+                    >
+                      Load Disk Version (Discard My Changes)
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Save local version (overwrite disk)
+                        if (currentFile) {
+                          window.phosphor.saveNote(currentFile, content);
+                          setConflict(null);
+                          setIsDirty(false);
+                        }
+                      }}
+                    >
+                      Overwrite Disk (Keep My Changes)
+                    </button>
+                  </div>
+                </div>
+              )}
               <Editor
                 initialDoc={content}
                 onChange={handleContentChange}

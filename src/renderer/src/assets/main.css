@@ -180,6 +180,19 @@ body {
   box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
 }
 
+.dirty-indicator {
+  color: var(--color-error);
+  font-weight: bold;
+  margin-left: 4px;
+  font-size: 1.2em;
+  vertical-align: middle;
+}
+
+.sidebar li.active .dirty-indicator {
+  color: #ff6b6b;
+  opacity: 0.9;
+}
+
 /* Draggable area for window */
 .sidebar-drag-area {
   position: absolute;
@@ -217,7 +230,7 @@ body {
   gap: var(--spacing-sm);
 }
 
-.linked-footer>div {
+.linked-footer > div {
   display: flex;
   align-items: center;
   gap: var(--spacing-md);
@@ -400,6 +413,49 @@ body {
   .cm-frontmatter-pill {
     background: linear-gradient(135deg, #5a7aff, #7095ff);
     color: #fff;
+  }
+}
+
+/* ============================================
+   CONFLICT BANNER
+   ============================================ */
+
+.conflict-banner {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: linear-gradient(135deg, #ff6b6b, #ff8787);
+  color: white;
+  padding: var(--spacing-md) var(--spacing-lg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  border-bottom: 2px solid rgba(0, 0, 0, 0.1);
+  font-weight: 600;
+  box-shadow: var(--shadow-md);
+}
+
+.conflict-banner button {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.15s ease;
+}
+
+.conflict-banner button:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.6);
+  transform: scale(1.02);
+}
+
+@media (prefers-color-scheme: dark) {
+  .conflict-banner {
+    background: linear-gradient(135deg, #c92a2a, #e03131);
   }
 }
 

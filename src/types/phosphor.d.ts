@@ -17,6 +17,10 @@ export interface PhosphorAPI {
   onGraphUpdate: (cb: (graph: Record<string, string[]>) => void) => () => void;
   onStatusUpdate: (cb: (status: { type: string; message: string }) => void) => () => void;
   onMenuEvent: (eventName: string, cb: () => void) => () => void;
+  onFileChanged: (cb: (filename: string) => void) => () => void;
+  onFileDeleted: (cb: (filename: string) => void) => () => void;
+  onFileAdded: (cb: (filename: string) => void) => () => void;
+  onCheckUnsavedChanges: (cb: (hasUnsaved: boolean) => boolean) => () => void;
   getLatestGraph: () => Promise<Record<string, string[]> | null>;
   search: (query: string) => Promise<Array<{ id: string; title: string; filename: string }>>;
 }

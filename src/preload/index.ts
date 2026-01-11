@@ -36,6 +36,37 @@ const api = {
     return () => ipcRenderer.removeListener(eventName, handler);
   },
 
+  // Event subscription for vault file changes
+  onFileChanged: (cb: (filename: string) => void) => {
+    const handler = (_: any, filename: string) => cb(filename);
+    ipcRenderer.on('vault:file-changed', handler);
+    return () => ipcRenderer.removeListener('vault:file-changed', handler);
+  },
+
+  // Event subscription for vault file deletions
+  onFileDeleted: (cb: (filename: string) => void) => {
+    const handler = (_: any, filename: string) => cb(filename);
+    ipcRenderer.on('vault:file-deleted', handler);
+    return () => ipcRenderer.removeListener('vault:file-deleted', handler);
+  },
+
+  // Event subscription for vault file additions
+  onFileAdded: (cb: (filename: string) => void) => {
+    const handler = (_: any, filename: string) => cb(filename);
+    ipcRenderer.on('vault:file-added', handler);
+    return () => ipcRenderer.removeListener('vault:file-added', handler);
+  },
+
+  // Listen for app quit check and respond with unsaved status
+  onCheckUnsavedChanges: (cb: (hasUnsaved: boolean) => void) => {
+    const handler = () => {
+      const hasUnsaved = cb(false); // Call the callback to determine if there are unsaved changes
+      ipcRenderer.send('app:unsaved-changes-result', hasUnsaved);
+    };
+    ipcRenderer.on('app:check-unsaved-changes', handler);
+    return () => ipcRenderer.removeListener('app:check-unsaved-changes', handler);
+  },
+
   getDailyNoteFilename: () => {
     const today = new Date();
     // Format: YYYY-MM-DD.md

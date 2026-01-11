@@ -21,7 +21,12 @@ export default defineConfig(
     files: ['**/*.{ts,tsx}'],
     plugins: {
       'react-hooks': eslintPluginReactHooks,
-      'react-refresh': eslintPluginReactRefresh
+      'react-refresh': eslintPluginReactRefresh,
+      semi: {
+        rules: {
+          semi: ['error', 'always']
+        }
+      }
     },
     rules: {
       ...eslintPluginReactHooks.configs.recommended.rules,

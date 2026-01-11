@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, protocol, net } from 'electron';
+import { app, shell, BrowserWindow, protocol, net, ipcMain } from 'electron';
 import { join } from 'path';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import icon from '../../resources/icon.png?asset';
@@ -119,6 +119,35 @@ app.whenReady().then(async () => {
     // On macOS it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+
+  // Handle before-quit to prompt user about unsaved changes
+  let allowQuit = false; // Flag to prevent multiple quit attempts
+  app.on('before-quit', (_event) => {
+    if (allowQuit) return; // Already confirmed, allow quit
+
+    // Ask renderer if there are unsaved changes
+    mainWindow.webContents.send('app:check-unsaved-changes');
+    _event.preventDefault(); // Prevent immediate quit
+
+    // Listen for response with a timeout
+    const timeout = setTimeout(() => {
+      allowQuit = true;
+      app.quit();
+    }, 2000); // 2 second timeout before forcing quit
+
+    // Will be set to false after user chooses action
+    ipcMain.once('app:unsaved-changes-result', (_event, hasUnsaved: boolean) => {
+      clearTimeout(timeout);
+      if (hasUnsaved) {
+        // Renderer will show a dialog, don't proceed
+        console.debug('[App] Renderer has unsaved changes, not quitting');
+      } else {
+        // Safe to quit
+        allowQuit = true;
+        app.quit();
+      }
+    });
   });
 });
 
