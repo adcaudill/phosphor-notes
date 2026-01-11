@@ -3,6 +3,7 @@
 export interface PhosphorAPI {
   // Vault Management
   selectVault: () => Promise<string | null>; // Returns the folder name (not full path) or null if cancelled
+  getCurrentVault: () => Promise<string | null>;
 
   // File Operations
   readNote: (filename: string) => Promise<string>;

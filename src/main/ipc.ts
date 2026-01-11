@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow } from 'electron';
+import { ipcMain, dialog, BrowserWindow, app } from 'electron';
 import * as fsp from 'fs/promises';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -7,9 +7,41 @@ import { startIndexing, stopIndexing } from './indexer';
 // Store the active vault path in memory for this session
 let activeVaultPath: string | null = null;
 
-export function setupIPC(mainWindow: BrowserWindow) {
+const CONFIG_DIR = path.join(app.getPath('userData'), '.phosphor');
+const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
+
+async function ensureConfigDir(): Promise<void> {
+  try {
+    await fsp.mkdir(CONFIG_DIR, { recursive: true });
+  } catch (err) {
+    console.error('Failed to create config dir', err);
+  }
+}
+
+async function saveLastVault(vaultPath: string): Promise<void> {
+  try {
+    await ensureConfigDir();
+    const cfg = { lastVault: vaultPath };
+    await fsp.writeFile(CONFIG_FILE, JSON.stringify(cfg), 'utf-8');
+  } catch (err) {
+    console.error('Failed to write config', err);
+  }
+}
+
+async function loadLastVault(): Promise<string | null> {
+  try {
+    const raw = await fsp.readFile(CONFIG_FILE, 'utf-8');
+    const cfg = JSON.parse(raw);
+    return cfg.lastVault || null;
+  } catch {
+    return null;
+  }
+}
+
+export function setupIPC(mainWindow: BrowserWindow): void {
   // 1. Select Vault
   ipcMain.handle('vault:select', async () => {
+    // Delegate to the dialog-based opener
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory', 'createDirectory'],
       title: 'Select Phosphor Vault',
@@ -20,31 +52,15 @@ export function setupIPC(mainWindow: BrowserWindow) {
       return null;
     }
 
-    activeVaultPath = result.filePaths[0];
+    const chosen = result.filePaths[0];
+    await openVaultPath(chosen, mainWindow);
+    return path.basename(chosen);
+  });
 
-    // If a cached graph exists in the vault, read and forward it immediately
-    try {
-      const cachePath = path.join(activeVaultPath, '.phosphor', 'graph.json');
-      try {
-        const raw = await fsp.readFile(cachePath, 'utf-8');
-        const graph = JSON.parse(raw);
-        mainWindow.webContents.send('phosphor:graph-update', graph);
-        console.log('Loaded cached graph from', cachePath);
-      } catch (err) {
-        // no cache — that's fine
-      }
-    } catch (err) {
-      console.error('Error checking/reading graph cache', err);
-    }
-
-    // start background indexing for this vault
-    try {
-      startIndexing(activeVaultPath, mainWindow);
-    } catch (err) {
-      console.error(err);
-    }
-
-    return path.basename(activeVaultPath); // Only return the folder name to UI
+  // Return current vault folder name (if already opened)
+  ipcMain.handle('vault:current', async () => {
+    if (!activeVaultPath) return null;
+    return path.basename(activeVaultPath);
   });
 
   // 2. Read Note
@@ -58,9 +74,10 @@ export function setupIPC(mainWindow: BrowserWindow) {
     try {
       const content = await fs.readFile(filePath, 'utf-8');
       return content;
-    } catch (err: any) {
+    } catch (err: unknown) {
       // If file doesn't exist, return empty string or create it
-      if (err.code === 'ENOENT') {
+      const e = err as { code?: string };
+      if (e.code === 'ENOENT') {
         await fs.writeFile(filePath, ''); // Create empty file
         return '';
       }
@@ -100,4 +117,62 @@ export function setupIPC(mainWindow: BrowserWindow) {
       return [];
     }
   });
+}
+
+// Programmatically open a vault path (used on startup or from menu)
+export async function openVaultPath(vaultPath: string, mainWindow: BrowserWindow): Promise<void> {
+  // Stop any existing indexer before switching vaults
+  try {
+    stopIndexing();
+  } catch (err) {
+    console.warn('Error stopping previous indexer (continuing):', err);
+  }
+
+  activeVaultPath = vaultPath;
+
+  // send cached graph if available
+  try {
+    const cachePath = path.join(activeVaultPath, '.phosphor', 'graph.json');
+    try {
+      const raw = await fsp.readFile(cachePath, 'utf-8');
+      const graph = JSON.parse(raw);
+      mainWindow.webContents.send('phosphor:graph-update', graph);
+      console.log('Loaded cached graph from', cachePath);
+      // notify UI that cached graph was loaded
+      mainWindow.webContents.send('phosphor:status', {
+        type: 'cache-loaded',
+        message: 'Loaded cached index'
+      });
+    } catch {
+      // no cache — that's fine
+    }
+  } catch (err) {
+    console.error('Error checking/reading graph cache', err);
+  }
+
+  // start background indexing for this vault
+  try {
+    startIndexing(activeVaultPath, mainWindow);
+    // persist choice
+    await saveLastVault(activeVaultPath);
+    // notify UI that vault opened
+    try {
+      mainWindow.webContents.send('phosphor:status', {
+        type: 'vault-opened',
+        message: `Opened vault ${path.basename(activeVaultPath)}`
+      });
+    } catch (e) {
+      console.warn('Could not send vault-opened status', e);
+    }
+  } catch (err) {
+    console.error(err);
+    mainWindow.webContents.send('phosphor:status', {
+      type: 'error',
+      message: 'Indexer failed to start'
+    });
+  }
+}
+
+export async function getSavedVaultPath(): Promise<string | null> {
+  return loadLastVault();
 }

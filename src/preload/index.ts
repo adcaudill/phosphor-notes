@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 // Define the API implementation
 const api = {
   selectVault: () => ipcRenderer.invoke('vault:select'),
+  getCurrentVault: () => ipcRenderer.invoke('vault:current'),
 
   readNote: (filename: string) => ipcRenderer.invoke('note:read', filename),
 

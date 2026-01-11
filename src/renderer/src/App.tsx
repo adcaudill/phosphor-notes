@@ -7,6 +7,7 @@ declare global {
   interface Window {
     phosphor: {
       selectVault: () => Promise<string | null>;
+      getCurrentVault?: () => Promise<string | null>;
       getDailyNoteFilename: () => Promise<string>;
       readNote: (filename: string) => Promise<string>;
       saveNote: (filename: string, content: string) => Promise<void>;
@@ -31,7 +32,13 @@ function App(): React.JSX.Element {
 
   useEffect(() => {
     const init = async (): Promise<void> => {
-      const selectedVault = await window.phosphor.selectVault();
+      // If main already opened a vault (auto-open), prefer that over prompting
+      const current = await window.phosphor.getCurrentVault?.();
+      let selectedVault = current;
+      if (!selectedVault) {
+        selectedVault = await window.phosphor.selectVault();
+      }
+
       if (selectedVault) {
         setVaultName(selectedVault);
         const dailyNoteFilename = await window.phosphor.getDailyNoteFilename();

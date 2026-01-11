@@ -1,8 +1,8 @@
-import { app, shell, BrowserWindow } from 'electron';
+import { app, shell, BrowserWindow, Menu } from 'electron';
 import { join } from 'path';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import icon from '../../resources/icon.png?asset';
-import { setupIPC } from './ipc';
+import { setupIPC, getSavedVaultPath, openVaultPath } from './ipc';
 
 function createWindow(): BrowserWindow {
   // Create the browser window.
@@ -54,6 +54,45 @@ app.whenReady().then(async () => {
 
   const mainWindow = createWindow();
   setupIPC(mainWindow);
+
+  // Try to auto-open the last used vault if present
+  try {
+    const last = await getSavedVaultPath();
+    console.log('Attempting to auto-open saved vault:', last);
+    if (last) {
+      // ensure path exists before opening
+      try {
+        await import('fs').then((fs) => fs.promises.access(last));
+        console.log('Saved vault path exists; opening:', last);
+        await openVaultPath(last, mainWindow);
+        console.log('Auto-opened last vault:', last);
+      } catch (err) {
+        console.warn('Saved vault path not accessible:', last, err);
+      }
+    }
+  } catch (err) {
+    console.error('Failed to auto-open last vault', err);
+  }
+
+  // Add menu item to open a different vault
+  const template = [
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'Open Vault...',
+          accelerator: 'CmdOrCtrl+O',
+          click: async () => {
+            const { openVaultFromMenu } = await import('./menuHelpers');
+            openVaultFromMenu(mainWindow);
+          }
+        },
+        { role: 'quit' }
+      ]
+    }
+  ];
+  const menu = Menu.buildFromTemplate(template as any);
+  Menu.setApplicationMenu(menu);
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
