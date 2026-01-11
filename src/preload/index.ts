@@ -78,7 +78,19 @@ const api = {
   // Get last graph in memory from main (if any)
   getLatestGraph: () => ipcRenderer.invoke('graph:get'),
   // Search vault
-  search: (query: string) => ipcRenderer.invoke('vault:search', query)
+  search: (query: string) => ipcRenderer.invoke('vault:search', query),
+
+  // Settings API
+  getSettings: () => ipcRenderer.invoke('settings:get'),
+  setSetting: (key: string, value: any) => ipcRenderer.invoke('settings:set', key, value),
+  setMultipleSettings: (updates: Record<string, any>) =>
+    ipcRenderer.invoke('settings:set-multiple', updates),
+  // Listen for settings changes from other windows
+  onSettingsChange: (cb: (settings: any) => void) => {
+    const handler = (_: any, data: any) => cb(data);
+    ipcRenderer.on('settings:changed', handler);
+    return () => ipcRenderer.removeListener('settings:changed', handler);
+  }
 };
 
 // Expose it to the main world (Renderer)

@@ -23,6 +23,20 @@ export interface PhosphorAPI {
   onCheckUnsavedChanges: (cb: (hasUnsaved: boolean) => boolean) => () => void;
   getLatestGraph: () => Promise<Record<string, string[]> | null>;
   search: (query: string) => Promise<Array<{ id: string; title: string; filename: string }>>;
+
+  // Settings
+  getSettings: () => Promise<UserSettings>;
+  setSetting: (key: keyof UserSettings, value: any) => Promise<UserSettings>;
+  setMultipleSettings: (updates: Partial<UserSettings>) => Promise<UserSettings>;
+  onSettingsChange: (cb: (settings: UserSettings) => void) => () => void;
+}
+
+export interface UserSettings {
+  theme: 'system' | 'light' | 'dark';
+  editorFontSize: number;
+  vimMode: boolean;
+  showLineNumbers: boolean;
+  lineHeight: number;
 }
 
 declare global {

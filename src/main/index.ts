@@ -4,6 +4,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import icon from '../../resources/icon.png?asset';
 import { setupIPC, getSavedVaultPath, openVaultPath, getActiveVaultPath } from './ipc';
 import { createMenu } from './menu';
+import { setupSettingsHandlers, initializeSettings } from './store';
 
 // Custom protocol for secure asset serving
 function setupProtocol(): void {
@@ -94,7 +95,16 @@ app.whenReady().then(async () => {
 
   const mainWindow = createWindow();
   setupIPC(mainWindow);
+  setupSettingsHandlers();
   createMenu(mainWindow);
+
+  // Initialize settings on startup
+  try {
+    await initializeSettings();
+    console.log('Settings initialized');
+  } catch (err) {
+    console.error('Failed to initialize settings:', err);
+  }
 
   // Try to auto-open the last used vault if present
   try {

@@ -3,8 +3,10 @@ import { Editor } from './components/Editor';
 import { Sidebar } from './components/Sidebar';
 import StatusBar from './components/StatusBar';
 import { CommandPalette } from './components/CommandPalette';
+import { SettingsModal } from './components/SettingsModal';
+import { SettingsProvider } from './contexts/SettingsContext';
 
-function App(): React.JSX.Element {
+function AppContent(): React.JSX.Element {
   const [content, setContent] = useState('');
   const [vaultName, setVaultName] = useState<string | null>(null);
   const [currentFile, setCurrentFile] = useState<string | null>(null);
@@ -15,6 +17,7 @@ function App(): React.JSX.Element {
   const [status, setStatus] = useState<{ type: string; message: string } | null>(null);
   const statusTimerRef = useRef<number | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [conflict, setConflict] = useState<string | null>(null); // Filename that has a conflict
   const [isDirty, setIsDirty] = useState(false); // Whether current file has unsaved changes
 
@@ -79,11 +82,15 @@ function App(): React.JSX.Element {
       statusTimerRef.current = window.setTimeout(() => setStatus(null), 4000) as unknown as number;
     });
 
-    // Handle Cmd+K / Ctrl+K to open command palette
+    // Handle Cmd+K / Ctrl+K to open command palette, Cmd+, to open settings
     const handleKeyDown = (e: KeyboardEvent): void => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         setCommandPaletteOpen(true);
+      }
+      if (e.metaKey && e.key === ',') {
+        e.preventDefault();
+        setSettingsOpen(true);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -127,6 +134,10 @@ function App(): React.JSX.Element {
     const unsubscribeToggleSidebar = window.phosphor.onMenuEvent?.('menu:toggle-sidebar', () => {
       // Sidebar toggle logic will be added here
       console.log('Toggle sidebar requested');
+    });
+
+    const unsubscribePreferences = window.phosphor.onMenuEvent?.('menu:preferences', () => {
+      setSettingsOpen(true);
     });
 
     // File change watchers - external file modifications
@@ -193,6 +204,7 @@ function App(): React.JSX.Element {
       if (unsubscribeFileDeleted) unsubscribeFileDeleted();
       if (unsubscribeFileAdded) unsubscribeFileAdded();
       if (unsubscribeCheckUnsaved) unsubscribeCheckUnsaved();
+      if (unsubscribePreferences) unsubscribePreferences();
       if (statusTimerRef.current) window.clearTimeout(statusTimerRef.current);
     };
   }, []);
@@ -341,6 +353,8 @@ function App(): React.JSX.Element {
             onClose={() => setCommandPaletteOpen(false)}
             onSelect={handleFileSelect}
           />
+
+          <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
         </>
       ) : (
         <div className="welcome-screen">
@@ -351,4 +365,10 @@ function App(): React.JSX.Element {
   );
 }
 
-export default App;
+export default function App(): React.JSX.Element {
+  return (
+    <SettingsProvider>
+      <AppContent />
+    </SettingsProvider>
+  );
+}
