@@ -7,6 +7,8 @@ const api = {
   readNote: (filename: string) => ipcRenderer.invoke('note:read', filename),
   
   saveNote: (filename: string, content: string) => ipcRenderer.invoke('note:save', filename, content),
+
+  listFiles: () => ipcRenderer.invoke('vault:list'),
   
   getDailyNoteFilename: () => {
     const today = new Date();

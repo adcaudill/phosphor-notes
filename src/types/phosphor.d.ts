@@ -8,8 +8,9 @@ export interface PhosphorAPI {
   readNote: (filename: string) => Promise<string>;
   saveNote: (filename: string, content: string) => Promise<boolean>;
   
-  // Day 1: Daily Journal Helper
   getDailyNoteFilename: () => Promise<string>; // Returns 'YYYY-MM-DD.md'
+
+  listFiles: () => Promise<string[]>;
 }
 
 declare global {

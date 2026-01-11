@@ -59,4 +59,23 @@ export function setupIPC(mainWindow: BrowserWindow) {
       return false;
     }
   });
+
+  // 4. List Files
+  ipcMain.handle('vault:list', async () => {
+    if (!activeVaultPath) return [];
+
+    try {
+      const files = await fs.readdir(activeVaultPath);
+
+      // Filter for .md files and ignore hidden system files (like .DS_Store)
+      const mdFiles = files.filter(file =>
+        file.endsWith('.md') && !file.startsWith('.')
+      );
+
+      return mdFiles;
+    } catch (err) {
+      console.error(err);
+      return [];
+    }
+  });
 }

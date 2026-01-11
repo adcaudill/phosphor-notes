@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
-import Editor from './components/Editor'
+import { Editor } from './components/Editor'
+import { Sidebar } from './components/Sidebar'
 
 function App(): React.JSX.Element {
   const [content, setContent] = useState('')
@@ -37,12 +38,25 @@ function App(): React.JSX.Element {
     }
   }
 
+  const handleFileSelect = async (filename: string) => {
+    const noteContent = await window.phosphor.readNote(filename);
+    setContent(noteContent);
+    setCurrentFile(filename);
+  }
+
   return (
-    <div className="App">
+    <div className="app-container">
       {vaultName ? (
-        <Editor initialContent={content} onContentChange={handleContentChange} />
+        <>
+          <Sidebar onFileSelect={handleFileSelect} activeFile={currentFile} />
+          <main className="main-content">
+            <Editor initialDoc={content} onChange={handleContentChange} />
+          </main>
+        </>
       ) : (
-        <h1>Select a Phosphor Vault to begin.</h1>
+        <div className="welcome-screen">
+          <h1>Select a Phosphor Vault to begin.</h1>
+        </div>
       )}
     </div>
   )
