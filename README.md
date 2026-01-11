@@ -1,6 +1,12 @@
-# phosphor-notes
+# Phosphor Notes
 
-An Electron application with React and TypeScript
+Phosphor Notes is a lightweight note-taking Electron app built with React and TypeScript. It
+focuses on simple Markdown editing and local vaults (folders of .md files) with basic
+wiki-style [[links]] and a background indexer that builds a link graph for backlinks.
+
+⚠️ WARNING: This project is under active development and may be unstable. Expect breaking
+changes, incomplete features, and bugs. Use on non-critical data or keep backups of your
+notes.
 
 ## Recommended IDE Setup
 
@@ -19,14 +25,6 @@ $ npm install
 ```bash
 $ npm run dev
 ```
-
-### First run / Expected behavior
-
-On the first run the app will prompt you to select a folder (a "vault"). The app will create and open today's note (format `YYYY-MM-DD.md`) in that folder. Typical first-run flow:
-
-- Pick a folder when prompted
-- The app creates `YYYY-MM-DD.md` (if missing) and opens it in the editor
-- Type, pause, and the editor saves the file to disk
 
 ### Build
 
