@@ -1,8 +1,9 @@
-import { app, shell, BrowserWindow, Menu } from 'electron';
+import { app, shell, BrowserWindow, Menu, MenuItemConstructorOptions, MenuItem } from 'electron';
 import { join } from 'path';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import icon from '../../resources/icon.png?asset';
 import { setupIPC, getSavedVaultPath, openVaultPath } from './ipc';
+import { openVaultFromMenu } from './menuHelpers';
 
 function createWindow(): BrowserWindow {
   // Create the browser window.
@@ -75,23 +76,62 @@ app.whenReady().then(async () => {
   }
 
   // Add menu item to open a different vault
-  const template = [
-    {
-      label: 'File',
+  const template: (MenuItemConstructorOptions | MenuItem)[] = [];
+
+  // App menu (macOS)
+  if (process.platform === 'darwin') {
+    template.push({
+      label: app.name,
       submenu: [
-        {
-          label: 'Open Vault...',
-          accelerator: 'CmdOrCtrl+O',
-          click: async () => {
-            const { openVaultFromMenu } = await import('./menuHelpers');
-            openVaultFromMenu(mainWindow);
-          }
-        },
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
         { role: 'quit' }
       ]
-    }
-  ];
-  const menu = Menu.buildFromTemplate(template as any);
+    });
+  }
+
+  // File menu with our Open Vault action
+  template.push({
+    label: 'File',
+    submenu: [
+      {
+        label: 'Open Vault...',
+        accelerator: 'CmdOrCtrl+O',
+        click: () => {
+          // use helper
+          openVaultFromMenu(mainWindow).catch((e) => console.error(e));
+        }
+      },
+      { type: 'separator' },
+      process.platform === 'darwin' ? { role: 'close' } : { role: 'quit' }
+    ]
+  });
+
+  // Standard Edit, View, Window menus
+  template.push({ role: 'editMenu' });
+  template.push({ role: 'viewMenu' });
+  template.push({ role: 'windowMenu' });
+
+  // Help menu
+  template.push({
+    role: 'help',
+    submenu: [
+      {
+        label: 'Learn More',
+        click: async () => {
+          await shell.openExternal('https://github.com/adcaudill/phosphor-notes');
+        }
+      }
+    ]
+  });
+
+  const menu = Menu.buildFromTemplate(template);
   Menu.setApplicationMenu(menu);
 
   app.on('activate', function () {
