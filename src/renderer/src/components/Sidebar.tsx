@@ -26,7 +26,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ onFileSelect, activeFile, refr
           <li
             key={file}
             className={file === activeFile ? 'active' : ''}
-            onClick={() => onFileSelect(file)}
+            onClick={() => {
+              try {
+                console.debug('Sidebar click:', file);
+              } catch {}
+              onFileSelect(file);
+            }}
           >
             {file}
           </li>

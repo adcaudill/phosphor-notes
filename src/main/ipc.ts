@@ -1,12 +1,13 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron';
+import * as fsp from 'fs/promises';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { startIndexing, stopIndexing } from './indexer';
 
 // Store the active vault path in memory for this session
 let activeVaultPath: string | null = null;
 
 export function setupIPC(mainWindow: BrowserWindow) {
-
   // 1. Select Vault
   ipcMain.handle('vault:select', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
@@ -20,15 +21,38 @@ export function setupIPC(mainWindow: BrowserWindow) {
     }
 
     activeVaultPath = result.filePaths[0];
+
+    // If a cached graph exists in the vault, read and forward it immediately
+    try {
+      const cachePath = path.join(activeVaultPath, '.phosphor', 'graph.json');
+      try {
+        const raw = await fsp.readFile(cachePath, 'utf-8');
+        const graph = JSON.parse(raw);
+        mainWindow.webContents.send('phosphor:graph-update', graph);
+        console.log('Loaded cached graph from', cachePath);
+      } catch (err) {
+        // no cache — that's fine
+      }
+    } catch (err) {
+      console.error('Error checking/reading graph cache', err);
+    }
+
+    // start background indexing for this vault
+    try {
+      startIndexing(activeVaultPath, mainWindow);
+    } catch (err) {
+      console.error(err);
+    }
+
     return path.basename(activeVaultPath); // Only return the folder name to UI
   });
 
   // 2. Read Note
   ipcMain.handle('note:read', async (_, filename: string) => {
     if (!activeVaultPath) throw new Error('No vault selected');
-    
+
     // Security: Sanitize filename to prevent directory traversal (e.g. "../../../secret.txt")
-    const safeName = path.basename(filename); 
+    const safeName = path.basename(filename);
     const filePath = path.join(activeVaultPath, safeName);
 
     try {
@@ -68,9 +92,7 @@ export function setupIPC(mainWindow: BrowserWindow) {
       const files = await fs.readdir(activeVaultPath);
 
       // Filter for .md files and ignore hidden system files (like .DS_Store)
-      const mdFiles = files.filter(file =>
-        file.endsWith('.md') && !file.startsWith('.')
-      );
+      const mdFiles = files.filter((file) => file.endsWith('.md') && !file.startsWith('.'));
 
       return mdFiles;
     } catch (err) {

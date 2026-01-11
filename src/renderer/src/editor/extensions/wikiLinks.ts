@@ -6,7 +6,7 @@ import {
   ViewUpdate,
   WidgetType,
   MatchDecorator
-} from "@codemirror/view";
+} from '@codemirror/view';
 
 // 1. Define the Style
 // We add a CSS class 'cm-wiki-link' to the matches
@@ -15,10 +15,10 @@ const wikiLinkDecorator = new MatchDecorator({
   decoration: (match) => {
     // 'match[1]' is the text inside the brackets
     return Decoration.mark({
-      tagName: "span",
-      class: "cm-wiki-link", // We will style this in CSS
+      tagName: 'span',
+      class: 'cm-wiki-link', // We will style this in CSS
       attributes: {
-        "data-link-target": match[1] // Store the filename in the DOM
+        'data-link-target': match[1] // Store the filename in the DOM
       }
     });
   }

@@ -1,51 +1,107 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { Editor } from './components/Editor'
-import { Sidebar } from './components/Sidebar'
+import React, { useState, useEffect, useRef } from 'react';
+import { Editor } from './components/Editor';
+import { Sidebar } from './components/Sidebar';
+import StatusBar from './components/StatusBar';
+
+declare global {
+  interface Window {
+    phosphor: {
+      selectVault: () => Promise<string | null>;
+      getDailyNoteFilename: () => Promise<string>;
+      readNote: (filename: string) => Promise<string>;
+      saveNote: (filename: string, content: string) => Promise<void>;
+      onGraphUpdate: (cb: (graph: Record<string, string[]>) => void) => (() => void) | void;
+      onStatusUpdate: (
+        cb: (s: { type: string; message: string } | null) => void
+      ) => (() => void) | void;
+    };
+  }
+}
 
 function App(): React.JSX.Element {
-  const [content, setContent] = useState('')
-  const [vaultName, setVaultName] = useState<string | null>(null)
-  const [currentFile, setCurrentFile] = useState<string | null>(null)
-  const [filesVersion, setFilesVersion] = useState<number>(0)
-  const debounceTimer = useRef<NodeJS.Timeout | null>(null)
+  const [content, setContent] = useState('');
+  const [vaultName, setVaultName] = useState<string | null>(null);
+  const [currentFile, setCurrentFile] = useState<string | null>(null);
+  const [filesVersion, setFilesVersion] = useState<number>(0);
+  const debounceTimer = useRef<number | null>(null);
+  const [backlinks, setBacklinks] = useState<Record<string, string[]>>({});
+  const skipSaveRef = useRef<boolean>(false);
+  const [status, setStatus] = useState<{ type: string; message: string } | null>(null);
+  const statusTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const init = async (): Promise<void> => {
-      const selectedVault = await window.phosphor.selectVault()
+      const selectedVault = await window.phosphor.selectVault();
       if (selectedVault) {
-        setVaultName(selectedVault)
-        const dailyNoteFilename = await window.phosphor.getDailyNoteFilename()
-        setCurrentFile(dailyNoteFilename)
-        const noteContent = await window.phosphor.readNote(dailyNoteFilename)
-        setContent(noteContent)
+        setVaultName(selectedVault);
+        const dailyNoteFilename = await window.phosphor.getDailyNoteFilename();
+        setCurrentFile(dailyNoteFilename);
+        const noteContent = await window.phosphor.readNote(dailyNoteFilename);
+        setContent(noteContent);
       } else {
-        console.log('No vault selected')
+        console.log('No vault selected');
       }
-    }
-    init()
-  }, [])
+    };
+    init();
+    // subscribe to graph updates
+    const unsubscribe = window.phosphor.onGraphUpdate((graph) => {
+      const bl: Record<string, string[]> = {};
+      Object.entries(graph).forEach(([source, links]) => {
+        links.forEach((target) => {
+          if (!bl[target]) bl[target] = [];
+          bl[target].push(source);
+        });
+      });
+      setBacklinks(bl);
+    });
+
+    // subscribe to status updates
+    const unsubscribeStatus = window.phosphor.onStatusUpdate((s) => {
+      setStatus(s);
+      if (statusTimerRef.current) window.clearTimeout(statusTimerRef.current);
+      statusTimerRef.current = window.setTimeout(() => setStatus(null), 4000) as unknown as number;
+    });
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+      if (unsubscribeStatus) unsubscribeStatus();
+      if (statusTimerRef.current) window.clearTimeout(statusTimerRef.current);
+    };
+  }, []);
 
   const handleContentChange = (newContent: string): void => {
-    setContent(newContent)
+    setContent(newContent);
+    if (skipSaveRef.current) return; // skip saving when content is being programmatically loaded
     if (currentFile) {
       if (debounceTimer.current) {
-        clearTimeout(debounceTimer.current)
+        window.clearTimeout(debounceTimer.current);
       }
-      debounceTimer.current = setTimeout(() => {
+      debounceTimer.current = window.setTimeout(() => {
         if (currentFile) {
-          window.phosphor.saveNote(currentFile, newContent)
+          window.phosphor.saveNote(currentFile, newContent);
         }
-      }, 500)
+      }, 500) as unknown as number;
     }
-  }
+  };
 
-  const handleFileSelect = async (filename: string) => {
-    const noteContent = await window.phosphor.readNote(filename);
-    setContent(noteContent);
-    setCurrentFile(filename);
-  }
+  const handleFileSelect = async (filename: string): Promise<void> => {
+    try {
+      console.debug('handleFileSelect invoked for', filename);
+      const noteContent = await window.phosphor.readNote(filename);
+      // Prevent the programmatic content load from triggering a save
+      skipSaveRef.current = true;
+      setContent(noteContent);
+      setCurrentFile(filename);
+      // Allow saves after the debounce window
+      setTimeout(() => {
+        skipSaveRef.current = false;
+      }, 600);
+    } catch (err) {
+      console.error('Failed to read note', filename, err);
+    }
+  };
 
-  const handleLinkClick = async (linkText: string) => {
+  const handleLinkClick = async (linkText: string): Promise<void> => {
     const filename = linkText.endsWith('.md') ? linkText : `${linkText}.md`;
     // readNote will create the file if missing (per main IPC behavior)
     const content = await window.phosphor.readNote(filename);
@@ -54,16 +110,47 @@ function App(): React.JSX.Element {
     // Trigger a save to ensure it appears in sidebar immediately
     await window.phosphor.saveNote(filename, content);
     // Bump filesVersion so Sidebar re-fetches
-    setFilesVersion(v => v + 1);
-  }
+    setFilesVersion((v) => v + 1);
+  };
 
   return (
     <div className="app-container">
       {vaultName ? (
         <>
-          <Sidebar onFileSelect={handleFileSelect} activeFile={currentFile} refreshSignal={filesVersion} />
+          <Sidebar
+            onFileSelect={handleFileSelect}
+            activeFile={currentFile}
+            refreshSignal={filesVersion}
+          />
           <main className="main-content">
-            <Editor initialDoc={content} onChange={handleContentChange} onLinkClick={handleLinkClick} />
+            <Editor
+              initialDoc={content}
+              onChange={handleContentChange}
+              onLinkClick={handleLinkClick}
+            />
+            <StatusBar status={status} />
+            <footer
+              style={{ padding: '12px 20px', borderTop: '1px solid #eee', background: '#fafafa' }}
+            >
+              {currentFile ? (
+                <div>
+                  <strong>Linked from:</strong>{' '}
+                  {(backlinks[currentFile] || []).length === 0 ? (
+                    <em>None</em>
+                  ) : (
+                    (backlinks[currentFile] || []).map((f, i) => (
+                      <button
+                        key={f}
+                        style={{ marginLeft: i ? 8 : 6 }}
+                        onClick={() => handleFileSelect(f)}
+                      >
+                        {f}
+                      </button>
+                    ))
+                  )}
+                </div>
+              ) : null}
+            </footer>
           </main>
         </>
       ) : (
@@ -72,7 +159,7 @@ function App(): React.JSX.Element {
         </div>
       )}
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

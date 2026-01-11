@@ -1,0 +1,160 @@
+import { Worker } from 'worker_threads';
+import { join, resolve } from 'path';
+import { BrowserWindow } from 'electron';
+import * as fs from 'fs';
+import { promises as fsp } from 'fs';
+
+interface WorkerMessage {
+  type: string;
+  data?: unknown;
+  error?: unknown;
+}
+
+let indexerWorker: Worker | null = null;
+
+async function tryStartWorkerFromFile(
+  workerPath: string,
+  vaultPath: string,
+  mainWindow: BrowserWindow
+): Promise<void> {
+  indexerWorker = new Worker(workerPath);
+
+  // Notify renderer that indexing has started
+  try {
+    mainWindow.webContents.send('phosphor:status', {
+      type: 'indexing-started',
+      message: 'Indexing started'
+    });
+  } catch (err) {
+    console.warn('Failed to send status to renderer:', err);
+  }
+
+  indexerWorker.on('message', (msg: WorkerMessage) => {
+    if (msg?.type === 'graph-complete') {
+      const graph = msg.data as object;
+      console.log('Graph indexing complete. Nodes:', Object.keys(graph).length);
+      mainWindow.webContents.send('phosphor:graph-update', graph);
+      try {
+        mainWindow.webContents.send('phosphor:status', {
+          type: 'indexing-complete',
+          message: 'Indexing complete'
+        });
+      } catch (err) {
+        console.warn('Failed to send status to renderer:', err);
+      }
+      // Persist the graph atomically into the vault
+      (async () => {
+        try {
+          if (!vaultPath) return;
+          const cacheDir = join(vaultPath, '.phosphor');
+          await fsp.mkdir(cacheDir, { recursive: true });
+          const tmpPath = join(cacheDir, 'graph.json.tmp');
+          const outPath = join(cacheDir, 'graph.json');
+          await fsp.writeFile(tmpPath, JSON.stringify(graph), 'utf-8');
+          await fsp.rename(tmpPath, outPath);
+          console.log('Graph cache saved to', outPath);
+        } catch (err) {
+          console.error('Failed to persist graph cache:', err);
+        }
+      })();
+    } else if (msg?.type === 'graph-error') {
+      console.error('Indexer error:', msg.error);
+    }
+  });
+
+  indexerWorker.on('error', (err) => {
+    console.error('Indexer worker error:', err);
+  });
+
+  indexerWorker.postMessage(vaultPath);
+}
+
+export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow): Promise<void> {
+  // Resolve worker path relative to compiled main directory
+  const workerPath = join(__dirname, 'worker', 'indexer.js');
+
+  try {
+    if (indexerWorker) {
+      indexerWorker.terminate();
+      indexerWorker = null;
+    }
+
+    if (fs.existsSync(workerPath)) {
+      // Normal: run compiled worker
+      await tryStartWorkerFromFile(workerPath, vaultPath, mainWindow);
+      return;
+    }
+
+    // Fallback for dev: transpile the TS source at runtime and run via eval
+    const possibleSrc = resolve(process.cwd(), 'src', 'main', 'worker', 'indexer.ts');
+    if (fs.existsSync(possibleSrc)) {
+      try {
+        const tsCode = fs.readFileSync(possibleSrc, 'utf-8');
+        // Transpile with Typescript at runtime to CommonJS
+        // Import lazily to avoid top-level dependency when not needed
+        const ts = await import('typescript');
+        const transpiled = ts.transpileModule(tsCode, {
+          compilerOptions: {
+            module: ts.ModuleKind.CommonJS,
+            target: ts.ScriptTarget.ES2020,
+            jsx: ts.JsxEmit.React
+          }
+        }).outputText;
+
+        // Start worker from transpiled code using eval
+        indexerWorker = new Worker(transpiled, { eval: true });
+
+        // Notify renderer that indexing has started
+        try {
+          mainWindow.webContents.send('phosphor:status', {
+            type: 'indexing-started',
+            message: 'Indexing started'
+          });
+        } catch (err) {
+          console.warn('Failed to send status to renderer:', err);
+        }
+
+        indexerWorker.on('message', (msg: WorkerMessage) => {
+          if (msg?.type === 'graph-complete') {
+            const graph = msg.data as object;
+            console.log('Graph indexing complete. Nodes:', Object.keys(graph).length);
+            mainWindow.webContents.send('phosphor:graph-update', graph);
+            try {
+              mainWindow.webContents.send('phosphor:status', {
+                type: 'indexing-complete',
+                message: 'Indexing complete'
+              });
+            } catch (err) {
+              console.warn('Failed to send status to renderer:', err);
+            }
+          } else if (msg?.type === 'graph-error') {
+            console.error('Indexer error:', msg.error);
+          }
+        });
+
+        indexerWorker.on('error', (err) => console.error('Indexer worker error:', err));
+
+        indexerWorker.postMessage(vaultPath);
+        return;
+      } catch (err) {
+        console.error('Runtime transpile failed:', err);
+      }
+    }
+
+    // If we reach here, no worker could be started
+    console.error('Indexer worker not found at', workerPath, 'and no source fallback available.');
+  } catch (err) {
+    console.error('Failed to start indexer worker:', err);
+  }
+}
+
+export function stopIndexing(): void {
+  if (indexerWorker) {
+    try {
+      indexerWorker.terminate();
+    } catch (err) {
+      console.error('Error terminating indexer worker:', err);
+    }
+    indexerWorker = null;
+  }
+}

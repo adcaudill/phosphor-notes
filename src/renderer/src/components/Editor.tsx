@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { EditorState } from '@codemirror/state';
-import { EditorView, keymap, lineWrapping } from '@codemirror/view';
+import { EditorView, keymap } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
@@ -14,7 +14,17 @@ interface EditorProps {
 
 export const Editor: React.FC<EditorProps> = ({ initialDoc, onChange, onLinkClick }) => {
   const editorRef = useRef<HTMLDivElement>(null);
-  const viewRef = useRef<EditorView>();
+  const viewRef = useRef<EditorView>(null);
+  const onChangeRef = useRef(onChange);
+  const onLinkClickRef = useRef(onLinkClick);
+
+  // Keep refs up-to-date so CodeMirror listeners call the latest handlers
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+  useEffect(() => {
+    onLinkClickRef.current = onLinkClick;
+  }, [onLinkClick]);
 
   useEffect(() => {
     if (!editorRef.current) return;
@@ -24,49 +34,64 @@ export const Editor: React.FC<EditorProps> = ({ initialDoc, onChange, onLinkClic
       doc: initialDoc,
       extensions: [
         keymap.of([...defaultKeymap, ...historyKeymap]), // Cmd+Z, Enter, etc.
-        lineWrapping, // Soft wrap long lines
+        EditorView.lineWrapping, // Soft wrap long lines
         markdown(), // Markdown syntax support
         history(), // Undo/Redo stack
         syntaxHighlighting(defaultHighlightStyle), // Colors
 
-        // 2. Listener for changes
+        // 2. Listener for changes (call latest handler via ref)
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
-            onChange(update.state.doc.toString());
+            try {
+              onChangeRef.current(update.state.doc.toString());
+            } catch (e) {
+              console.error(e);
+            }
           }
         }),
 
         // 3. Visual Styling (Minimalist Theme)
         EditorView.theme({
-          "&": { height: "100%", fontSize: "16px" },
-          ".cm-scroller": { fontFamily: "Menlo, Monaco, 'Courier New', monospace" },
-          ".cm-content": { caretColor: "#569cd6", maxWidth: "800px", margin: "0 auto", padding: "40px" },
-          "&.cm-focused": { outline: "none" }
-        })
-        ,
+          '&': { height: '100%', fontSize: '16px' },
+          '.cm-scroller': { fontFamily: "Menlo, Monaco, 'Courier New', monospace" },
+          '.cm-content': {
+            caretColor: '#569cd6',
+            maxWidth: '800px',
+            margin: '0 auto',
+            padding: '40px'
+          },
+          '&.cm-focused': { outline: 'none' }
+        }),
         // Wiki link plugin and click handler
         wikiLinkPlugin,
         EditorView.domEventHandlers({
-          mousedown: (event) => {
-            const target = event.target as HTMLElement;
-            if (target && target.matches && target.matches('.cm-wiki-link')) {
-              const linkTarget = target.getAttribute('data-link-target') || undefined;
-              if (linkTarget && typeof onLinkClick === 'function') {
-                event.preventDefault();
-                onLinkClick(linkTarget);
-                return true;
+          click: (event) => {
+            try {
+              const target = event.target as HTMLElement | null;
+              const linkEl =
+                target?.closest && (target.closest('.cm-wiki-link') as HTMLElement | null);
+              if (linkEl) {
+                const linkTarget = linkEl.getAttribute('data-link-target') || undefined;
+                console.debug('Wiki link clicked:', linkTarget);
+                if (linkTarget && typeof onLinkClickRef.current === 'function') {
+                  event.preventDefault();
+                  onLinkClickRef.current(linkTarget);
+                  return true;
+                }
               }
+            } catch (err) {
+              console.error('Error handling wiki link click', err);
             }
             return false;
           }
         })
-      ],
+      ]
     });
 
     // 4. Create the View
     const view = new EditorView({
       state: startState,
-      parent: editorRef.current,
+      parent: editorRef.current
     });
 
     viewRef.current = view;
