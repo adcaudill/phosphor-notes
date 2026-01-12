@@ -9,7 +9,13 @@ export function createMenu(mainWindow: BrowserWindow | null): void {
     template.push({
       label: app.name,
       submenu: [
-        { role: 'about' },
+        {
+          label: 'Preferences',
+          accelerator: 'Cmd+,',
+          click: () => {
+            mainWindow?.webContents.send('menu:preferences');
+          }
+        },
         { type: 'separator' },
         { role: 'services' },
         { type: 'separator' },
@@ -78,14 +84,6 @@ export function createMenu(mainWindow: BrowserWindow | null): void {
     label: 'View',
     submenu: [
       {
-        label: 'Preferences',
-        accelerator: 'Cmd+,',
-        click: () => {
-          mainWindow?.webContents.send('menu:preferences');
-        }
-      },
-      { type: 'separator' },
-      {
         label: 'Toggle Sidebar',
         accelerator: 'Cmd+\\',
         click: () => {
@@ -113,7 +111,9 @@ export function createMenu(mainWindow: BrowserWindow | null): void {
         click: async () => {
           await shell.openExternal('https://github.com/adcaudill/phosphor-notes');
         }
-      }
+      },
+      { type: 'separator' },
+      { role: 'about' }
     ]
   });
 
