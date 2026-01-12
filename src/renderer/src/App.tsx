@@ -39,7 +39,7 @@ function getTitleFromContent(content: string, filename: string | null): string {
 }
 
 function AppContent(): React.JSX.Element {
-  const { settings } = useSettings();
+  const { settings, updateSetting } = useSettings();
   const [content, setContent] = useState('');
   const [vaultName, setVaultName] = useState<string | null>(null);
   const [currentFile, setCurrentFile] = useState<string | null>(null);
@@ -57,6 +57,8 @@ function AppContent(): React.JSX.Element {
   const [viewMode, setViewMode] = useState<'editor' | 'tasks'>('editor'); // Switch between editor and tasks view
   const [showRelationshipsSidebar, setShowRelationshipsSidebar] = useState(false); // Toggle for relationships sidebar
   const [frontmatterModalOpen, setFrontmatterModalOpen] = useState(false); // Toggle for frontmatter modal
+  const [focusMode, setFocusMode] = useState(false); // Toggle for focus/zen mode
+  const [paragraphDimming, setParagraphDimming] = useState(settings.enableParagraphDimming); // Toggle for paragraph dimming
 
   // Apply color palette and theme to the document
   useEffect(() => {
@@ -73,6 +75,11 @@ function AppContent(): React.JSX.Element {
     html.setAttribute('data-color-palette', settings.colorPalette);
     html.setAttribute('data-theme-mode', effectiveTheme);
   }, [settings.theme, settings.colorPalette]);
+
+  // Sync feature toggles with settings
+  useEffect(() => {
+    setParagraphDimming(settings.enableParagraphDimming);
+  }, [settings.enableParagraphDimming]);
 
   useEffect(() => {
     const init = async (): Promise<void> => {
@@ -191,6 +198,18 @@ function AppContent(): React.JSX.Element {
       console.log('Toggle sidebar requested');
     });
 
+    const unsubscribeFocusMode = window.phosphor.onMenuEvent?.('menu:focus-mode', () => {
+      setFocusMode((prev) => !prev);
+    });
+
+    const unsubscribeDimming = window.phosphor.onMenuEvent?.('menu:paragraph-dimming', () => {
+      setParagraphDimming((prev) => {
+        const newValue = !prev;
+        updateSetting('enableParagraphDimming', newValue);
+        return newValue;
+      });
+    });
+
     const unsubscribePreferences = window.phosphor.onMenuEvent?.('menu:preferences', () => {
       setSettingsOpen(true);
     });
@@ -255,6 +274,8 @@ function AppContent(): React.JSX.Element {
       if (unsubscribeSave) unsubscribeSave();
       if (unsubscribeSearch) unsubscribeSearch();
       if (unsubscribeToggleSidebar) unsubscribeToggleSidebar();
+      if (unsubscribeFocusMode) unsubscribeFocusMode();
+      if (unsubscribeDimming) unsubscribeDimming();
       if (unsubscribeFileChanged) unsubscribeFileChanged();
       if (unsubscribeFileDeleted) unsubscribeFileDeleted();
       if (unsubscribeFileAdded) unsubscribeFileAdded();
@@ -339,7 +360,7 @@ function AppContent(): React.JSX.Element {
     <div className="app-container">
       {vaultName ? (
         <>
-          <div className="main-layout">
+          <div className={`main-layout ${focusMode ? 'focus-mode' : ''}`}>
             <div className="content-wrap">
               <Sidebar
                 onFileSelect={handleFileSelect}
@@ -411,6 +432,7 @@ function AppContent(): React.JSX.Element {
                       initialDoc={content}
                       onChange={handleContentChange}
                       onLinkClick={handleLinkClick}
+                      enableDimming={paragraphDimming}
                     />
                   </>
                 ) : (
@@ -445,7 +467,7 @@ function AppContent(): React.JSX.Element {
           </div>
 
           <div className="app-footer">
-            <StatusBar status={status} />
+            <StatusBar status={status} content={viewMode === 'editor' ? content : undefined} />
           </div>
 
           <CommandPalette

@@ -90,6 +90,20 @@ export function createMenu(mainWindow: BrowserWindow | null): void {
           mainWindow?.webContents.send('menu:toggle-sidebar');
         }
       },
+      {
+        label: 'Focus Mode',
+        accelerator: 'Cmd+D',
+        click: () => {
+          mainWindow?.webContents.send('menu:focus-mode');
+        }
+      },
+      {
+        label: 'Paragraph Dimming',
+        accelerator: 'Cmd+Option+F',
+        click: () => {
+          mainWindow?.webContents.send('menu:paragraph-dimming');
+        }
+      },
       { type: 'separator' },
       {
         label: 'Toggle Developer Tools',

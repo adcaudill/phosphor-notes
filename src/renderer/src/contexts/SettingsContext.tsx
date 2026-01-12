@@ -21,7 +21,9 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
           editorFontSize: 16,
           vimMode: false,
           showLineNumbers: false,
-          lineHeight: 1.5
+          lineHeight: 1.5,
+          enableTypewriterScrolling: true,
+          enableParagraphDimming: false
         });
       } finally {
         setIsLoading(false);

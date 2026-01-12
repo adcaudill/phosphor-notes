@@ -107,6 +107,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   </label>
                   <p className="setting-hint">For the power users. Requires editor reload.</p>
                 </div>
+
+                <div className="setting-item setting-checkbox">
+                  <label htmlFor="typewriter-scrolling">
+                    <input
+                      id="typewriter-scrolling"
+                      type="checkbox"
+                      checked={settings.enableTypewriterScrolling}
+                      onChange={(e) => updateSetting('enableTypewriterScrolling', e.target.checked)}
+                    />
+                    Typewriter Scrolling
+                  </label>
+                  <p className="setting-hint">Keeps cursor centered as you type.</p>
+                </div>
+
+                <div className="setting-item setting-checkbox">
+                  <label htmlFor="paragraph-dimming">
+                    <input
+                      id="paragraph-dimming"
+                      type="checkbox"
+                      checked={settings.enableParagraphDimming}
+                      onChange={(e) => updateSetting('enableParagraphDimming', e.target.checked)}
+                    />
+                    Paragraph Dimming
+                  </label>
+                  <p className="setting-hint">Dims inactive paragraphs for focus.</p>
+                </div>
               </>
             )}
 

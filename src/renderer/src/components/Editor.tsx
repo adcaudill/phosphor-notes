@@ -9,6 +9,8 @@ import { wikiLinkPlugin } from '../editor/extensions/wikiLinks';
 import { imagePreviewPlugin } from '../editor/extensions/imagePreview';
 import { taskCheckboxPlugin, cycleTaskStatus } from '../editor/extensions/taskCheckbox';
 import { dateIndicatorPlugin } from '../editor/extensions/dateIndicator';
+import { typewriterScrollPlugin } from '../editor/extensions/typewriter';
+import { dimmingPlugin } from '../editor/extensions/dimming';
 import {
   extractFrontmatter,
   reconstructDocument,
@@ -41,9 +43,15 @@ interface EditorProps {
   initialDoc: string;
   onChange: (doc: string) => void;
   onLinkClick?: (link: string) => void;
+  enableDimming?: boolean;
 }
 
-export const Editor: React.FC<EditorProps> = ({ initialDoc, onChange, onLinkClick }) => {
+export const Editor: React.FC<EditorProps> = ({
+  initialDoc,
+  onChange,
+  onLinkClick,
+  enableDimming = false
+}) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView>(null);
   const onChangeRef = useRef(onChange);
@@ -87,6 +95,8 @@ export const Editor: React.FC<EditorProps> = ({ initialDoc, onChange, onLinkClic
         syntaxHighlighting(darkModeHighlightStyle), // Use custom dark mode colors
         taskCheckboxPlugin, // Task checkboxes
         dateIndicatorPlugin, // Date pill indicators
+        typewriterScrollPlugin, // Typewriter scrolling (cursor centered)
+        ...(enableDimming ? [dimmingPlugin] : []), // Paragraph dimming (optional)
 
         // 2. Listener for changes (call latest handler via ref, reconstruct with frontmatter)
         EditorView.updateListener.of((update) => {

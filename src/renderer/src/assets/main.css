@@ -311,7 +311,7 @@ body {
 .app-footer {
   border-top: 1px solid var(--color-border);
   background-color: var(--color-surface);
-  padding: var(--spacing-lg) var(--spacing-xl);
+  padding: 0 var(--spacing-xl);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
@@ -527,6 +527,7 @@ body {
   height: 100%;
   background-color: var(--color-background);
   color: var(--color-text-primary);
+  scroll-behavior: smooth;
 }
 
 .cm-gutters {
@@ -545,7 +546,8 @@ body {
 
 /* Typewriter mode: scrolling padding to center the cursor */
 .cm-content {
-  padding-bottom: 60vh !important;
+  padding-top: 40px !important;
+  padding-bottom: 45vh !important;
   font-size: var(--font-size-base);
   line-height: 1.6;
   letter-spacing: 0.3px;
@@ -554,6 +556,23 @@ body {
 .cm-line {
   padding-left: var(--spacing-lg);
   padding-right: var(--spacing-lg);
+}
+
+/* Paragraph Dimming */
+.cm-dimmed-line {
+  opacity: 0.4;
+  transition: opacity 0.2s ease;
+  color: var(--color-text-secondary);
+  filter: saturate(0.8) brightness(0.85);
+}
+
+/* Highlight the active paragraph */
+.cm-line:not(.cm-dimmed-line) {
+  opacity: 1;
+  color: var(--color-text-primary);
+  transition:
+    opacity 0.2s ease,
+    color 0.2s ease;
 }
 
 /* ============================================
@@ -873,16 +892,16 @@ body {
 
 .status-bar {
   width: 100%;
-  min-height: 40px;
-  padding: var(--spacing-md) var(--spacing-lg);
+  min-height: 20px;
+  padding: 4px var(--spacing-md);
   border-top: 1px solid var(--color-border);
   display: flex;
   align-items: center;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   background: var(--color-surface);
   color: var(--color-text-primary);
   font-weight: var(--font-weight-medium);
-  gap: var(--spacing-sm);
+  gap: var(--spacing-xs);
   transition: all 0.15s ease;
 }
 
@@ -962,8 +981,9 @@ body {
 }
 
 .status-bar-icon {
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-sm);
   line-height: 1;
+  flex-shrink: 0;
 }
 
 .status-bar-message {
@@ -971,6 +991,26 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.reading-stats {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-left: auto;
+  padding-left: var(--spacing-md);
+  border-left: 1px solid rgba(100, 100, 100, 0.2);
+}
+
+.stat-item {
+  white-space: nowrap;
+  font-size: var(--font-size-xs);
+  opacity: 0.8;
+}
+
+.stat-separator {
+  font-size: var(--font-size-xs);
+  opacity: 0.5;
 }
 
 /* ============================================
@@ -1285,4 +1325,55 @@ body {
 
 .delete-file-btn:hover {
   opacity: 0.9;
+}
+
+/* Focus Mode Styles */
+
+.main-layout.focus-mode .sidebar {
+  transform: translateX(-100%);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 0.3s ease-out,
+    opacity 0.3s ease-out;
+}
+
+.main-layout.focus-mode .content-wrap {
+  width: 100%;
+  transition: width 0.3s ease-out;
+}
+
+.main-layout.focus-mode .main-content {
+  max-width: 700px;
+  margin: 0 auto;
+  padding-left: var(--spacing-xl);
+  padding-right: var(--spacing-xl);
+  width: 100%;
+}
+
+.main-layout.focus-mode .app-footer {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease-out;
+}
+
+.main-layout.focus-mode .command-palette {
+  /* Command palette remains visible and interactive */
+}
+
+/* Normal state transitions */
+.sidebar {
+  transition:
+    transform 0.3s ease-out,
+    opacity 0.3s ease-out;
+}
+
+.main-content {
+  transition:
+    max-width 0.3s ease-out,
+    padding 0.3s ease-out;
+}
+
+.app-footer {
+  transition: opacity 0.3s ease-out;
 }

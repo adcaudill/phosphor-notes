@@ -55,6 +55,8 @@ export interface UserSettings {
   vimMode: boolean;
   showLineNumbers: boolean;
   lineHeight: number;
+  enableTypewriterScrolling: boolean;
+  enableParagraphDimming: boolean;
 }
 
 declare global {

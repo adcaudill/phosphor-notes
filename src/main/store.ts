@@ -10,7 +10,9 @@ const defaults: UserSettings = {
   editorFontSize: 16,
   vimMode: false,
   showLineNumbers: false,
-  lineHeight: 1.5
+  lineHeight: 1.5,
+  enableTypewriterScrolling: true,
+  enableParagraphDimming: false
 };
 
 const CONFIG_DIR = path.join(app.getPath('userData'), '.phosphor');

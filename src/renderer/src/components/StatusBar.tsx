@@ -1,8 +1,20 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+import { calculateReadingStats, formatReadTime, formatWordCount } from '../utils/readingStats';
 
 export type Status = { type: string; message: string } | null;
 
-export function StatusBar({ status }: { status: Status }): React.JSX.Element {
+export function StatusBar({
+  status,
+  content
+}: {
+  status: Status;
+  content?: string;
+}): React.JSX.Element {
+  const stats = useMemo(() => {
+    if (!content) return null;
+    return calculateReadingStats(content);
+  }, [content]);
+
   const getIcon = (type?: string): string => {
     switch (type) {
       case 'indexing-started':
@@ -30,7 +42,16 @@ export function StatusBar({ status }: { status: Status }): React.JSX.Element {
           <span className="status-bar-message">{status.message}</span>
         </>
       ) : (
-        <span className="status-bar-message">Ready</span>
+        <>
+          <span className="status-bar-message">Ready</span>
+          {stats && (
+            <div className="reading-stats">
+              <span className="stat-item">{formatWordCount(stats.wordCount)}</span>
+              <span className="stat-separator">•</span>
+              <span className="stat-item">{formatReadTime(stats)}</span>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
