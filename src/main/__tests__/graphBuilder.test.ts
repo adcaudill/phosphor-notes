@@ -83,6 +83,31 @@ describe('Graph Builder - Wikilink Extraction', () => {
       expect(links[0]).toBe('file0.md');
       expect(links[99]).toBe('file99.md');
     });
+
+    it('should handle nested paths in wikilinks', () => {
+      const content = '[[People/John]]';
+      const links = extractWikilinks(content);
+      expect(links).toEqual(['People/John.md', 'People.md']);
+    });
+
+    it('should handle deeply nested paths', () => {
+      const content = '[[Projects/Work/Client/Document]]';
+      const links = extractWikilinks(content);
+      expect(links).toEqual([
+        'Projects/Work/Client/Document.md',
+        'Projects.md',
+        'Projects/Work.md',
+        'Projects/Work/Client.md'
+      ]);
+    });
+
+    it('should deduplicate implicit parent links', () => {
+      const content = '[[People/John]] and [[People/Jane]]';
+      const links = extractWikilinks(content);
+      expect(links).toContain('People.md');
+      // People.md appears twice in the raw extract (once from each link)
+      expect(links.filter((l) => l === 'People.md')).toHaveLength(2);
+    });
   });
 
   describe('extractTags', () => {
@@ -213,6 +238,28 @@ Content`;
       const files = { 'test.md': '[[file]] [[file]] [[file]]' };
       const graph = buildWikiGraph(files);
       expect(graph['test.md']).toEqual(['file.md', 'file.md', 'file.md']);
+    });
+
+    it('should add implicit links for nested file paths', () => {
+      const files = { 'People/John.md': 'Content' };
+      const graph = buildWikiGraph(files);
+      expect(graph['People/John.md']).toEqual(['People.md']);
+    });
+
+    it('should add implicit links for deeply nested file paths', () => {
+      const files = { 'Projects/Work/Client/Document.md': 'Content' };
+      const graph = buildWikiGraph(files);
+      expect(graph['Projects/Work/Client/Document.md']).toEqual([
+        'Projects.md',
+        'Projects/Work.md',
+        'Projects/Work/Client.md'
+      ]);
+    });
+
+    it('should combine explicit wikilinks with implicit nested path links', () => {
+      const files = { 'People/John.md': '[[Skills]]' };
+      const graph = buildWikiGraph(files);
+      expect(graph['People/John.md']).toEqual(['Skills.md', 'People.md']);
     });
   });
 
