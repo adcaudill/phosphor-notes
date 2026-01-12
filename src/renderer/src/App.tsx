@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Editor } from './components/Editor';
 import { Sidebar } from './components/Sidebar';
 import StatusBar from './components/StatusBar';
+import { RelationshipsPanel } from './components/RelationshipsPanel';
 import { CommandPalette } from './components/CommandPalette';
 import { SettingsModal } from './components/SettingsModal';
 import { TasksView } from './components/TasksView';
@@ -16,6 +17,7 @@ function AppContent(): React.JSX.Element {
   const [currentFile, setCurrentFile] = useState<string | null>(null);
   const [filesVersion, setFilesVersion] = useState<number>(0);
   const debounceTimer = useRef<number | null>(null);
+  const [graph, setGraph] = useState<Record<string, string[]>>({});
   const [backlinks, setBacklinks] = useState<Record<string, string[]>>({});
   const skipSaveRef = useRef<boolean>(false);
   const [status, setStatus] = useState<{ type: string; message: string } | null>(null);
@@ -25,6 +27,7 @@ function AppContent(): React.JSX.Element {
   const [conflict, setConflict] = useState<string | null>(null); // Filename that has a conflict
   const [isDirty, setIsDirty] = useState(false); // Whether current file has unsaved changes
   const [viewMode, setViewMode] = useState<'editor' | 'tasks'>('editor'); // Switch between editor and tasks view
+  const [showRelationshipsSidebar, setShowRelationshipsSidebar] = useState(false); // Toggle for relationships sidebar
 
   // Apply color palette and theme to the document
   useEffect(() => {
@@ -66,6 +69,7 @@ function AppContent(): React.JSX.Element {
         const cached = await window.phosphor.getCachedGraph?.();
         console.debug('Cached graph loaded (raw):', cached ? Object.keys(cached).length : 0);
         if (cached) {
+          setGraph(cached);
           const bl: Record<string, string[]> = {};
           Object.entries(cached).forEach(([source, links]) => {
             links.forEach((target) => {
@@ -83,10 +87,11 @@ function AppContent(): React.JSX.Element {
     init();
 
     // subscribe to graph updates
-    const unsubscribe = window.phosphor.onGraphUpdate((graph) => {
-      console.debug('Received graph update, raw keys:', Object.keys(graph).length, graph);
+    const unsubscribe = window.phosphor.onGraphUpdate((graphData) => {
+      console.debug('Received graph update, raw keys:', Object.keys(graphData).length, graphData);
+      setGraph(graphData);
       const bl: Record<string, string[]> = {};
-      Object.entries(graph).forEach(([source, links]) => {
+      Object.entries(graphData).forEach(([source, links]) => {
         links.forEach((target) => {
           if (!bl[target]) bl[target] = [];
           bl[target].push(source);
@@ -294,98 +299,102 @@ function AppContent(): React.JSX.Element {
     <div className="app-container">
       {vaultName ? (
         <>
-          <div className="content-wrap">
-            <Sidebar
-              onFileSelect={handleFileSelect}
-              onTasksClick={() => setViewMode('tasks')}
-              onEditorClick={() => setViewMode('editor')}
-              activeFile={currentFile}
-              isDirty={isDirty}
-              refreshSignal={filesVersion}
-              viewMode={viewMode}
-            />
-            <main className="main-content">
-              {conflict && (
-                <div className="conflict-banner">
-                  ⚠️ File changed on disk. You have unsaved changes.
-                  <div>
-                    <button
-                      onClick={() => {
-                        // Load disk version (discard local changes)
-                        window.phosphor.readNote(conflict).then((diskContent) => {
-                          skipSaveRef.current = true;
-                          setContent(diskContent);
-                          setConflict(null);
-                          setIsDirty(false);
-                          setTimeout(() => {
-                            skipSaveRef.current = false;
-                          }, 100);
-                        });
-                      }}
-                    >
-                      Load Disk Version (Discard My Changes)
-                    </button>
-                    <button
-                      onClick={() => {
-                        // Save local version (overwrite disk)
-                        if (currentFile) {
-                          window.phosphor.saveNote(currentFile, content);
-                          setConflict(null);
-                          setIsDirty(false);
-                        }
-                      }}
-                    >
-                      Overwrite Disk (Keep My Changes)
-                    </button>
-                  </div>
+          <div className="main-layout">
+            <div className="content-wrap">
+              <Sidebar
+                onFileSelect={handleFileSelect}
+                onTasksClick={() => setViewMode('tasks')}
+                onEditorClick={() => setViewMode('editor')}
+                activeFile={currentFile}
+                isDirty={isDirty}
+                refreshSignal={filesVersion}
+                viewMode={viewMode}
+              />
+              <main className="main-content">
+                <div className="editor-header">
+                  <button
+                    className="relationships-toggle"
+                    onClick={() => setShowRelationshipsSidebar(!showRelationshipsSidebar)}
+                    title="Toggle relationships panel"
+                  >
+                    🔗
+                  </button>
                 </div>
-              )}
-              {viewMode === 'editor' ? (
-                <Editor
-                  initialDoc={content}
-                  onChange={handleContentChange}
-                  onLinkClick={handleLinkClick}
-                />
-              ) : (
-                <TasksView
-                  onTaskClick={(filename, _line) => {
-                    // Switch to editor view and open file
-                    setViewMode('editor');
-                    handleFileSelect(filename);
-                    // Scroll to line after a brief delay to ensure file is loaded
-                    setTimeout(() => {
-                      const view = document.querySelector('.cm-editor');
-                      if (view) {
-                        view.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                      }
-                    }, 100);
-                  }}
-                />
-              )}
-            </main>
+                {conflict && (
+                  <div className="conflict-banner">
+                    ⚠️ File changed on disk. You have unsaved changes.
+                    <div>
+                      <button
+                        onClick={() => {
+                          // Load disk version (discard local changes)
+                          window.phosphor.readNote(conflict).then((diskContent) => {
+                            skipSaveRef.current = true;
+                            setContent(diskContent);
+                            setConflict(null);
+                            setIsDirty(false);
+                            setTimeout(() => {
+                              skipSaveRef.current = false;
+                            }, 100);
+                          });
+                        }}
+                      >
+                        Load Disk Version (Discard My Changes)
+                      </button>
+                      <button
+                        onClick={() => {
+                          // Save local version (overwrite disk)
+                          if (currentFile) {
+                            window.phosphor.saveNote(currentFile, content);
+                            setConflict(null);
+                            setIsDirty(false);
+                          }
+                        }}
+                      >
+                        Overwrite Disk (Keep My Changes)
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {viewMode === 'editor' ? (
+                  <>
+                    <Editor
+                      initialDoc={content}
+                      onChange={handleContentChange}
+                      onLinkClick={handleLinkClick}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <TasksView
+                      onTaskClick={(filename, _line) => {
+                        // Switch to editor view and open file
+                        setViewMode('editor');
+                        handleFileSelect(filename);
+                        // Scroll to line after a brief delay to ensure file is loaded
+                        setTimeout(() => {
+                          const view = document.querySelector('.cm-editor');
+                          if (view) {
+                            view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          }
+                        }, 100);
+                      }}
+                    />
+                  </>
+                )}
+              </main>
+            </div>
+
+            {showRelationshipsSidebar && (
+              <RelationshipsPanel
+                currentFile={currentFile}
+                graph={graph}
+                backlinks={backlinks}
+                onFileSelect={handleFileSelect}
+              />
+            )}
           </div>
 
           <div className="app-footer">
-            <div className="linked-footer">
-              {currentFile ? (
-                <div>
-                  <strong>Linked from:</strong>{' '}
-                  {(backlinks[currentFile] || []).length === 0 ? (
-                    <em>None</em>
-                  ) : (
-                    (backlinks[currentFile] || []).map((f, i) => (
-                      <button
-                        key={f}
-                        style={{ marginLeft: i ? 8 : 6 }}
-                        onClick={() => handleFileSelect(f)}
-                      >
-                        {f}
-                      </button>
-                    ))
-                  )}
-                </div>
-              ) : null}
-            </div>
             <StatusBar status={status} />
           </div>
 
