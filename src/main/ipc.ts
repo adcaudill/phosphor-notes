@@ -581,6 +581,16 @@ export function setupIPC(mainWindow: BrowserWindow): void {
       return false;
     }
   });
+
+  // Get app versions
+  ipcMain.handle('app:get-versions', async () => {
+    return {
+      electron: process.versions.electron,
+      chrome: process.versions.chrome,
+      node: process.versions.node,
+      app: app.getVersion()
+    };
+  });
 }
 
 // Programmatically open a vault path (used on startup or from menu)

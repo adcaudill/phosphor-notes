@@ -53,6 +53,9 @@ export interface PhosphorAPI {
   ) => Promise<UserSettings>;
   setMultipleSettings: (updates: Partial<UserSettings>) => Promise<UserSettings>;
   onSettingsChange: (cb: (settings: UserSettings) => void) => () => void;
+
+  // App Info
+  getVersions: () => Promise<{ electron?: string; chrome?: string; node?: string; app?: string }>;
 }
 
 export interface UserSettings {

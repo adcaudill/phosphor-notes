@@ -108,7 +108,10 @@ const api = {
   createEncryption: (password: string) => ipcRenderer.invoke('encryption:create', password),
 
   // Delete note
-  deleteNote: (filename: string) => ipcRenderer.invoke('note:delete', filename)
+  deleteNote: (filename: string) => ipcRenderer.invoke('note:delete', filename),
+
+  // Get app versions
+  getVersions: () => ipcRenderer.invoke('app:get-versions')
 };
 
 // Expose it to the main world (Renderer)

@@ -1,5 +1,7 @@
 # Phosphor Notes
 
+_A minimal, encrypted note-taking application for the modern knowledge worker._
+
 Phosphor Notes is a lightweight note-taking Electron app built with React and TypeScript. It
 focuses on simple Markdown editing and local vaults (folders of .md files) with basic
 wiki-style [[links]] and a background indexer that builds a link graph for backlinks.

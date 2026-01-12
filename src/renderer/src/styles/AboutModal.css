@@ -1,0 +1,273 @@
+/* About Modal Styles */
+
+.modal-content.about-modal {
+  background-color: var(--color-background-secondary, #ffffff);
+  border: 1px solid var(--color-border, #e0e0e0);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header with close button */
+.about-header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px;
+  border-bottom: 1px solid var(--color-border, #e0e0e0);
+}
+
+.about-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--color-text-secondary, #666666);
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.about-close:hover {
+  background-color: var(--color-surface, #f5f5f5);
+  color: var(--color-text-primary, #000000);
+}
+
+/* Main Content Area */
+.about-content {
+  padding: 40px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+/* Icon Area */
+.about-icon-area {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.about-app-icon {
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-primary, #0066cc);
+}
+
+.about-app-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Title and Version */
+.about-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--color-text-primary, #000000);
+  text-align: center;
+}
+
+.about-version {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text-secondary, #666666);
+  text-align: center;
+  font-weight: 500;
+}
+
+/* Description */
+.about-description {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text-secondary, #666666);
+  text-align: center;
+  line-height: 1.6;
+  max-width: 340px;
+}
+
+/* Links Section */
+.about-links {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.about-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background-color: var(--color-surface, #f5f5f7);
+  color: var(--color-primary, #0066cc);
+  text-decoration: none;
+  border-radius: 6px;
+  border: 1px solid var(--color-border, #e0e0e0);
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  width: 100%;
+}
+
+.about-link:hover {
+  background-color: var(--color-primary, #0066cc);
+  color: #ffffff;
+  border-color: var(--color-primary, #0066cc);
+}
+
+.about-link-icon {
+  font-size: 12px;
+  opacity: 0.7;
+  transition: transform 0.2s ease;
+}
+
+.about-link:hover .about-link-icon {
+  transform: translate(2px, -2px);
+}
+
+/* Divider */
+.about-divider {
+  width: 100%;
+  height: 1px;
+  background-color: var(--color-border, #e0e0e0);
+  margin: 8px 0;
+}
+
+/* Technical Details Section */
+.about-section {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.about-section-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary, #666666);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Versions Grid */
+.about-versions {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+
+.version-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background-color: var(--color-surface, #f5f5f7);
+  border-radius: 6px;
+  border: 1px solid var(--color-border, #e0e0e0);
+}
+
+.version-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-primary, #000000);
+}
+
+.version-value {
+  font-size: 13px;
+  color: var(--color-text-secondary, #666666);
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  letter-spacing: 0.3px;
+}
+
+/* Footer */
+.about-footer {
+  width: 100%;
+  text-align: center;
+  margin-top: 12px;
+}
+
+.about-copyright {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-secondary, #666666);
+  opacity: 0.7;
+}
+
+/* Scrollbar styling for the modal */
+.modal-content.about-modal::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-content.about-modal::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal-content.about-modal::-webkit-scrollbar-thumb {
+  background-color: var(--color-text-secondary, #666666);
+  border-radius: 3px;
+  opacity: 0.3;
+}
+
+.modal-content.about-modal::-webkit-scrollbar-thumb:hover {
+  opacity: 0.5;
+}
+
+/* Dark Mode - High contrast adjustments */
+@media (prefers-color-scheme: dark) {
+  .about-link {
+    background-color: var(--color-surface, #2d2d2d);
+  }
+
+  .about-link:hover {
+    background-color: var(--color-primary, #4d9cff);
+    border-color: var(--color-primary, #4d9cff);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .about-modal {
+    border-radius: 16px;
+  }
+
+  .about-content {
+    padding: 32px 24px;
+    gap: 20px;
+  }
+
+  .about-icon-area {
+    margin-bottom: 4px;
+  }
+
+  .about-app-icon {
+    width: 72px;
+    height: 72px;
+  }
+
+  .about-title {
+    font-size: 24px;
+  }
+
+  .about-description {
+    font-size: 13px;
+  }
+}

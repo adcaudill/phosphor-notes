@@ -8,6 +8,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { FrontmatterModal } from './components/FrontmatterModal';
 import { TasksView } from './components/TasksView';
 import { EncryptionModal } from './components/EncryptionModal';
+import { AboutModal } from './components/AboutModal';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { useSettings } from './hooks/useSettings';
 import { extractFrontmatter, generateDefaultFrontmatter } from './utils/frontmatterUtils';
@@ -47,6 +48,7 @@ function AppContent(): React.JSX.Element {
   const statusTimerRef = useRef<number | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [aboutModalOpen, setAboutModalOpen] = useState(false); // Toggle for about modal
   const [conflict, setConflict] = useState<string | null>(null); // Filename that has a conflict
   const [isDirty, setIsDirty] = useState(false); // Whether current file has unsaved changes
   const [viewMode, setViewMode] = useState<'editor' | 'tasks'>('editor'); // Switch between editor and tasks view
@@ -235,6 +237,10 @@ function AppContent(): React.JSX.Element {
       setSettingsOpen(true);
     });
 
+    const unsubscribeAbout = window.phosphor.onMenuEvent?.('menu:about', () => {
+      setAboutModalOpen(true);
+    });
+
     const unsubscribeEnableEncryption = window.phosphor.onMenuEvent?.(
       'menu:enable-encryption',
       () => {
@@ -322,6 +328,7 @@ function AppContent(): React.JSX.Element {
       if (unsubscribeFileAdded) unsubscribeFileAdded();
       if (unsubscribeCheckUnsaved) unsubscribeCheckUnsaved();
       if (unsubscribePreferences) unsubscribePreferences();
+      if (unsubscribeAbout) unsubscribeAbout();
       if (unsubscribeEnableEncryption) unsubscribeEnableEncryption();
       if (unsubscribeLockVault) unsubscribeLockVault();
       if (statusTimerRef.current) window.clearTimeout(statusTimerRef.current);
@@ -620,6 +627,8 @@ function AppContent(): React.JSX.Element {
             isLoading={encryptionLoading}
             error={encryptionError || undefined}
           />
+
+          <AboutModal isOpen={aboutModalOpen} onClose={() => setAboutModalOpen(false)} />
         </>
       ) : (
         <div className="welcome-screen">

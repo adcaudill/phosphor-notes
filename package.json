@@ -1,7 +1,7 @@
 {
   "name": "phosphor-notes",
   "version": "1.0.0",
-  "description": "An Electron application with React and TypeScript",
+  "description": "A minimal, encrypted note-taking application for the modern knowledge worker.",
   "main": "./out/main/index.js",
   "author": "adamcaudill.com",
   "homepage": "https://github.com/adcaudill/phosphor-notes",

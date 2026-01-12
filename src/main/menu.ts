@@ -140,7 +140,12 @@ export function createMenu(mainWindow: BrowserWindow | null): void {
         }
       },
       { type: 'separator' },
-      { role: 'about' }
+      {
+        label: 'About Phosphor Notes',
+        click: () => {
+          mainWindow?.webContents.send('menu:about');
+        }
+      }
     ]
   });
 
