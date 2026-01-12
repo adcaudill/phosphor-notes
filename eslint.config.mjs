@@ -21,16 +21,13 @@ export default defineConfig(
     files: ['**/*.{ts,tsx}'],
     plugins: {
       'react-hooks': eslintPluginReactHooks,
-      'react-refresh': eslintPluginReactRefresh,
-      semi: {
-        rules: {
-          semi: ['error', 'always']
-        }
-      }
+      'react-refresh': eslintPluginReactRefresh
     },
     rules: {
       ...eslintPluginReactHooks.configs.recommended.rules,
-      ...eslintPluginReactRefresh.configs.vite.rules
+      ...eslintPluginReactRefresh.configs.vite.rules,
+      semi: ['error', 'always'],
+      'prettier/prettier': ['error', { semi: true }]
     }
   },
   eslintConfigPrettier
