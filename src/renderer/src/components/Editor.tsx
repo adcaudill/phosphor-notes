@@ -3,12 +3,35 @@ import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, KeyBinding } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
-import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
+import { syntaxHighlighting, HighlightStyle } from '@codemirror/language';
+import { tags as t } from '@lezer/highlight';
 import { wikiLinkPlugin } from '../editor/extensions/wikiLinks';
 import { imagePreviewPlugin } from '../editor/extensions/imagePreview';
 import { frontmatterPlugin } from '../editor/extensions/frontmatter';
 import { taskCheckboxPlugin, cycleTaskStatus } from '../editor/extensions/taskCheckbox';
 import { dateIndicatorPlugin } from '../editor/extensions/dateIndicator';
+
+// Dark mode highlight style with proper color contrast
+const darkModeHighlightStyle = HighlightStyle.define([
+  { tag: t.heading, color: '#60a5fa', fontWeight: 'bold' },
+  { tag: t.heading1, color: '#60a5fa', fontWeight: 'bold' },
+  { tag: t.heading2, color: '#60a5fa', fontWeight: 'bold' },
+  { tag: t.heading3, color: '#60a5fa', fontWeight: 'bold' },
+  { tag: t.processingInstruction, color: '#b0b0b0' }, // For --- and similar
+  { tag: t.punctuation, color: '#b0b0b0' },
+  { tag: t.quote, color: '#78716c', fontStyle: 'italic' },
+  { tag: t.link, color: '#60a5fa' },
+  { tag: t.url, color: '#4ade80' },
+  { tag: t.emphasis, color: '#ecf0f1', fontStyle: 'italic' },
+  { tag: t.strong, color: '#ecf0f1', fontWeight: 'bold' },
+  { tag: t.strikethrough, color: '#6b7280', textDecoration: 'line-through' },
+  { tag: t.meta, color: '#b0b0b0' },
+  { tag: t.comment, color: '#6b7280', fontStyle: 'italic' },
+  { tag: t.atom, color: '#b0b0b0' },
+  { tag: t.keyword, color: '#b0b0b0' },
+  { tag: t.string, color: '#f87171' },
+  { tag: t.variableName, color: '#ecf0f1' }
+]);
 
 interface EditorProps {
   initialDoc: string;
@@ -48,7 +71,7 @@ export const Editor: React.FC<EditorProps> = ({ initialDoc, onChange, onLinkClic
         EditorView.lineWrapping, // Soft wrap long lines
         markdown(), // Markdown syntax support
         history(), // Undo/Redo stack
-        syntaxHighlighting(defaultHighlightStyle), // Colors
+        syntaxHighlighting(darkModeHighlightStyle), // Use custom dark mode colors
         taskCheckboxPlugin, // Task checkboxes
         dateIndicatorPlugin, // Date pill indicators
 
@@ -64,17 +87,20 @@ export const Editor: React.FC<EditorProps> = ({ initialDoc, onChange, onLinkClic
         }),
 
         // 3. Visual Styling (Minimalist Theme)
-        EditorView.theme({
-          '&': { height: '100%', fontSize: '16px' },
-          '.cm-scroller': { fontFamily: "Menlo, Monaco, 'Courier New', monospace" },
-          '.cm-content': {
-            caretColor: '#569cd6',
-            maxWidth: '800px',
-            margin: '0 auto',
-            padding: '40px'
+        EditorView.theme(
+          {
+            '&': { height: '100%', fontSize: '16px' },
+            '.cm-scroller': { fontFamily: "Menlo, Monaco, 'Courier New', monospace" },
+            '.cm-content': {
+              caretColor: '#569cd6',
+              maxWidth: '800px',
+              margin: '0 auto',
+              padding: '40px'
+            },
+            '&.cm-focused': { outline: 'none' }
           },
-          '&.cm-focused': { outline: 'none' }
-        }),
+          { dark: true }
+        ),
         // Wiki link plugin and click handler
         wikiLinkPlugin,
         imagePreviewPlugin,

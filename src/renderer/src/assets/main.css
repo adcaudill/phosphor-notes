@@ -943,3 +943,111 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ============================================
+   CODEMIRROR SYNTAX HIGHLIGHTING (DARK MODE)
+   ============================================ */
+
+@media (prefers-color-scheme: dark) {
+  /* Base text color - ensure visibility */
+  .cm-editor {
+    color: #ecf0f1;
+  }
+
+  /* All punctuation and formatting marks */
+  .cm-punctuation,
+  .cm-formatting,
+  .cm-formatting-code,
+  .cm-formatting-code-block,
+  .cm-formatting-em,
+  .cm-formatting-strong,
+  .cm-formatting-list,
+  .cm-formatting-quote,
+  .cm-formatting-link,
+  .cm-formatting-linkString,
+  .cm-formatting-linkLabel,
+  .cm-formatting-hr {
+    color: #b0b0b0 !important;
+  }
+
+  /* Markdown emphasis markers (*, _, ~) */
+  .cm-em,
+  .cm-strong,
+  .cm-strikethrough {
+    color: #a0a0a0;
+  }
+
+  /* Headings */
+  .cm-heading {
+    color: #60a5fa;
+    font-weight: bold;
+  }
+
+  /* Code/inline code */
+  .cm-inline-code {
+    color: #f87171;
+    background: rgba(139, 92, 246, 0.1);
+  }
+
+  .cm-code {
+    color: #f87171;
+  }
+
+  /* Lists and blockquotes */
+  .cm-list {
+    color: #a0a0a0;
+  }
+
+  .cm-quote {
+    color: #78716c;
+    font-style: italic;
+  }
+
+  /* Link markers and URLs */
+  .cm-link {
+    color: #60a5fa;
+  }
+
+  .cm-url {
+    color: #4ade80;
+  }
+
+  /* HTML tags and attributes */
+  .cm-tag {
+    color: #f87171;
+  }
+
+  .cm-attribute {
+    color: #fbbf24;
+  }
+
+  /* Comments */
+  .cm-comment {
+    color: #6b7280;
+    font-style: italic;
+  }
+
+  /* Atoms and keywords */
+  .cm-atom {
+    color: #b0b0b0;
+  }
+
+  .cm-keyword {
+    color: #b0b0b0;
+  }
+
+  /* Variable and property names */
+  .cm-variable {
+    color: #ecf0f1;
+  }
+
+  .cm-property {
+    color: #ecf0f1;
+  }
+
+  /* Ensure text content remains visible */
+  .cm-content,
+  .cm-line {
+    color: #ecf0f1;
+  }
+}
