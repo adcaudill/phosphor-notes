@@ -83,7 +83,7 @@ function extractTasks(content: string, filename: string): Task[] {
 
     // Try Org-mode style: DEADLINE: <YYYY-MM-DD ...>
     if (!dueDate) {
-      const orgDateMatch = text.match(/DEADLINE:\s?<(\d{4}-\d{2}-\d{2})/);
+      const orgDateMatch = text.match(/DEADLINE:\s*<(\d{4}-\d{2}-\d{2})/i);
       if (orgDateMatch) {
         dueDate = orgDateMatch[1];
       }

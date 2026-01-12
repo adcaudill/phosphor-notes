@@ -45,7 +45,7 @@ export function parseTaskMetadata(rawText: string): TaskMetadata {
 
   // 4. Support Org-Mode SCHEDULED style
   if (!scheduledDate) {
-    const scheduledMatch = text.match(/SCHEDULED:\s?<(\d{4}-\d{2}-\d{2})/);
+    const scheduledMatch = text.match(/SCHEDULED:\s*<(\d{4}-\d{2}-\d{2})/i);
     if (scheduledMatch) {
       scheduledDate = parseDate(scheduledMatch[1]);
     }
@@ -53,7 +53,7 @@ export function parseTaskMetadata(rawText: string): TaskMetadata {
 
   // 5. Support Org-Mode DEADLINE style
   if (!dueDate) {
-    const deadlineMatch = text.match(/DEADLINE:\s?<(\d{4}-\d{2}-\d{2})/);
+    const deadlineMatch = text.match(/DEADLINE:\s*<(\d{4}-\d{2}-\d{2})/i);
     if (deadlineMatch) {
       dueDate = parseDate(deadlineMatch[1]);
     }
