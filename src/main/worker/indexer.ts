@@ -15,6 +15,13 @@ try {
 
 type Graph = Record<string, string[]>;
 
+export interface Task {
+  file: string;
+  line: number;
+  status: 'todo' | 'doing' | 'done';
+  text: string;
+}
+
 let searchEngine: any = null;
 
 // Parse YAML frontmatter and extract tags
@@ -49,6 +56,29 @@ function extractTags(content: string): string[] {
   }
 
   return tags;
+}
+
+// Extract tasks from markdown content
+function extractTasks(content: string, filename: string): Task[] {
+  const tasks: Task[] = [];
+  const taskRegex = /^\s*-\s*\[([ x/])\]\s*(.*)$/gm;
+
+  let match;
+  while ((match = taskRegex.exec(content)) !== null) {
+    const status = match[1] === ' ' ? 'todo' : match[1] === '/' ? 'doing' : 'done';
+    const text = match[2].trim();
+    // Calculate line number (1-indexed)
+    const line = content.substring(0, match.index).split('\n').length;
+
+    tasks.push({
+      file: filename,
+      line,
+      status,
+      text
+    });
+  }
+
+  return tasks;
 }
 
 // Initialize MiniSearch
@@ -87,6 +117,7 @@ parentPort?.on('message', async (msg: string | { type: string; query: string }) 
   if (!vaultPath) return;
 
   const graph: Graph = {};
+  const tasks: Task[] = [];
   initSearch();
 
   try {
@@ -109,6 +140,10 @@ parentPort?.on('message', async (msg: string | { type: string; query: string }) 
 
           graph[filename] = links;
 
+          // Extract tasks from this file
+          const fileTasks = extractTasks(content, filename);
+          tasks.push(...fileTasks);
+
           // Add to search index
           if (searchEngine) {
             const tags = extractTags(content);
@@ -127,7 +162,7 @@ parentPort?.on('message', async (msg: string | { type: string; query: string }) 
       })
     );
 
-    parentPort?.postMessage({ type: 'graph-complete', data: graph });
+    parentPort?.postMessage({ type: 'graph-complete', data: { graph, tasks } });
   } catch (err) {
     console.error('Indexer failed:', err);
     parentPort?.postMessage({ type: 'graph-error', error: String(err) });

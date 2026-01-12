@@ -149,6 +149,39 @@ body {
   color: var(--color-sidebar-text);
 }
 
+.sidebar-nav {
+  display: flex;
+  gap: var(--spacing-sm);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.nav-btn {
+  flex: 1;
+  padding: var(--spacing-md);
+  background-color: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-sidebar-text);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 18px;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-btn:hover {
+  background-color: var(--color-sidebar-hover);
+  border-color: var(--color-primary);
+}
+
+.nav-btn.active {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+}
+
 .sidebar ul {
   list-style: none;
   padding: 0;

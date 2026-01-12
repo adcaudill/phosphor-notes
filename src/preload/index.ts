@@ -80,6 +80,14 @@ const api = {
   // Search vault
   search: (query: string) => ipcRenderer.invoke('vault:search', query),
 
+  // Tasks API
+  getTaskIndex: () => ipcRenderer.invoke('tasks:get'),
+  onTasksUpdate: (cb: (tasks: any[]) => void) => {
+    const handler = (_: any, data: any[]) => cb(data);
+    ipcRenderer.on('phosphor:tasks-update', handler);
+    return () => ipcRenderer.removeListener('phosphor:tasks-update', handler);
+  },
+
   // Settings API
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setSetting: (key: string, value: any) => ipcRenderer.invoke('settings:set', key, value),

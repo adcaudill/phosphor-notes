@@ -10,8 +10,16 @@ interface WorkerMessage {
   error?: unknown;
 }
 
+interface Task {
+  file: string;
+  line: number;
+  status: 'todo' | 'doing' | 'done';
+  text: string;
+}
+
 let indexerWorker: Worker | null = null;
 let lastGraph: Record<string, string[]> | null = null;
+let lastTasks: Task[] | null = null;
 
 async function tryStartWorkerFromFile(
   workerPath: string,
@@ -32,10 +40,19 @@ async function tryStartWorkerFromFile(
 
   indexerWorker.on('message', (msg: WorkerMessage) => {
     if (msg?.type === 'graph-complete') {
-      const graph = msg.data as object as Record<string, string[]>;
-      console.log('Graph indexing complete. Nodes:', Object.keys(graph).length);
+      const msgData = msg.data as { graph: Record<string, string[]>; tasks: Task[] };
+      const graph = msgData.graph;
+      const tasks = msgData.tasks || [];
+      console.log(
+        'Graph indexing complete. Nodes:',
+        Object.keys(graph).length,
+        'Tasks:',
+        tasks.length
+      );
       lastGraph = graph as Record<string, string[]>;
+      lastTasks = tasks;
       mainWindow.webContents.send('phosphor:graph-update', graph);
+      mainWindow.webContents.send('phosphor:tasks-update', tasks);
       try {
         mainWindow.webContents.send('phosphor:status', {
           type: 'indexing-complete',
@@ -127,10 +144,19 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
 
         indexerWorker.on('message', (msg: WorkerMessage) => {
           if (msg?.type === 'graph-complete') {
-            const graph = msg.data as object as Record<string, string[]>;
-            console.log('Graph indexing complete. Nodes:', Object.keys(graph).length);
+            const msgData = msg.data as { graph: Record<string, string[]>; tasks: Task[] };
+            const graph = msgData.graph;
+            const tasks = msgData.tasks || [];
+            console.log(
+              'Graph indexing complete. Nodes:',
+              Object.keys(graph).length,
+              'Tasks:',
+              tasks.length
+            );
             lastGraph = graph as Record<string, string[]>;
+            lastTasks = tasks;
             mainWindow.webContents.send('phosphor:graph-update', graph);
+            mainWindow.webContents.send('phosphor:tasks-update', tasks);
             try {
               mainWindow.webContents.send('phosphor:status', {
                 type: 'indexing-complete',
@@ -193,6 +219,10 @@ export function getLastGraph(): Record<string, string[]> | null {
   return lastGraph;
 }
 
+export function getLastTasks(): Task[] | null {
+  return lastTasks;
+}
+
 let searchResultsCallback: ((results: unknown[]) => void) | null = null;
 
 export function performSearch(query: string, callback: (results: unknown[]) => void): void {
@@ -217,4 +247,49 @@ export function registerSearchResponseHandler(): void {
       searchResultsCallback?.(msg.data as unknown[]);
     }
   });
+}
+/**
+ * Update tasks for a single changed file (efficient incremental update)
+ */
+export async function updateTasksForFile(
+  vaultPath: string,
+  filename: string,
+  mainWindow: BrowserWindow
+): Promise<void> {
+  try {
+    const filePath = join(vaultPath, filename);
+    const content = await fsp.readFile(filePath, 'utf-8');
+
+    // Extract tasks from this file using the same regex as the worker
+    const taskRegex = /^\s*-\s*\[([ x/])\]\s*(.*?)$/gm;
+    const fileTasks: Task[] = [];
+
+    let match;
+    while ((match = taskRegex.exec(content)) !== null) {
+      const status = match[1] === ' ' ? 'todo' : match[1] === '/' ? 'doing' : 'done';
+      const text = match[2].trim();
+      const line = content.substring(0, match.index).split('\n').length;
+
+      fileTasks.push({
+        file: filename,
+        line,
+        status,
+        text
+      });
+    }
+
+    // Update the task index: remove old tasks for this file, add new ones
+    if (lastTasks) {
+      lastTasks = lastTasks.filter((task) => task.file !== filename);
+      lastTasks.push(...fileTasks);
+    } else {
+      lastTasks = fileTasks;
+    }
+
+    // Send updated tasks to renderer
+    mainWindow.webContents.send('phosphor:tasks-update', lastTasks);
+    console.debug(`Updated tasks for ${filename}: ${fileTasks.length} tasks`);
+  } catch (err) {
+    console.error('Failed to update tasks for file:', filename, err);
+  }
 }

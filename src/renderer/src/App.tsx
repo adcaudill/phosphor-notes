@@ -4,6 +4,7 @@ import { Sidebar } from './components/Sidebar';
 import StatusBar from './components/StatusBar';
 import { CommandPalette } from './components/CommandPalette';
 import { SettingsModal } from './components/SettingsModal';
+import { TasksView } from './components/TasksView';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { useSettings } from './hooks/useSettings';
 import './styles/colorPalettes.css';
@@ -23,6 +24,7 @@ function AppContent(): React.JSX.Element {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [conflict, setConflict] = useState<string | null>(null); // Filename that has a conflict
   const [isDirty, setIsDirty] = useState(false); // Whether current file has unsaved changes
+  const [viewMode, setViewMode] = useState<'editor' | 'tasks'>('editor'); // Switch between editor and tasks view
 
   // Apply color palette and theme to the document
   useEffect(() => {
@@ -295,9 +297,12 @@ function AppContent(): React.JSX.Element {
           <div className="content-wrap">
             <Sidebar
               onFileSelect={handleFileSelect}
+              onTasksClick={() => setViewMode('tasks')}
+              onEditorClick={() => setViewMode('editor')}
               activeFile={currentFile}
               isDirty={isDirty}
               refreshSignal={filesVersion}
+              viewMode={viewMode}
             />
             <main className="main-content">
               {conflict && (
@@ -335,11 +340,28 @@ function AppContent(): React.JSX.Element {
                   </div>
                 </div>
               )}
-              <Editor
-                initialDoc={content}
-                onChange={handleContentChange}
-                onLinkClick={handleLinkClick}
-              />
+              {viewMode === 'editor' ? (
+                <Editor
+                  initialDoc={content}
+                  onChange={handleContentChange}
+                  onLinkClick={handleLinkClick}
+                />
+              ) : (
+                <TasksView
+                  onTaskClick={(filename, _line) => {
+                    // Switch to editor view and open file
+                    setViewMode('editor');
+                    handleFileSelect(filename);
+                    // Scroll to line after a brief delay to ensure file is loaded
+                    setTimeout(() => {
+                      const view = document.querySelector('.cm-editor');
+                      if (view) {
+                        view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }
+                    }, 100);
+                  }}
+                />
+              )}
             </main>
           </div>
 

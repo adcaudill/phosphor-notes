@@ -1,5 +1,12 @@
 // src/types/phosphor.d.ts
 
+export interface Task {
+  file: string;
+  line: number;
+  status: 'todo' | 'doing' | 'done';
+  text: string;
+}
+
 export interface PhosphorAPI {
   // Vault Management
   selectVault: () => Promise<string | null>; // Returns the folder name (not full path) or null if cancelled
@@ -23,6 +30,10 @@ export interface PhosphorAPI {
   onCheckUnsavedChanges: (cb: (hasUnsaved: boolean) => boolean) => () => void;
   getLatestGraph: () => Promise<Record<string, string[]> | null>;
   search: (query: string) => Promise<Array<{ id: string; title: string; filename: string }>>;
+
+  // Tasks
+  getTaskIndex: () => Promise<Task[]>;
+  onTasksUpdate: (cb: (tasks: Task[]) => void) => () => void;
 
   // Settings
   getSettings: () => Promise<UserSettings>;

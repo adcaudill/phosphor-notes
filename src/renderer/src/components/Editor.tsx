@@ -1,12 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 import { EditorState } from '@codemirror/state';
-import { EditorView, keymap } from '@codemirror/view';
+import { EditorView, keymap, KeyBinding } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import { wikiLinkPlugin } from '../editor/extensions/wikiLinks';
 import { imagePreviewPlugin } from '../editor/extensions/imagePreview';
 import { frontmatterPlugin } from '../editor/extensions/frontmatter';
+import { taskCheckboxPlugin, cycleTaskStatus } from '../editor/extensions/taskCheckbox';
 
 interface EditorProps {
   initialDoc: string;
@@ -35,11 +36,19 @@ export const Editor: React.FC<EditorProps> = ({ initialDoc, onChange, onLinkClic
     const startState = EditorState.create({
       doc: initialDoc,
       extensions: [
-        keymap.of([...defaultKeymap, ...historyKeymap]), // Cmd+Z, Enter, etc.
+        keymap.of([
+          ...defaultKeymap,
+          ...historyKeymap,
+          {
+            key: 'Mod-Enter',
+            run: cycleTaskStatus
+          } as KeyBinding
+        ]), // Cmd+Z, Enter, etc.
         EditorView.lineWrapping, // Soft wrap long lines
         markdown(), // Markdown syntax support
         history(), // Undo/Redo stack
         syntaxHighlighting(defaultHighlightStyle), // Colors
+        taskCheckboxPlugin, // Task checkboxes
 
         // 2. Listener for changes (call latest handler via ref)
         EditorView.updateListener.of((update) => {
@@ -131,6 +140,8 @@ export const Editor: React.FC<EditorProps> = ({ initialDoc, onChange, onLinkClic
           click: (event) => {
             try {
               const target = event.target as HTMLElement | null;
+
+              // Handle wiki link clicks
               const linkEl =
                 target?.closest && (target.closest('.cm-wiki-link') as HTMLElement | null);
               if (linkEl) {
@@ -143,7 +154,7 @@ export const Editor: React.FC<EditorProps> = ({ initialDoc, onChange, onLinkClic
                 }
               }
             } catch (err) {
-              console.error('Error handling wiki link click', err);
+              console.error('Error handling click', err);
             }
             return false;
           }

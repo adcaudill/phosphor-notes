@@ -2,7 +2,14 @@ import { ipcMain, dialog, BrowserWindow, app } from 'electron';
 import * as fsp from 'fs/promises';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { startIndexing, stopIndexing, getLastGraph, performSearch } from './indexer';
+import {
+  startIndexing,
+  stopIndexing,
+  getLastGraph,
+  getLastTasks,
+  performSearch,
+  updateTasksForFile
+} from './indexer';
 import { setupWatcher, stopWatcher, markInternalSave } from './watcher';
 
 // Store the active vault path in memory for this session
@@ -79,6 +86,11 @@ export function setupIPC(mainWindow: BrowserWindow): void {
   // Return last in-memory graph if available (sent recently by indexer)
   ipcMain.handle('graph:get', async () => {
     return getLastGraph();
+  });
+
+  // Return last in-memory tasks if available (sent recently by indexer)
+  ipcMain.handle('tasks:get', async () => {
+    return getLastTasks();
   });
 
   // Search handler
@@ -192,7 +204,10 @@ export async function openVaultPath(vaultPath: string, mainWindow: BrowserWindow
 
   // Start file watcher for this vault
   try {
-    setupWatcher(activeVaultPath, mainWindow);
+    setupWatcher(vaultPath, mainWindow, (filename) => {
+      // Update tasks for only the changed file (efficient incremental update)
+      updateTasksForFile(vaultPath, filename, mainWindow);
+    });
   } catch (err) {
     console.error('Failed to start watcher:', err);
   }

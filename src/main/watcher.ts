@@ -6,6 +6,7 @@ import * as path from 'path';
 let watcher: FSWatcher | null = null; // FSWatcher type
 let lastSaveTime = 0; // Timestamp of last internal save
 const debounceTimers: Map<string, NodeJS.Timeout> = new Map();
+let onFileChangeCallback: ((filename: string) => void) | null = null; // Callback with filename
 
 const DEBOUNCE_MS = 300; // Wait 300ms after last change event before sending to UI
 const INTERNAL_SAVE_GRACE_MS = 500; // Ignore FS changes within 500ms of our own saves
@@ -14,7 +15,14 @@ const INTERNAL_SAVE_GRACE_MS = 500; // Ignore FS changes within 500ms of our own
  * Start watching a vault directory for file changes.
  * Sends events to the renderer when files change, are deleted, or are added.
  */
-export function setupWatcher(vaultPath: string, mainWindow: BrowserWindow): void {
+export function setupWatcher(
+  vaultPath: string,
+  mainWindow: BrowserWindow,
+  onFileChange?: (filename: string) => void
+): void {
+  // Store the callback for re-indexing
+  onFileChangeCallback = onFileChange || null;
+
   // Clean up any existing watcher
   if (watcher) {
     watcher.close();
@@ -33,17 +41,26 @@ export function setupWatcher(vaultPath: string, mainWindow: BrowserWindow): void
   });
 
   watcher.on('change', (filePath) => {
-    // Check if this change came from our own save
-    if (Date.now() - lastSaveTime < INTERNAL_SAVE_GRACE_MS) {
-      console.debug('[Watcher] Ignoring internal save:', filePath);
+    const relativePath = path.relative(vaultPath, filePath);
+    const isInternalSave = Date.now() - lastSaveTime < INTERNAL_SAVE_GRACE_MS;
+
+    if (isInternalSave) {
+      console.debug('[Watcher] Internal save detected:', relativePath);
+      // Still update tasks for internal saves, but skip the file-changed event
+      if (onFileChangeCallback) {
+        onFileChangeCallback(relativePath);
+      }
       return;
     }
 
     // Debounce: wait for file system to stabilize
-    const relativePath = path.relative(vaultPath, filePath);
     debounce(relativePath, () => {
       console.debug('[Watcher] File changed:', relativePath);
       mainWindow.webContents.send('vault:file-changed', relativePath);
+      // Trigger targeted re-indexing for this specific file
+      if (onFileChangeCallback) {
+        onFileChangeCallback(relativePath);
+      }
     });
   });
 
