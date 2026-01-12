@@ -35,7 +35,8 @@
     "chokidar": "^5.0.0",
     "electron-updater": "^6.3.9",
     "fs-extra": "^11.3.3",
-    "minisearch": "^7.2.0"
+    "minisearch": "^7.2.0",
+    "sodium-native": "^5.0.10"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",

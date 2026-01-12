@@ -7,15 +7,10 @@ import { CommandPalette } from './components/CommandPalette';
 import { SettingsModal } from './components/SettingsModal';
 import { FrontmatterModal } from './components/FrontmatterModal';
 import { TasksView } from './components/TasksView';
+import { EncryptionModal } from './components/EncryptionModal';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { useSettings } from './hooks/useSettings';
-import {
-  extractFrontmatter,
-  reconstructDocument,
-  isDailyNote,
-  generateDefaultFrontmatter,
-  type Frontmatter
-} from './utils/frontmatterUtils';
+import { extractFrontmatter, generateDefaultFrontmatter } from './utils/frontmatterUtils';
 import './styles/colorPalettes.css';
 
 /**
@@ -59,6 +54,12 @@ function AppContent(): React.JSX.Element {
   const [frontmatterModalOpen, setFrontmatterModalOpen] = useState(false); // Toggle for frontmatter modal
   const [focusMode, setFocusMode] = useState(false); // Toggle for focus/zen mode
   const [paragraphDimming, setParagraphDimming] = useState(settings.enableParagraphDimming); // Toggle for paragraph dimming
+  const [encryptionModalOpen, setEncryptionModalOpen] = useState(false); // Encryption modal visibility
+  const [encryptionMode, setEncryptionMode] = useState<'unlock' | 'create'>('unlock'); // Whether we're unlocking or creating
+  const [encryptionError, setEncryptionError] = useState<string | null>(null); // Error message for encryption
+  const [encryptionLoading, setEncryptionLoading] = useState(false); // Loading state for encryption operations
+  const [isVaultEncrypted, setIsVaultEncrypted] = useState(false); // Whether current vault is encrypted
+  const [isVaultUnlocked, setIsVaultUnlocked] = useState(false); // Whether vault is unlocked (only relevant if encrypted)
 
   // Apply color palette and theme to the document
   useEffect(() => {
@@ -92,10 +93,30 @@ function AppContent(): React.JSX.Element {
 
       if (selectedVault) {
         setVaultName(selectedVault);
-        const dailyNoteFilename = await window.phosphor.getDailyNoteFilename();
-        setCurrentFile(dailyNoteFilename);
-        const noteContent = await window.phosphor.readNote(dailyNoteFilename);
-        setContent(noteContent);
+
+        // Check if vault is encrypted
+        try {
+          const isEncrypted = await window.phosphor.isEncryptionEnabled?.();
+          setIsVaultEncrypted(!!isEncrypted);
+
+          if (isEncrypted) {
+            // Check if already unlocked
+            const isUnlocked = await window.phosphor.isVaultUnlocked?.();
+            setIsVaultUnlocked(!!isUnlocked);
+
+            if (!isUnlocked) {
+              // Show unlock modal
+              setEncryptionMode('unlock');
+              setEncryptionModalOpen(true);
+              return; // Don't load content yet
+            }
+          }
+        } catch (err) {
+          console.warn('Failed to check encryption status:', err);
+        }
+
+        // Load the vault content
+        await loadVaultContent();
       } else {
         console.log('No vault selected');
       }
@@ -214,6 +235,26 @@ function AppContent(): React.JSX.Element {
       setSettingsOpen(true);
     });
 
+    const unsubscribeEnableEncryption = window.phosphor.onMenuEvent?.(
+      'menu:enable-encryption',
+      () => {
+        setEncryptionMode('create');
+        setEncryptionModalOpen(true);
+      }
+    );
+
+    const unsubscribeLockVault = window.phosphor.onMenuEvent?.('menu:lock-vault', async () => {
+      try {
+        await window.phosphor.lockVault?.();
+        setIsVaultUnlocked(false);
+        // Show unlock modal again on next use
+        setEncryptionMode('unlock');
+        setEncryptionModalOpen(true);
+      } catch (err) {
+        console.error('Failed to lock vault:', err);
+      }
+    });
+
     // File change watchers - external file modifications
     const unsubscribeFileChanged = window.phosphor.onFileChanged?.((filename: string) => {
       console.debug('[FileWatcher] File changed externally:', filename);
@@ -281,6 +322,8 @@ function AppContent(): React.JSX.Element {
       if (unsubscribeFileAdded) unsubscribeFileAdded();
       if (unsubscribeCheckUnsaved) unsubscribeCheckUnsaved();
       if (unsubscribePreferences) unsubscribePreferences();
+      if (unsubscribeEnableEncryption) unsubscribeEnableEncryption();
+      if (unsubscribeLockVault) unsubscribeLockVault();
       if (statusTimerRef.current) window.clearTimeout(statusTimerRef.current);
     };
   }, []);
@@ -331,6 +374,73 @@ function AppContent(): React.JSX.Element {
     } catch (err) {
       console.error('Failed to read note', filename, err);
     }
+  };
+
+  /**
+   * Load vault content (daily note, files, graph)
+   */
+  const loadVaultContent = async (): Promise<void> => {
+    try {
+      const dailyNoteFilename = await window.phosphor.getDailyNoteFilename();
+      setCurrentFile(dailyNoteFilename);
+      const noteContent = await window.phosphor.readNote(dailyNoteFilename);
+      setContent(noteContent);
+    } catch (err) {
+      console.error('Failed to load vault content:', err);
+    }
+  };
+
+  /**
+   * Handle encryption modal submission (unlock or create)
+   */
+  const handleEncryptionSubmit = async (password: string): Promise<void> => {
+    setEncryptionLoading(true);
+    setEncryptionError(null);
+
+    try {
+      if (encryptionMode === 'unlock') {
+        // Try to unlock the vault
+        const success = await window.phosphor.unlockVault?.(password);
+        if (success) {
+          setIsVaultUnlocked(true);
+          setEncryptionModalOpen(false);
+          // Load content after unlocking
+          await loadVaultContent();
+        } else {
+          setEncryptionError('Invalid password');
+        }
+      } else {
+        // Create encryption for the vault
+        const success = await window.phosphor.createEncryption?.(password);
+        if (success) {
+          setIsVaultEncrypted(true);
+          setIsVaultUnlocked(true);
+          setEncryptionModalOpen(false);
+          // Load content after creating encryption
+          await loadVaultContent();
+        } else {
+          setEncryptionError('Failed to create encryption');
+        }
+      }
+    } catch (err) {
+      console.error('Encryption operation failed:', err);
+      setEncryptionError(`Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setEncryptionLoading(false);
+    }
+  };
+
+  /**
+   * Handle encryption modal cancel
+   */
+  const handleEncryptionCancel = (): void => {
+    // If vault is encrypted and not unlocked, user can't proceed
+    if (isVaultEncrypted && !isVaultUnlocked) {
+      // Don't allow closing the modal - force unlock or exit
+      return;
+    }
+    setEncryptionModalOpen(false);
+    setEncryptionError(null);
   };
 
   useEffect(() => {
@@ -468,7 +578,12 @@ function AppContent(): React.JSX.Element {
           </div>
 
           <div className="app-footer">
-            <StatusBar status={status} content={viewMode === 'editor' ? content : undefined} />
+            <StatusBar
+              status={status}
+              content={viewMode === 'editor' ? content : undefined}
+              isVaultEncrypted={isVaultEncrypted}
+              isVaultUnlocked={isVaultUnlocked}
+            />
           </div>
 
           <CommandPalette
@@ -495,6 +610,15 @@ function AppContent(): React.JSX.Element {
               setContent('');
               setFilesVersion((v) => v + 1);
             }}
+          />
+
+          <EncryptionModal
+            isOpen={encryptionModalOpen}
+            mode={encryptionMode}
+            onSubmit={handleEncryptionSubmit}
+            onCancel={handleEncryptionCancel}
+            isLoading={encryptionLoading}
+            error={encryptionError || undefined}
           />
         </>
       ) : (

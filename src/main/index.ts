@@ -1,10 +1,18 @@
-import { app, shell, BrowserWindow, protocol, net, ipcMain } from 'electron';
+import { app, shell, BrowserWindow, protocol, ipcMain } from 'electron';
 import { join } from 'path';
+import { readFile } from 'fs/promises';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import icon from '../../resources/icon.png?asset';
-import { setupIPC, getSavedVaultPath, openVaultPath, getActiveVaultPath } from './ipc';
+import {
+  setupIPC,
+  getSavedVaultPath,
+  openVaultPath,
+  getActiveVaultPath,
+  getActiveMasterKey
+} from './ipc';
 import { createMenu } from './menu';
 import { setupSettingsHandlers, initializeSettings } from './store';
+import { decryptBuffer, isEncrypted } from './crypto';
 
 // Suppress EPIPE errors that occur when trying to write to stdout/stderr during shutdown
 // This prevents "write EPIPE" errors when the process is closing
@@ -41,7 +49,23 @@ function setupProtocol(): void {
     }
 
     try {
-      return await net.fetch(new URL(`file://${normalized}`).href);
+      // Read the file as a buffer
+      const buffer = await readFile(normalized);
+
+      // Check if file is encrypted and decrypt if needed
+      const masterKey = getActiveMasterKey();
+      if (masterKey && isEncrypted(buffer)) {
+        try {
+          const decrypted = decryptBuffer(buffer, masterKey);
+          return new Response(new Uint8Array(decrypted));
+        } catch (err) {
+          console.error('Failed to decrypt asset:', filePath, err);
+          return new Response('Decryption failed', { status: 500 });
+        }
+      }
+
+      // File is not encrypted, return as-is
+      return new Response(new Uint8Array(buffer));
     } catch (err) {
       console.error('Failed to serve asset:', filePath, err);
       return new Response('Not found', { status: 404 });

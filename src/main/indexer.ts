@@ -3,6 +3,8 @@ import { join, resolve } from 'path';
 import { BrowserWindow } from 'electron';
 import * as fs from 'fs';
 import { promises as fsp } from 'fs';
+import { getActiveMasterKey, isEncryptionEnabled } from './ipc';
+import { decryptBuffer } from './crypto';
 
 // Safe logging that ignores EPIPE errors during shutdown
 const safeLog = (...args: unknown[]): void => {
@@ -44,9 +46,58 @@ interface Task {
   completedAt?: string;
 }
 
+interface FileContent {
+  filename: string;
+  content: string;
+}
+
 let indexerWorker: Worker | null = null;
 let lastGraph: Record<string, string[]> | null = null;
 let lastTasks: Task[] | null = null;
+
+// Helper: recursively find all .md files
+async function getFilesRecursively(dir: string): Promise<string[]> {
+  const files: string[] = [];
+  const entries = await fsp.readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name.startsWith('.')) continue;
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await getFilesRecursively(fullPath)));
+    } else if (entry.name.endsWith('.md')) {
+      files.push(fullPath);
+    }
+  }
+  return files;
+}
+
+// Helper: read a markdown file and decrypt if needed
+async function readMarkdownFile(filePath: string, vaultPath: string): Promise<string> {
+  const buffer = await fsp.readFile(filePath);
+
+  // Check if vault is encrypted and we have a master key
+  if (await isEncryptionEnabled(vaultPath)) {
+    const masterKey = getActiveMasterKey();
+    if (masterKey) {
+      try {
+        // Try to decrypt
+        const decrypted = decryptBuffer(buffer, masterKey);
+        return decrypted.toString('utf-8');
+      } catch (err) {
+        void err;
+        // If decryption fails, assume it's plaintext (safety fallback)
+        try {
+          return buffer.toString('utf-8');
+        } catch {
+          return '';
+        }
+      }
+    }
+  }
+
+  // Not encrypted or no master key - read as plaintext
+  return buffer.toString('utf-8');
+}
 
 async function tryStartWorkerFromFile(
   workerPath: string,
@@ -121,7 +172,26 @@ async function tryStartWorkerFromFile(
     console.error('Indexer worker error:', err);
   });
 
-  indexerWorker.postMessage(vaultPath);
+  // Read all markdown files and decrypt if needed
+  try {
+    const mdFiles = await getFilesRecursively(vaultPath);
+    const fileContents: FileContent[] = [];
+
+    for (const filePath of mdFiles) {
+      try {
+        const content = await readMarkdownFile(filePath, vaultPath);
+        const filename = filePath.substring(vaultPath.length + 1).replace(/\\/g, '/');
+        fileContents.push({ filename, content });
+      } catch (err) {
+        console.warn(`Failed to read file ${filePath}:`, err);
+      }
+    }
+
+    safeLog('Sending', fileContents.length, 'files to indexer worker');
+    indexerWorker.postMessage(fileContents);
+  } catch (err) {
+    console.error('Failed to read vault files:', err);
+  }
 }
 
 export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow): Promise<void> {
@@ -226,7 +296,26 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
 
         indexerWorker.on('error', (err) => safeError('Indexer worker error:', err));
 
-        indexerWorker.postMessage(vaultPath);
+        // Read all markdown files and decrypt if needed
+        try {
+          const mdFiles = await getFilesRecursively(vaultPath);
+          const fileContents: FileContent[] = [];
+
+          for (const filePath of mdFiles) {
+            try {
+              const content = await readMarkdownFile(filePath, vaultPath);
+              const filename = filePath.substring(vaultPath.length + 1).replace(/\\/g, '/');
+              fileContents.push({ filename, content });
+            } catch (err) {
+              safeLog(`Failed to read file ${filePath}:`, err);
+            }
+          }
+
+          safeLog('Sending', fileContents.length, 'files to indexer worker');
+          indexerWorker.postMessage(fileContents);
+        } catch (err) {
+          safeError('Failed to read vault files:', err);
+        }
         safeLog('Indexer: runtime-transpiled worker started');
         return;
       } catch (err) {

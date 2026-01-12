@@ -34,6 +34,13 @@ export interface PhosphorAPI {
   search: (query: string) => Promise<Array<{ id: string; title: string; filename: string }>>;
   deleteNote: (filename: string) => Promise<boolean>;
 
+  // Encryption
+  isEncryptionEnabled: () => Promise<boolean>;
+  unlockVault: (password: string) => Promise<boolean>; // Returns true if unlock successful
+  lockVault: () => Promise<void>; // Clears the master key from memory
+  isVaultUnlocked: () => Promise<boolean>;
+  createEncryption: (password: string) => Promise<boolean>; // Create encryption for vault
+
   // Tasks
   getTaskIndex: () => Promise<Task[]>;
   onTasksUpdate: (cb: (tasks: Task[]) => void) => () => void;

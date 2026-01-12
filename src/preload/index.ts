@@ -98,7 +98,17 @@ const api = {
     const handler = (_: any, data: any) => cb(data);
     ipcRenderer.on('settings:changed', handler);
     return () => ipcRenderer.removeListener('settings:changed', handler);
-  }
+  },
+
+  // Encryption API
+  isEncryptionEnabled: () => ipcRenderer.invoke('encryption:is-enabled'),
+  unlockVault: (password: string) => ipcRenderer.invoke('encryption:unlock', password),
+  lockVault: () => ipcRenderer.invoke('encryption:lock'),
+  isVaultUnlocked: () => ipcRenderer.invoke('encryption:is-unlocked'),
+  createEncryption: (password: string) => ipcRenderer.invoke('encryption:create', password),
+
+  // Delete note
+  deleteNote: (filename: string) => ipcRenderer.invoke('note:delete', filename)
 };
 
 // Expose it to the main world (Renderer)

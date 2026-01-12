@@ -55,6 +55,19 @@ export function createMenu(mainWindow: BrowserWindow | null): void {
           }
         }
       },
+      {
+        label: 'Enable Encryption...',
+        click: () => {
+          mainWindow?.webContents.send('menu:enable-encryption');
+        }
+      },
+      {
+        label: 'Lock Vault',
+        accelerator: 'Cmd+L',
+        click: () => {
+          mainWindow?.webContents.send('menu:lock-vault');
+        }
+      },
       { type: 'separator' },
       {
         label: 'Search',

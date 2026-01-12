@@ -1,6 +1,4 @@
 import { parentPort } from 'worker_threads';
-import * as fs from 'fs/promises';
-import * as path from 'path';
 
 // MiniSearch can have import issues in worker context
 // Load it dynamically to handle both ESM and CommonJS contexts
@@ -177,83 +175,81 @@ const initSearch = (): void => {
   });
 };
 
-parentPort?.on('message', async (msg: string | { type: string; query: string }) => {
-  // Handle search queries
-  if (typeof msg === 'object' && msg.type === 'search') {
-    if (!searchEngine) {
-      // Return empty results if search engine not ready yet
+parentPort?.on(
+  'message',
+  async (
+    msg: string | { type: string; query: string } | { vaultPath?: string; masterKey?: string }
+  ) => {
+    // Handle search queries
+    if (
+      typeof msg === 'object' &&
+      msg !== null &&
+      'type' in msg &&
+      (msg as { type?: unknown }).type === 'search'
+    ) {
+      const searchMsg = msg as { type: 'search'; query: string };
+      if (!searchEngine) {
+        // Return empty results if search engine not ready yet
+        parentPort?.postMessage({
+          type: 'search-results',
+          data: []
+        });
+        return;
+      }
+      const results = searchEngine.search(searchMsg.query, { prefix: true });
       parentPort?.postMessage({
         type: 'search-results',
-        data: []
+        data: results.slice(0, 20)
       });
       return;
     }
-    const results = searchEngine.search(msg.query, { prefix: true });
-    parentPort?.postMessage({
-      type: 'search-results',
-      data: results.slice(0, 20)
-    });
-    return;
-  }
 
-  // Handle initial indexing (vaultPath is a string)
-  const vaultPath = typeof msg === 'string' ? msg : null;
-  if (!vaultPath) return;
+    // Handle initial indexing - msg is an array of { filename, content } objects
+    if (!Array.isArray(msg)) {
+      return;
+    }
 
-  const graph: Graph = {};
-  const tasks: Task[] = [];
-  initSearch();
+    const fileContents = msg as Array<{ filename: string; content: string }>;
+    const graph: Graph = {};
+    const tasks: Task[] = [];
+    initSearch();
 
-  try {
-    const files = await getFilesRecursively(vaultPath);
+    try {
+      await Promise.all(
+        fileContents.map(async (file) => {
+          try {
+            const { filename, content } = file;
 
-    await Promise.all(
-      files.map(async (filePath) => {
-        try {
-          const content = await fs.readFile(filePath, 'utf-8');
-          const filename = path.basename(filePath);
+            // Extract wikilinks
+            const links = extractWikilinks(content);
+            graph[filename] = links;
 
-          // Extract wikilinks
-          const links = extractWikilinks(content);
-          graph[filename] = links;
+            // Extract tasks from this file
+            const fileTasks = extractTasks(content, filename);
+            tasks.push(...fileTasks);
 
-          // Extract tasks from this file
-          const fileTasks = extractTasks(content, filename);
-          tasks.push(...fileTasks);
-
-          // Add to search index
-          if (searchEngine) {
-            const tags = extractTags(content);
-            searchEngine.add({
-              id: filename,
-              title: filename.replace('.md', ''),
-              filename: filename,
-              content: content,
-              tags: tags.join(' ')
-            });
+            // Add to search index
+            if (searchEngine) {
+              const tags = extractTags(content);
+              searchEngine.add({
+                id: filename,
+                title: filename.replace('.md', ''),
+                filename: filename,
+                content: content,
+                tags: tags.join(' ')
+              });
+            }
+          } catch (err) {
+            // ignore file read errors for robustness
+            console.error('Indexer error for', file.filename, err);
           }
-        } catch (err) {
-          // ignore file read errors for robustness
-          console.error('Indexer read error for', filePath, err);
-        }
-      })
-    );
+        })
+      );
 
-    parentPort?.postMessage({ type: 'graph-complete', data: { graph, tasks } });
-  } catch (err) {
-    console.error('Indexer failed:', err);
-    parentPort?.postMessage({ type: 'graph-error', error: String(err) });
+      parentPort?.postMessage({ type: 'graph-complete', data: { graph, tasks } });
+    } catch (err) {
+      console.error('Indexer failed:', err);
+      parentPort?.postMessage({ type: 'graph-error', error: String(err) });
+    }
   }
-});
-
-async function getFilesRecursively(dir: string): Promise<string[]> {
-  const dirents = await fs.readdir(dir, { withFileTypes: true });
-  const files = await Promise.all(
-    dirents.map((dirent) => {
-      const res = path.resolve(dir, dirent.name);
-      return dirent.isDirectory() ? getFilesRecursively(res) : res;
-    })
-  );
-
-  return Array.prototype.concat(...files).filter((f) => f.endsWith('.md'));
-}
+);

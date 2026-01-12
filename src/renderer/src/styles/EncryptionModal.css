@@ -1,0 +1,311 @@
+/* Encryption Modal Styles */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content.encryption-modal {
+  background-color: var(--bg-secondary, #ffffff);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 8px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  padding: 24px;
+  max-width: 400px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.encryption-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.encryption-modal-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary, #000000);
+}
+
+.encryption-modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--text-secondary, #666666);
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.encryption-modal-close:hover {
+  background-color: var(--bg-tertiary, #f5f5f5);
+}
+
+.encryption-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.encryption-modal-description {
+  font-size: 14px;
+  color: var(--text-secondary, #666666);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.encryption-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary, #000000);
+}
+
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, #d0d0d0);
+  border-radius: 4px;
+  background-color: var(--bg-primary, #ffffff);
+  color: var(--text-primary, #000000);
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.password-input:focus {
+  outline: none;
+  border-color: var(--accent-color, #0078d4);
+  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.1);
+}
+
+.show-password-btn {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary, #666666);
+  padding: 4px 8px;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.show-password-btn:hover {
+  color: var(--text-primary, #000000);
+}
+
+.password-strength {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.strength-bar {
+  width: 100%;
+  height: 4px;
+  background-color: var(--bg-tertiary, #e8e8e8);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.strength-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition:
+    width 0.2s,
+    background-color 0.2s;
+}
+
+.strength-fill.weak {
+  background-color: #ef4444;
+}
+
+.strength-fill.fair {
+  background-color: #f59e0b;
+}
+
+.strength-fill.strong {
+  background-color: #10b981;
+}
+
+.strength-label {
+  font-size: 12px;
+  color: var(--text-secondary, #666666);
+}
+
+.encryption-error {
+  padding: 8px 12px;
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 4px;
+  color: #dc2626;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.encryption-info {
+  padding: 8px 12px;
+  background-color: rgba(96, 165, 250, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  border-radius: 4px;
+  color: #1e40af;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.encryption-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.btn-primary,
+.btn-secondary {
+  flex: 1;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition:
+    background-color 0.2s,
+    color 0.2s;
+  font-family: inherit;
+}
+
+.btn-primary {
+  background-color: var(--accent-color, #0078d4);
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background-color: var(--accent-color-hover, #106ebe);
+}
+
+.btn-primary:active {
+  background-color: var(--accent-color-active, #005a9e);
+}
+
+.btn-secondary {
+  background-color: var(--bg-tertiary, #f0f0f0);
+  color: var(--text-primary, #000000);
+  border: 1px solid var(--border-color, #d0d0d0);
+}
+
+.btn-secondary:hover {
+  background-color: var(--bg-tertiary-hover, #e8e8e8);
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .modal-content.encryption-modal {
+    background-color: #2d2d2d;
+    border-color: #404040;
+  }
+
+  .encryption-modal-header h2 {
+    color: #ffffff;
+  }
+
+  .encryption-modal-close {
+    color: #999999;
+  }
+
+  .encryption-modal-close:hover {
+    background-color: #3d3d3d;
+  }
+
+  .encryption-modal-description {
+    color: #cccccc;
+  }
+
+  .form-group label {
+    color: #ffffff;
+  }
+
+  .password-input {
+    background-color: #1e1e1e;
+    border-color: #404040;
+    color: #ffffff;
+  }
+
+  .password-input:focus {
+    border-color: #0078d4;
+    box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.2);
+  }
+
+  .show-password-btn {
+    color: #999999;
+  }
+
+  .show-password-btn:hover {
+    color: #ffffff;
+  }
+
+  .strength-bar {
+    background-color: #404040;
+  }
+
+  .strength-label {
+    color: #cccccc;
+  }
+
+  .encryption-error {
+    background-color: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #ff6b6b;
+  }
+
+  .encryption-info {
+    background-color: rgba(96, 165, 250, 0.15);
+    border-color: rgba(96, 165, 250, 0.4);
+    color: #60a5fa;
+  }
+
+  .btn-secondary {
+    background-color: #3d3d3d;
+    color: #ffffff;
+    border-color: #404040;
+  }
+
+  .btn-secondary:hover {
+    background-color: #4d4d4d;
+  }
+}

@@ -5,10 +5,14 @@ export type Status = { type: string; message: string } | null;
 
 export function StatusBar({
   status,
-  content
+  content,
+  isVaultEncrypted = false,
+  isVaultUnlocked = false
 }: {
   status: Status;
   content?: string;
+  isVaultEncrypted?: boolean;
+  isVaultUnlocked?: boolean;
 }): React.JSX.Element {
   const stats = useMemo(() => {
     if (!content) return null;
@@ -36,6 +40,14 @@ export function StatusBar({
 
   return (
     <div className={`status-bar ${statusClass}`}>
+      {isVaultEncrypted && (
+        <span
+          className="status-bar-encryption-icon"
+          title={isVaultUnlocked ? 'Vault is encrypted and unlocked' : 'Vault is encrypted'}
+        >
+          🔐
+        </span>
+      )}
       {status ? (
         <>
           <span className="status-bar-icon">{getIcon(status.type)}</span>

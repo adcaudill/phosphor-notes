@@ -986,6 +986,13 @@ body {
   flex-shrink: 0;
 }
 
+.status-bar-encryption-icon {
+  font-size: var(--font-size-sm);
+  line-height: 1;
+  flex-shrink: 0;
+  margin-right: var(--spacing-xs);
+}
+
 .status-bar-message {
   flex: 1;
   white-space: nowrap;
