@@ -286,7 +286,9 @@ function AppContent(): React.JSX.Element {
   }, []);
 
   const handleContentChange = (newContent: string): void => {
-    setContent(newContent);
+    // Note: We don't call setContent() here because the Editor manages its own state.
+    // Calling setContent() would update the initialDoc prop and reset CodeMirror state.
+
     setIsDirty(true); // Mark as having unsaved changes
     if (skipSaveRef.current) return; // skip saving when content is being programmatically loaded
     if (currentFile) {
@@ -307,7 +309,6 @@ function AppContent(): React.JSX.Element {
       console.debug('handleFileSelect invoked for', filename);
       let noteContent = await window.phosphor.readNote(filename);
 
-      // Check if file is missing frontmatter and auto-add it
       const { frontmatter } = extractFrontmatter(noteContent);
       if (!frontmatter) {
         console.debug('File missing frontmatter, adding default:', filename);
