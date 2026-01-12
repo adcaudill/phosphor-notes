@@ -20,6 +20,22 @@ const frontmatterCollapsedEffect = StateEffect.define<boolean>();
 const frontmatterCollapsedField = StateField.define<boolean>({
   create: () => true, // Default: collapsed
   update(value, tr) {
+    // Always reset to collapsed when document substantially changes (file switch)
+    // This happens when the entire document is replaced (from === 0, to === old length)
+    if (tr.docChanged) {
+      let isFullReplace = false;
+      tr.changes.iterChanges((fromA, toA) => {
+        // If the change spans from the start to (roughly) the end of old doc, it's a full replace
+        if (fromA === 0 && toA >= Math.max(10, tr.startState.doc.length * 0.9)) {
+          isFullReplace = true;
+        }
+      });
+      if (isFullReplace) {
+        return true; // Reset to collapsed
+      }
+    }
+
+    // Check for explicit toggle effects
     for (const effect of tr.effects) {
       if (effect.is(frontmatterCollapsedEffect)) {
         return effect.value;
@@ -48,7 +64,19 @@ const preventFrontmatterEditFilter = EditorState.transactionFilter.of((tr: Trans
   const endOfBlock = getFrontmatterEnd(docString);
   if (endOfBlock === null) return tr;
 
-  // Check if any change is within the frontmatter block
+  // Allow full document replacements (file switches)
+  // These are changes from position 0 covering ~90%+ of the old document
+  let isFullReplace = false;
+  tr.changes.iterChanges((fromA, toA) => {
+    if (fromA === 0 && toA >= Math.max(10, tr.startState.doc.length * 0.9)) {
+      isFullReplace = true;
+    }
+  });
+  if (isFullReplace) {
+    return tr; // Allow full document replacement
+  }
+
+  // Check if any partial change is within the frontmatter block
   let changedInFrontmatter = false;
   tr.changes.iterChanges((fromA) => {
     if (fromA < endOfBlock) {
@@ -57,7 +85,7 @@ const preventFrontmatterEditFilter = EditorState.transactionFilter.of((tr: Trans
   });
 
   if (changedInFrontmatter) {
-    // Reject any changes to the frontmatter block when collapsed
+    // Reject partial changes to the frontmatter block when collapsed
     return [];
   }
 
