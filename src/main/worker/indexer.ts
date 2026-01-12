@@ -76,7 +76,7 @@ function extractTasks(content: string, filename: string): Task[] {
     let dueDate: string | undefined;
 
     // Try emoji style: 📅 YYYY-MM-DD
-    const emojiDateMatch = text.match(/📅\s?(\d{4}-\d{2}-\d{2})/);
+    const emojiDateMatch = text.match(/📅\s*(\d{4}-\d{2}-\d{2})/);
     if (emojiDateMatch) {
       dueDate = emojiDateMatch[1];
     }
@@ -91,7 +91,7 @@ function extractTasks(content: string, filename: string): Task[] {
 
     // Extract completion timestamp from task text
     let completedAt: string | undefined;
-    const completeMatch = text.match(/✓\s?(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})/);
+    const completeMatch = text.match(/✓\s*(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})/);
     if (completeMatch) {
       completedAt = completeMatch[1];
     }

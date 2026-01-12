@@ -22,7 +22,7 @@ export function parseTaskMetadata(rawText: string): TaskMetadata {
   let completedAt: string | null = null;
 
   // 1. Extract Completion Timestamp (✓ 2026-01-12 14:30:45)
-  const completeMatch = text.match(/✓\s?(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})/);
+  const completeMatch = text.match(/✓\s*(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})/);
   if (completeMatch) {
     completedAt = completeMatch[1];
     text = text.replace(completeMatch[0], '').trim();
@@ -36,7 +36,7 @@ export function parseTaskMetadata(rawText: string): TaskMetadata {
   }
 
   // 3. Extract Due Date (📅 YYYY-MM-DD)
-  const dateMatch = text.match(/📅\s?(\d{4}-\d{2}-\d{2})/);
+  const dateMatch = text.match(/📅\s*(\d{4}-\d{2}-\d{2})/);
   if (dateMatch) {
     const dateStr = dateMatch[1];
     dueDate = parseDate(dateStr);
