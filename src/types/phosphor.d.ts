@@ -5,6 +5,8 @@ export interface Task {
   line: number;
   status: 'todo' | 'doing' | 'done';
   text: string;
+  dueDate?: string; // ISO date string (YYYY-MM-DD)
+  completedAt?: string; // ISO datetime string (YYYY-MM-DD HH:MM:SS)
 }
 
 export interface PhosphorAPI {

@@ -20,6 +20,8 @@ export interface Task {
   line: number;
   status: 'todo' | 'doing' | 'done';
   text: string;
+  dueDate?: string; // ISO date string (YYYY-MM-DD)
+  completedAt?: string; // ISO datetime string (YYYY-MM-DD HH:MM:SS)
 }
 
 let searchEngine: any = null;
@@ -70,11 +72,37 @@ function extractTasks(content: string, filename: string): Task[] {
     // Calculate line number (1-indexed)
     const line = content.substring(0, match.index).split('\n').length;
 
+    // Extract due date from task text
+    let dueDate: string | undefined;
+
+    // Try emoji style: 📅 YYYY-MM-DD
+    const emojiDateMatch = text.match(/📅\s?(\d{4}-\d{2}-\d{2})/);
+    if (emojiDateMatch) {
+      dueDate = emojiDateMatch[1];
+    }
+
+    // Try Org-mode style: DEADLINE: <YYYY-MM-DD ...>
+    if (!dueDate) {
+      const orgDateMatch = text.match(/DEADLINE:\s?<(\d{4}-\d{2}-\d{2})/);
+      if (orgDateMatch) {
+        dueDate = orgDateMatch[1];
+      }
+    }
+
+    // Extract completion timestamp from task text
+    let completedAt: string | undefined;
+    const completeMatch = text.match(/✓\s?(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})/);
+    if (completeMatch) {
+      completedAt = completeMatch[1];
+    }
+
     tasks.push({
       file: filename,
       line,
       status,
-      text
+      text,
+      dueDate,
+      completedAt
     });
   }
 

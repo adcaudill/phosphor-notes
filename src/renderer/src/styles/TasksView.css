@@ -61,8 +61,26 @@
   padding: 12px 16px;
   border-bottom: 1px solid var(--color-border);
   display: flex;
-  gap: 8px;
-  overflow-x: auto;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+}
+
+.filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.filter-group h4 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  opacity: 0.5;
+  margin-right: 6px;
+  white-space: nowrap;
 }
 
 .filter-btn {
@@ -197,6 +215,26 @@
   flex: 1;
   font-size: 14px;
   color: var(--color-text-primary);
+}
+
+.task-due-date-icon {
+  font-size: 12px;
+  min-width: 16px;
+  text-align: center;
+}
+
+.task-due-date {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  opacity: 0.7;
+  font-family: 'Menlo', 'Monaco', monospace;
+}
+
+.task-completed-time {
+  font-size: 12px;
+  color: #4a7c59;
+  opacity: 0.8;
+  font-style: italic;
 }
 
 .task-line {

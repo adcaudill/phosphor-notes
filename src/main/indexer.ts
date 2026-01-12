@@ -15,6 +15,8 @@ interface Task {
   line: number;
   status: 'todo' | 'doing' | 'done';
   text: string;
+  dueDate?: string;
+  completedAt?: string;
 }
 
 let indexerWorker: Worker | null = null;

@@ -7,7 +7,12 @@ import {
   WidgetType
 } from '@codemirror/view';
 import { Range } from '@codemirror/state';
-import { parseTaskMetadata, formatDate, addInterval } from '../../utils/taskParser';
+import {
+  parseTaskMetadata,
+  formatDate,
+  addInterval,
+  getCurrentTimestamp
+} from '../../utils/taskParser';
 
 class TaskCheckboxWidget extends WidgetType {
   constructor(
@@ -43,10 +48,23 @@ class TaskCheckboxWidget extends WidgetType {
     indicator.style.lineHeight = '1';
     indicator.style.color = 'var(--color-primary)';
     indicator.style.fontWeight = 'bold';
+    indicator.style.userSelect = 'none';
+
+    // Use pointerdown to intercept before CodeMirror processes cursor movement
+    indicator.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      // Capture the pointer to ensure we get the full sequence
+      if (indicator instanceof HTMLElement) {
+        indicator.setPointerCapture((e as PointerEvent).pointerId);
+      }
+    });
 
     indicator.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      e.stopImmediatePropagation();
       this.onToggle();
     });
 
@@ -108,14 +126,19 @@ export const taskCheckboxPlugin = ViewPlugin.fromClass(
             const nextDateStr = formatDate(nextDate);
             const currentDateStr = formatDate(metadata.dueDate);
 
-            // Mark current line as done
+            // Mark current line as done with timestamp
+            const timestamp = getCurrentTimestamp();
             const nextBracket = '[x]';
-            const currentLineReplacement = fullLineText.replace(/\[[ /x]\]/, nextBracket);
+            const currentLineReplacement = fullLineText
+              .replace(/\[[ /x]\]/, nextBracket)
+              .replace(/✓\s?\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}/, '') // Remove old timestamp if exists
+              .replace(/(.)$/, `✓ ${timestamp}$1`); // Add new timestamp at end
 
             // Create next occurrence
             let nextLineContent = fullLineText
               .replace(/\[[ x/]\]/, '[ ]')
-              .replace(currentDateStr, nextDateStr);
+              .replace(currentDateStr, nextDateStr)
+              .replace(/✓\s?\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}\s?/, ''); // Remove completion timestamp from new occurrence
 
             // Ensure it's reset to todo
             nextLineContent = nextLineContent.replace(/\[x\]/, '[ ]');
@@ -137,11 +160,46 @@ export const taskCheckboxPlugin = ViewPlugin.fromClass(
           } else {
             // Regular task toggle: todo → doing → done → todo
             const nextBracket = status === 'todo' ? '[/]' : status === 'doing' ? '[x]' : '[ ]';
+            let replacement = nextBracket;
+
+            // Add timestamp when marking as done
+            if (status === 'doing' && nextBracket === '[x]') {
+              const timestamp = getCurrentTimestamp();
+              replacement = `[x] ✓ ${timestamp}`;
+              // Also update the line text to include the timestamp
+              const lineText = view.state.doc.sliceString(line.from, line.to);
+              const updated = lineText.replace(/\[[ /x]\]/, replacement);
+              view.dispatch({
+                changes: {
+                  from: line.from,
+                  to: line.to,
+                  insert: updated
+                }
+              });
+              return;
+            }
+
+            // If transitioning from done to todo, remove the timestamp
+            if (status === 'done' && nextBracket === '[ ]') {
+              const lineText = view.state.doc.sliceString(line.from, line.to);
+              const updated = lineText
+                .replace(/\[x\]\s*✓\s?\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}/, '[ ]')
+                .replace(/✓\s?\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}/, '');
+              view.dispatch({
+                changes: {
+                  from: line.from,
+                  to: line.to,
+                  insert: updated
+                }
+              });
+              return;
+            }
+
             view.dispatch({
               changes: {
                 from: taskStart,
                 to: taskEnd,
-                insert: nextBracket
+                insert: replacement
               }
             });
           }

@@ -6,6 +6,7 @@ export interface TaskMetadata {
   dueDate: Date | null;
   scheduledDate: Date | null;
   recurrence: string | null; // e.g., "+1w"
+  completedAt: string | null; // ISO datetime string
   cleanText: string; // Text without metadata
 }
 
@@ -18,15 +19,23 @@ export function parseTaskMetadata(rawText: string): TaskMetadata {
   let dueDate: Date | null = null;
   let scheduledDate: Date | null = null;
   let recurrence: string | null = null;
+  let completedAt: string | null = null;
 
-  // 1. Extract Recurrence (🔁 +1d/w/m/y)
+  // 1. Extract Completion Timestamp (✓ 2026-01-12 14:30:45)
+  const completeMatch = text.match(/✓\s?(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})/);
+  if (completeMatch) {
+    completedAt = completeMatch[1];
+    text = text.replace(completeMatch[0], '').trim();
+  }
+
+  // 2. Extract Recurrence (🔁 +1d/w/m/y)
   const recurMatch = text.match(/🔁\s?(\+\d+[dwmy])/i);
   if (recurMatch) {
     recurrence = recurMatch[1].toLowerCase();
     text = text.replace(recurMatch[0], '').trim();
   }
 
-  // 2. Extract Due Date (📅 YYYY-MM-DD)
+  // 3. Extract Due Date (📅 YYYY-MM-DD)
   const dateMatch = text.match(/📅\s?(\d{4}-\d{2}-\d{2})/);
   if (dateMatch) {
     const dateStr = dateMatch[1];
@@ -34,7 +43,7 @@ export function parseTaskMetadata(rawText: string): TaskMetadata {
     text = text.replace(dateMatch[0], '').trim();
   }
 
-  // 3. Support Org-Mode SCHEDULED style
+  // 4. Support Org-Mode SCHEDULED style
   if (!scheduledDate) {
     const scheduledMatch = text.match(/SCHEDULED:\s?<(\d{4}-\d{2}-\d{2})/);
     if (scheduledMatch) {
@@ -42,7 +51,7 @@ export function parseTaskMetadata(rawText: string): TaskMetadata {
     }
   }
 
-  // 4. Support Org-Mode DEADLINE style
+  // 5. Support Org-Mode DEADLINE style
   if (!dueDate) {
     const deadlineMatch = text.match(/DEADLINE:\s?<(\d{4}-\d{2}-\d{2})/);
     if (deadlineMatch) {
@@ -50,7 +59,7 @@ export function parseTaskMetadata(rawText: string): TaskMetadata {
     }
   }
 
-  return { dueDate, scheduledDate, recurrence, cleanText: text };
+  return { dueDate, scheduledDate, recurrence, completedAt, cleanText: text };
 }
 
 /**
@@ -155,4 +164,36 @@ export function addInterval(date: Date, interval: string): Date {
     default:
       return date;
   }
+}
+
+/**
+ * Get current timestamp in YYYY-MM-DD HH:MM:SS format
+ */
+export function getCurrentTimestamp(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
+/**
+ * Format a timestamp for display (e.g., "Jan 12, 2:30 PM")
+ */
+export function formatTimestamp(timestampStr: string): string {
+  const [dateStr, timeStr] = timestampStr.split(' ');
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const [hours, minutes] = timeStr.split(':').map(Number);
+
+  const date = new Date(year, month - 1, day, hours, minutes);
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
 }
