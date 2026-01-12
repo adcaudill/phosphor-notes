@@ -5,9 +5,17 @@ import StatusBar from './components/StatusBar';
 import { RelationshipsPanel } from './components/RelationshipsPanel';
 import { CommandPalette } from './components/CommandPalette';
 import { SettingsModal } from './components/SettingsModal';
+import { FrontmatterModal } from './components/FrontmatterModal';
 import { TasksView } from './components/TasksView';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { useSettings } from './hooks/useSettings';
+import {
+  extractFrontmatter,
+  reconstructDocument,
+  isDailyNote,
+  generateDefaultFrontmatter,
+  type Frontmatter
+} from './utils/frontmatterUtils';
 import './styles/colorPalettes.css';
 
 /**
@@ -20,7 +28,7 @@ function getTitleFromContent(content: string, filename: string | null): string {
   const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
   if (frontmatterMatch) {
     const frontmatter = frontmatterMatch[1];
-    const titleMatch = frontmatter.match(/title:\s*["']?([^"\'\n]+)["']?/);
+    const titleMatch = frontmatter.match(/title:\s*["']?([^"'\n]+)["']?/);
     if (titleMatch) {
       return titleMatch[1].trim();
     }
@@ -48,6 +56,7 @@ function AppContent(): React.JSX.Element {
   const [isDirty, setIsDirty] = useState(false); // Whether current file has unsaved changes
   const [viewMode, setViewMode] = useState<'editor' | 'tasks'>('editor'); // Switch between editor and tasks view
   const [showRelationshipsSidebar, setShowRelationshipsSidebar] = useState(false); // Toggle for relationships sidebar
+  const [frontmatterModalOpen, setFrontmatterModalOpen] = useState(false); // Toggle for frontmatter modal
 
   // Apply color palette and theme to the document
   useEffect(() => {
@@ -275,7 +284,18 @@ function AppContent(): React.JSX.Element {
   const handleFileSelect = async (filename: string): Promise<void> => {
     try {
       console.debug('handleFileSelect invoked for', filename);
-      const noteContent = await window.phosphor.readNote(filename);
+      let noteContent = await window.phosphor.readNote(filename);
+
+      // Check if file is missing frontmatter and auto-add it
+      const { frontmatter } = extractFrontmatter(noteContent);
+      if (!frontmatter) {
+        console.debug('File missing frontmatter, adding default:', filename);
+        const defaultFrontmatter = generateDefaultFrontmatter(filename);
+        noteContent = defaultFrontmatter + '\n' + noteContent;
+        // Save the updated content with frontmatter
+        await window.phosphor.saveNote(filename, noteContent);
+      }
+
       // Prevent the programmatic content load from triggering a save
       skipSaveRef.current = true;
       setContent(noteContent);
@@ -333,13 +353,22 @@ function AppContent(): React.JSX.Element {
               <main className="main-content">
                 <div className="editor-header">
                   <h1 className="editor-title">{getTitleFromContent(content, currentFile)}</h1>
-                  <button
-                    className="relationships-toggle"
-                    onClick={() => setShowRelationshipsSidebar(!showRelationshipsSidebar)}
-                    title="Toggle relationships panel"
-                  >
-                    🔗
-                  </button>
+                  <div className="editor-header-actions">
+                    <button
+                      className="settings-btn"
+                      onClick={() => setFrontmatterModalOpen(true)}
+                      title="Edit file settings"
+                    >
+                      🔧
+                    </button>
+                    <button
+                      className="relationships-toggle"
+                      onClick={() => setShowRelationshipsSidebar(!showRelationshipsSidebar)}
+                      title="Toggle relationships panel"
+                    >
+                      🔗
+                    </button>
+                  </div>
                 </div>
                 {conflict && (
                   <div className="conflict-banner">
@@ -387,7 +416,7 @@ function AppContent(): React.JSX.Element {
                 ) : (
                   <>
                     <TasksView
-                      onTaskClick={(filename, _line) => {
+                      onTaskClick={(filename) => {
                         // Switch to editor view and open file
                         setViewMode('editor');
                         handleFileSelect(filename);
@@ -426,6 +455,24 @@ function AppContent(): React.JSX.Element {
           />
 
           <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+          <FrontmatterModal
+            isOpen={frontmatterModalOpen}
+            onClose={() => setFrontmatterModalOpen(false)}
+            currentFile={currentFile}
+            content={content}
+            onSave={(updatedContent) => {
+              setContent(updatedContent);
+              if (currentFile) {
+                window.phosphor.saveNote(currentFile, updatedContent);
+              }
+            }}
+            onDelete={(filename) => {
+              window.phosphor.deleteNote(filename);
+              setCurrentFile(null);
+              setContent('');
+              setFilesVersion((v) => v + 1);
+            }}
+          />
         </>
       ) : (
         <div className="welcome-screen">

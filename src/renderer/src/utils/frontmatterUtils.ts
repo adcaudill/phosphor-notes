@@ -9,6 +9,46 @@ export interface DocumentParts {
 }
 
 /**
+ * Check if a filename matches the daily note pattern (YYYY-MM-DD.md)
+ */
+export function isDailyNote(filename: string): boolean {
+  const match = filename.match(/(\d{4})-(\d{2})-(\d{2})\.md$/);
+  return !!match;
+}
+
+/**
+ * Extract date parts from a daily note filename
+ */
+export function extractDateFromFilename(filename: string): Date | null {
+  const match = filename.match(/(\d{4})-(\d{2})-(\d{2})\.md$/);
+  if (!match) return null;
+
+  const [, year, month, day] = match;
+  return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+}
+
+/**
+ * Generate default frontmatter for a new file
+ */
+export function generateDefaultFrontmatter(filename: string): string {
+  if (isDailyNote(filename)) {
+    const date = extractDateFromFilename(filename);
+    if (date) {
+      const formatted = date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+      return `---\ntitle: ${formatted}\ntype: daily\n---`;
+    }
+  }
+
+  // Extract filename without extension for default title
+  const filenameWithoutExt = filename.replace(/\.md$/, '');
+  return `---\ntitle: ${filenameWithoutExt}\n---`;
+}
+
+/**
  * Extract frontmatter from a document string
  * Frontmatter is expected to be at the start, between --- delimiters
  */
@@ -78,7 +118,6 @@ export function reconstructDocument(frontmatter: Frontmatter | null, content: st
   }
 
   // Check if the content already starts with this frontmatter (avoid duplication)
-  const expectedStart = frontmatter.raw + '\n';
   if (content.startsWith(frontmatter.raw)) {
     // Content already has frontmatter, return as-is
     return content;

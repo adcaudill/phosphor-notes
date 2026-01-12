@@ -32,6 +32,7 @@ export interface PhosphorAPI {
   onCheckUnsavedChanges: (cb: (hasUnsaved: boolean) => boolean) => () => void;
   getLatestGraph: () => Promise<Record<string, string[]> | null>;
   search: (query: string) => Promise<Array<{ id: string; title: string; filename: string }>>;
+  deleteNote: (filename: string) => Promise<boolean>;
 
   // Tasks
   getTaskIndex: () => Promise<Task[]>;
@@ -39,7 +40,10 @@ export interface PhosphorAPI {
 
   // Settings
   getSettings: () => Promise<UserSettings>;
-  setSetting: (key: keyof UserSettings, value: any) => Promise<UserSettings>;
+  setSetting: <K extends keyof UserSettings>(
+    key: K,
+    value: UserSettings[K]
+  ) => Promise<UserSettings>;
   setMultipleSettings: (updates: Partial<UserSettings>) => Promise<UserSettings>;
   onSettingsChange: (cb: (settings: UserSettings) => void) => () => void;
 }
