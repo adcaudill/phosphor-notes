@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, KeyBinding } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
@@ -7,9 +7,13 @@ import { syntaxHighlighting, HighlightStyle } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
 import { wikiLinkPlugin } from '../editor/extensions/wikiLinks';
 import { imagePreviewPlugin } from '../editor/extensions/imagePreview';
-import { frontmatterPlugin } from '../editor/extensions/frontmatter';
 import { taskCheckboxPlugin, cycleTaskStatus } from '../editor/extensions/taskCheckbox';
 import { dateIndicatorPlugin } from '../editor/extensions/dateIndicator';
+import {
+  extractFrontmatter,
+  reconstructDocument,
+  type Frontmatter
+} from '../utils/frontmatterUtils';
 
 // Dark mode highlight style with proper color contrast
 const darkModeHighlightStyle = HighlightStyle.define([
@@ -44,6 +48,15 @@ export const Editor: React.FC<EditorProps> = ({ initialDoc, onChange, onLinkClic
   const viewRef = useRef<EditorView>(null);
   const onChangeRef = useRef(onChange);
   const onLinkClickRef = useRef(onLinkClick);
+  const frontmatterRef = useRef<Frontmatter | null>(null);
+
+  // Extract frontmatter and content, memoized to avoid re-extraction on every render
+  const { frontmatter, content } = useMemo(() => extractFrontmatter(initialDoc), [initialDoc]);
+
+  // Update the frontmatter ref whenever extraction changes
+  useEffect(() => {
+    frontmatterRef.current = frontmatter;
+  }, [frontmatter]);
 
   // Keep refs up-to-date so CodeMirror listeners call the latest handlers
   useEffect(() => {
@@ -56,9 +69,9 @@ export const Editor: React.FC<EditorProps> = ({ initialDoc, onChange, onLinkClic
   useEffect(() => {
     if (!editorRef.current) return;
 
-    // 1. Define the Initial State
+    // 1. Define the Initial State (use only the content, without frontmatter)
     const startState = EditorState.create({
-      doc: initialDoc,
+      doc: content,
       extensions: [
         keymap.of([
           ...defaultKeymap,
@@ -75,11 +88,13 @@ export const Editor: React.FC<EditorProps> = ({ initialDoc, onChange, onLinkClic
         taskCheckboxPlugin, // Task checkboxes
         dateIndicatorPlugin, // Date pill indicators
 
-        // 2. Listener for changes (call latest handler via ref)
+        // 2. Listener for changes (call latest handler via ref, reconstruct with frontmatter)
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             try {
-              onChangeRef.current(update.state.doc.toString());
+              const contentOnly = update.state.doc.toString();
+              const fullDoc = reconstructDocument(frontmatterRef.current, contentOnly);
+              onChangeRef.current(fullDoc);
             } catch (e) {
               console.error(e);
             }
@@ -104,7 +119,6 @@ export const Editor: React.FC<EditorProps> = ({ initialDoc, onChange, onLinkClic
         // Wiki link plugin and click handler
         wikiLinkPlugin,
         imagePreviewPlugin,
-        frontmatterPlugin,
         EditorView.domEventHandlers({
           paste: (event, view) => {
             const items = event.clipboardData?.items;
@@ -202,20 +216,20 @@ export const Editor: React.FC<EditorProps> = ({ initialDoc, onChange, onLinkClic
     return () => {
       view.destroy();
     };
-  }, []); // Run once on mount
+  }, [content]); // Re-create editor when content changes
 
   // Handle external updates (e.g. clicking a different file in sidebar)
   useEffect(() => {
-    if (viewRef.current && initialDoc !== viewRef.current.state.doc.toString()) {
+    if (viewRef.current && content !== viewRef.current.state.doc.toString()) {
       viewRef.current.dispatch({
         changes: {
           from: 0,
           to: viewRef.current.state.doc.length,
-          insert: initialDoc
+          insert: content
         }
       });
     }
-  }, [initialDoc]);
+  }, [content]);
 
   return (
     <div

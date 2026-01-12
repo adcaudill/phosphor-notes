@@ -647,6 +647,16 @@ body {
   }
 }
 
+/* Hide frontmatter lines completely */
+.cm-frontmatter-hidden {
+  display: none !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
 /* ============================================
    CONFLICT BANNER
    ============================================ */
