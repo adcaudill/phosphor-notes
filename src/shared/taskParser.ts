@@ -1,0 +1,158 @@
+/**
+ * Task parser for extracting metadata (dates, recurrence) from task text
+ */
+
+export interface TaskMetadata {
+  dueDate: Date | null;
+  scheduledDate: Date | null;
+  recurrence: string | null; // e.g., "+1w"
+  cleanText: string; // Text without metadata
+}
+
+/**
+ * Parse task metadata from raw task text
+ * Supports both emoji style (📅 2026-01-15 🔁 +1w) and Org-mode style
+ */
+export function parseTaskMetadata(rawText: string): TaskMetadata {
+  let text = rawText;
+  let dueDate: Date | null = null;
+  let scheduledDate: Date | null = null;
+  let recurrence: string | null = null;
+
+  // 1. Extract Recurrence (🔁 +1d/w/m/y)
+  const recurMatch = text.match(/🔁\s?(\+\d+[dwmy])/i);
+  if (recurMatch) {
+    recurrence = recurMatch[1].toLowerCase();
+    text = text.replace(recurMatch[0], '').trim();
+  }
+
+  // 2. Extract Due Date (📅 YYYY-MM-DD)
+  const dateMatch = text.match(/📅\s?(\d{4}-\d{2}-\d{2})/);
+  if (dateMatch) {
+    const dateStr = dateMatch[1];
+    dueDate = parseDate(dateStr);
+    text = text.replace(dateMatch[0], '').trim();
+  }
+
+  // 3. Support Org-Mode SCHEDULED style
+  if (!scheduledDate) {
+    const scheduledMatch = text.match(/SCHEDULED:\s?<(\d{4}-\d{2}-\d{2})/);
+    if (scheduledMatch) {
+      scheduledDate = parseDate(scheduledMatch[1]);
+    }
+  }
+
+  // 4. Support Org-Mode DEADLINE style
+  if (!dueDate) {
+    const deadlineMatch = text.match(/DEADLINE:\s?<(\d{4}-\d{2}-\d{2})/);
+    if (deadlineMatch) {
+      dueDate = parseDate(deadlineMatch[1]);
+    }
+  }
+
+  return { dueDate, scheduledDate, recurrence, cleanText: text };
+}
+
+/**
+ * Parse a date string in YYYY-MM-DD format
+ */
+function parseDate(dateStr: string): Date {
+  const date = new Date(dateStr + 'T00:00:00Z');
+  return date;
+}
+
+/**
+ * Format a date as YYYY-MM-DD
+ */
+export function formatDate(date: Date): string {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Check if a date is in the past
+ */
+export function isPast(date: Date): boolean {
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  return date < today;
+}
+
+/**
+ * Check if a date is today
+ */
+export function isToday(date: Date): boolean {
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const dateNorm = new Date(date);
+  dateNorm.setUTCHours(0, 0, 0, 0);
+  return dateNorm.getTime() === today.getTime();
+}
+
+/**
+ * Check if a date is in the future
+ */
+export function isFuture(date: Date): boolean {
+  return !isPast(date) && !isToday(date);
+}
+
+/**
+ * Add days to a date
+ */
+export function addDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  result.setUTCDate(result.getUTCDate() + days);
+  return result;
+}
+
+/**
+ * Add weeks to a date
+ */
+export function addWeeks(date: Date, weeks: number): Date {
+  return addDays(date, weeks * 7);
+}
+
+/**
+ * Add months to a date
+ */
+export function addMonths(date: Date, months: number): Date {
+  const result = new Date(date);
+  result.setUTCMonth(result.getUTCMonth() + months);
+  return result;
+}
+
+/**
+ * Add years to a date
+ */
+export function addYears(date: Date, years: number): Date {
+  const result = new Date(date);
+  result.setUTCFullYear(result.getUTCFullYear() + years);
+  return result;
+}
+
+/**
+ * Parse recurrence interval and add to date
+ * e.g., "+1w" -> 1 week, "+2d" -> 2 days
+ */
+export function addInterval(date: Date, interval: string): Date {
+  const match = interval.match(/\+(\d+)([dwmy])/i);
+  if (!match) return date;
+
+  const amount = parseInt(match[1]);
+  const unit = match[2].toLowerCase();
+
+  switch (unit) {
+    case 'd':
+      return addDays(date, amount);
+    case 'w':
+      return addWeeks(date, amount);
+    case 'm':
+      return addMonths(date, amount);
+    case 'y':
+      return addYears(date, amount);
+    default:
+      return date;
+  }
+}

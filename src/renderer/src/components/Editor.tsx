@@ -8,6 +8,7 @@ import { wikiLinkPlugin } from '../editor/extensions/wikiLinks';
 import { imagePreviewPlugin } from '../editor/extensions/imagePreview';
 import { frontmatterPlugin } from '../editor/extensions/frontmatter';
 import { taskCheckboxPlugin, cycleTaskStatus } from '../editor/extensions/taskCheckbox';
+import { dateIndicatorPlugin } from '../editor/extensions/dateIndicator';
 
 interface EditorProps {
   initialDoc: string;
@@ -49,6 +50,7 @@ export const Editor: React.FC<EditorProps> = ({ initialDoc, onChange, onLinkClic
         history(), // Undo/Redo stack
         syntaxHighlighting(defaultHighlightStyle), // Colors
         taskCheckboxPlugin, // Task checkboxes
+        dateIndicatorPlugin, // Date pill indicators
 
         // 2. Listener for changes (call latest handler via ref)
         EditorView.updateListener.of((update) => {

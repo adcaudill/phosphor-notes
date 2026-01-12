@@ -7,6 +7,7 @@ import {
   WidgetType
 } from '@codemirror/view';
 import { Range } from '@codemirror/state';
+import { parseTaskMetadata, formatDate, addInterval } from '../../utils/taskParser';
 
 class TaskCheckboxWidget extends WidgetType {
   constructor(
@@ -97,15 +98,53 @@ export const taskCheckboxPlugin = ViewPlugin.fromClass(
         const status = match[1] === ' ' ? 'todo' : match[1] === '/' ? 'doing' : 'done';
 
         const onToggle = (): void => {
-          // Dispatch a task toggle when checkbox is clicked
-          const nextBracket = status === 'todo' ? '[/]' : status === 'doing' ? '[x]' : '[ ]';
-          view.dispatch({
-            changes: {
-              from: taskStart,
-              to: taskEnd,
-              insert: nextBracket
-            }
-          });
+          // Get the full line text to check for recurrence
+          const fullLineText = view.state.doc.sliceString(line.from, line.to);
+          const metadata = parseTaskMetadata(fullLineText);
+
+          if (metadata.recurrence && metadata.dueDate) {
+            // Handle recurring task
+            const nextDate = addInterval(metadata.dueDate, metadata.recurrence);
+            const nextDateStr = formatDate(nextDate);
+            const currentDateStr = formatDate(metadata.dueDate);
+
+            // Mark current line as done
+            const nextBracket = '[x]';
+            const currentLineReplacement = fullLineText.replace(/\[[ /x]\]/, nextBracket);
+
+            // Create next occurrence
+            let nextLineContent = fullLineText
+              .replace(/\[[ x/]\]/, '[ ]')
+              .replace(currentDateStr, nextDateStr);
+
+            // Ensure it's reset to todo
+            nextLineContent = nextLineContent.replace(/\[x\]/, '[ ]');
+
+            // Dispatch changes: replace current line and insert new line below
+            view.dispatch({
+              changes: [
+                {
+                  from: line.from,
+                  to: line.to,
+                  insert: currentLineReplacement
+                },
+                {
+                  from: line.to,
+                  insert: '\n' + nextLineContent
+                }
+              ]
+            });
+          } else {
+            // Regular task toggle: todo → doing → done → todo
+            const nextBracket = status === 'todo' ? '[/]' : status === 'doing' ? '[x]' : '[ ]';
+            view.dispatch({
+              changes: {
+                from: taskStart,
+                to: taskEnd,
+                insert: nextBracket
+              }
+            });
+          }
         };
 
         const widget = new TaskCheckboxWidget(status, line.from, taskStart, taskEnd, onToggle);
@@ -136,7 +175,41 @@ export function cycleTaskStatus(view: EditorView): boolean {
   const taskMatch = lineText.match(/^\s*-\s*\[([ x/])\]/);
   if (!taskMatch) return false;
 
-  // Determine next status: todo → doing → done → todo
+  // Check if this is a recurring task
+  const metadata = parseTaskMetadata(lineText);
+  if (metadata.recurrence && metadata.dueDate) {
+    // Handle recurring task completion
+    const nextDate = addInterval(metadata.dueDate, metadata.recurrence);
+    const nextDateStr = formatDate(nextDate);
+    const currentDateStr = formatDate(metadata.dueDate);
+
+    // Mark current line as done
+    const currentLineReplacement = lineText.replace(/\[[ /x]\]/, '[x]');
+
+    // Create next occurrence
+    let nextLineContent = lineText.replace(/\[[ x/]\]/, '[ ]').replace(currentDateStr, nextDateStr);
+
+    nextLineContent = nextLineContent.replace(/\[x\]/, '[ ]');
+
+    // Dispatch changes: replace current line and insert new line below
+    view.dispatch({
+      changes: [
+        {
+          from: lineStart,
+          to: lineEnd,
+          insert: currentLineReplacement
+        },
+        {
+          from: lineEnd,
+          insert: '\n' + nextLineContent
+        }
+      ]
+    });
+
+    return true;
+  }
+
+  // Regular task toggle: todo → doing → done → todo
   const currentStatus = taskMatch[1];
   const nextBracket = currentStatus === ' ' ? '[/]' : currentStatus === '/' ? '[x]' : '[ ]';
 
