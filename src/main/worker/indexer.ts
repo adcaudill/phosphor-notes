@@ -4,14 +4,24 @@ import * as path from 'path';
 
 // MiniSearch can have import issues in worker context
 // Load it dynamically to handle both ESM and CommonJS contexts
-let MiniSearch: any;
-try {
-  const imported = require('minisearch');
-  MiniSearch = imported.default || imported;
-} catch {
-  // Fallback if require fails
-  MiniSearch = require('minisearch');
-}
+let MiniSearch: unknown = null;
+
+// Dynamically import minisearch to avoid require() in ESM contexts
+(async () => {
+  try {
+    const imported = await import('minisearch');
+    if (typeof imported === 'object' && imported !== null && 'default' in imported) {
+      // ESM default export
+      MiniSearch = (imported as { default: unknown }).default;
+    } else {
+      // CommonJS or other shape
+      MiniSearch = imported;
+    }
+  } catch {
+    // Fallback: if dynamic import fails, leave MiniSearch null
+    MiniSearch = null;
+  }
+})();
 
 type Graph = Record<string, string[]>;
 
@@ -24,40 +34,76 @@ export interface Task {
   completedAt?: string; // ISO datetime string (YYYY-MM-DD HH:MM:SS)
 }
 
-let searchEngine: any = null;
+// Minimal interface for the subset of MiniSearch used by this worker
+interface SearchEngine {
+  search(query: string, options?: Record<string, unknown>): Array<Record<string, unknown>>;
+  add(doc: Record<string, unknown>): void;
+}
 
-// Parse YAML frontmatter and extract tags
+let searchEngine: SearchEngine | null = null;
+
+/**
+ * Extract wikilinks from markdown content
+ * Converts [[filename]] or [[filename.md]] format
+ * Always returns filenames with .md extension
+ */
+function extractWikilinks(content: string): string[] {
+  const wikiLinkRegex = /\[\[(.*?)\]\]/g;
+  const links: string[] = [];
+
+  let match;
+  while ((match = wikiLinkRegex.exec(content)) !== null) {
+    let link = match[1].trim();
+    if (!link) continue; // Skip empty matches
+
+    // Normalize: ensure .md extension
+    if (!link.endsWith('.md')) {
+      link += '.md';
+    }
+
+    links.push(link);
+  }
+
+  return links;
+}
+
+/**
+ * Extract tags from YAML frontmatter
+ * Supports multiple formats:
+ * 1. tags: [tag1, tag2, tag3]
+ * 2. tags: tag1, tag2, tag3
+ * 3. #tag1 #tag2 in frontmatter
+ */
 function extractTags(content: string): string[] {
   const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
   if (!frontmatterMatch) return [];
 
   const frontmatter = frontmatterMatch[1];
-  const tags: string[] = [];
+  const tags = new Set<string>();
 
-  // Match tags in multiple formats:
-  // 1. tags: [tag1, tag2] or tags: [tag1, tag2, tag3]
+  // Format 1: tags: [tag1, tag2, tag3]
   const arrayMatch = frontmatter.match(/tags:\s*\[(.*?)\]/);
   if (arrayMatch) {
-    const tagList = arrayMatch[1].split(',').map((t) => t.trim());
-    tags.push(...tagList);
+    const tagList = arrayMatch[1].split(',').map((t) => t.trim().toLowerCase());
+    tagList.forEach((t) => tags.add(t));
   }
 
-  // 2. tags: tag1, tag2, tag3 (comma-separated)
-  const csvMatch = frontmatter.match(/tags:\s*([^\n]+)/);
-  if (csvMatch && !arrayMatch) {
-    const tagList = csvMatch[1].split(',').map((t) => t.trim());
-    tags.push(...tagList);
-  }
-
-  // 3. #tag1 #tag2 (hashtag format)
-  const hashtagMatches = frontmatter.matchAll(/#(\w+)/g);
-  for (const match of hashtagMatches) {
-    if (!tags.includes(match[1])) {
-      tags.push(match[1]);
+  // Format 2: tags: tag1, tag2, tag3 (comma-separated)
+  if (!arrayMatch) {
+    const csvMatch = frontmatter.match(/tags:\s*([^\n]+)/);
+    if (csvMatch) {
+      const tagList = csvMatch[1].split(',').map((t) => t.trim().toLowerCase());
+      tagList.forEach((t) => tags.add(t));
     }
   }
 
-  return tags;
+  // Format 3: #tag1 #tag2 (hashtag format)
+  const hashtagMatches = frontmatter.matchAll(/#(\w+)/g);
+  for (const match of hashtagMatches) {
+    tags.add(match[1].toLowerCase());
+  }
+
+  return Array.from(tags).sort();
 }
 
 // Extract tasks from markdown content
@@ -111,7 +157,17 @@ function extractTasks(content: string, filename: string): Task[] {
 
 // Initialize MiniSearch
 const initSearch = (): void => {
-  searchEngine = new MiniSearch({
+  if (!MiniSearch) {
+    searchEngine = null;
+    return;
+  }
+
+  // Cast the dynamically imported MiniSearch to a constructor that produces our SearchEngine
+  const MiniSearchCtor = MiniSearch as unknown as {
+    new (options?: Record<string, unknown>): SearchEngine;
+  };
+
+  searchEngine = new MiniSearchCtor({
     fields: ['title', 'content', 'tags'],
     storeFields: ['title', 'filename', 'tags'],
     searchOptions: {
@@ -157,15 +213,8 @@ parentPort?.on('message', async (msg: string | { type: string; query: string }) 
           const content = await fs.readFile(filePath, 'utf-8');
           const filename = path.basename(filePath);
 
-          const matches = content.matchAll(/\[\[(.*?)\]\]/g);
-          const links: string[] = [];
-
-          for (const match of matches) {
-            let link = match[1];
-            if (!link.endsWith('.md')) link += '.md';
-            links.push(link);
-          }
-
+          // Extract wikilinks
+          const links = extractWikilinks(content);
           graph[filename] = links;
 
           // Extract tasks from this file
