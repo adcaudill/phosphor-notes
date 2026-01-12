@@ -12,6 +12,31 @@ import {
 } from './indexer';
 import { setupWatcher, stopWatcher, markInternalSave } from './watcher';
 
+// Safe logging that ignores EPIPE errors during shutdown
+const safeLog = (msg: string) => {
+  try {
+    console.log(msg);
+  } catch {
+    // Ignore EPIPE errors that occur during shutdown
+  }
+};
+
+const safeError = (msg: string, err?: unknown) => {
+  try {
+    console.error(msg, err);
+  } catch {
+    // Ignore EPIPE errors that occur during shutdown
+  }
+};
+
+const safeWarn = (msg: string, err?: unknown) => {
+  try {
+    console.warn(msg, err);
+  } catch {
+    // Ignore EPIPE errors that occur during shutdown
+  }
+};
+
 // Store the active vault path in memory for this session
 let activeVaultPath: string | null = null;
 
@@ -22,7 +47,7 @@ async function ensureConfigDir(): Promise<void> {
   try {
     await fsp.mkdir(CONFIG_DIR, { recursive: true });
   } catch (err) {
-    console.error('Failed to create config dir', err);
+    safeError('Failed to create config dir', err);
   }
 }
 
@@ -32,7 +57,7 @@ async function saveLastVault(vaultPath: string): Promise<void> {
     const cfg = { lastVault: vaultPath };
     await fsp.writeFile(CONFIG_FILE, JSON.stringify(cfg), 'utf-8');
   } catch (err) {
-    console.error('Failed to write config', err);
+    safeError('Failed to write config', err);
   }
 }
 
@@ -142,7 +167,7 @@ export function setupIPC(mainWindow: BrowserWindow): void {
       await fs.writeFile(filePath, content, 'utf-8');
       return true;
     } catch (err) {
-      console.error('Failed to save:', err);
+      safeError('Failed to save:', err);
       return false;
     }
   });
@@ -167,7 +192,7 @@ export function setupIPC(mainWindow: BrowserWindow): void {
 
       return safeName; // Return just the filename, not the full path
     } catch (err) {
-      console.error('Failed to save asset:', err);
+      safeError('Failed to save asset:', err);
       throw err;
     }
   });
@@ -184,7 +209,7 @@ export function setupIPC(mainWindow: BrowserWindow): void {
 
       return mdFiles;
     } catch (err) {
-      console.error(err);
+      safeError('Failed to list vault files:', err);
       return [];
     }
   });
@@ -197,7 +222,7 @@ export async function openVaultPath(vaultPath: string, mainWindow: BrowserWindow
     stopIndexing();
     stopWatcher();
   } catch (err) {
-    console.warn('Error stopping previous indexer/watcher (continuing):', err);
+    safeWarn('Error stopping previous indexer/watcher (continuing):', err);
   }
 
   activeVaultPath = vaultPath;
@@ -209,7 +234,7 @@ export async function openVaultPath(vaultPath: string, mainWindow: BrowserWindow
       updateTasksForFile(vaultPath, filename, mainWindow);
     });
   } catch (err) {
-    console.error('Failed to start watcher:', err);
+    safeError('Failed to start watcher:', err);
   }
 
   // send cached graph if available
@@ -218,18 +243,23 @@ export async function openVaultPath(vaultPath: string, mainWindow: BrowserWindow
     try {
       const raw = await fsp.readFile(cachePath, 'utf-8');
       const graph = JSON.parse(raw);
-      mainWindow.webContents.send('phosphor:graph-update', graph);
-      console.log('Loaded cached graph from', cachePath);
+      // Only send if window is still valid
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('phosphor:graph-update', graph);
+      }
+      safeLog('Loaded cached graph from ' + cachePath);
       // notify UI that cached graph was loaded
-      mainWindow.webContents.send('phosphor:status', {
-        type: 'cache-loaded',
-        message: 'Loaded cached index'
-      });
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('phosphor:status', {
+          type: 'cache-loaded',
+          message: 'Loaded cached index'
+        });
+      }
     } catch {
       // no cache — that's fine
     }
   } catch (err) {
-    console.error('Error checking/reading graph cache', err);
+    safeError('Error checking/reading graph cache', err);
   }
 
   // start background indexing for this vault
@@ -239,19 +269,23 @@ export async function openVaultPath(vaultPath: string, mainWindow: BrowserWindow
     await saveLastVault(activeVaultPath);
     // notify UI that vault opened
     try {
-      mainWindow.webContents.send('phosphor:status', {
-        type: 'vault-opened',
-        message: `Opened vault ${path.basename(activeVaultPath)}`
-      });
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('phosphor:status', {
+          type: 'vault-opened',
+          message: `Opened vault ${path.basename(activeVaultPath)}`
+        });
+      }
     } catch (e) {
-      console.warn('Could not send vault-opened status', e);
+      safeWarn('Could not send vault-opened status', e);
     }
   } catch (err) {
-    console.error(err);
-    mainWindow.webContents.send('phosphor:status', {
-      type: 'error',
-      message: 'Indexer failed to start'
-    });
+    safeError('Indexer error:', err);
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('phosphor:status', {
+        type: 'error',
+        message: 'Indexer failed to start'
+      });
+    }
   }
 }
 

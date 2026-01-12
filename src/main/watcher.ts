@@ -3,6 +3,31 @@ import type { FSWatcher } from 'chokidar';
 import { BrowserWindow } from 'electron';
 import * as path from 'path';
 
+// Safe logging that ignores EPIPE errors during shutdown
+const safeLog = (...args: unknown[]) => {
+  try {
+    console.log(...(args as any));
+  } catch {
+    // Ignore EPIPE errors that occur during shutdown
+  }
+};
+
+const safeDebug = (...args: unknown[]) => {
+  try {
+    console.debug(...(args as any));
+  } catch {
+    // Ignore EPIPE errors that occur during shutdown
+  }
+};
+
+const safeError = (msg: string, err?: unknown) => {
+  try {
+    console.error(msg, err);
+  } catch {
+    // Ignore EPIPE errors that occur during shutdown
+  }
+};
+
 let watcher: FSWatcher | null = null; // FSWatcher type
 let lastSaveTime = 0; // Timestamp of last internal save
 const debounceTimers: Map<string, NodeJS.Timeout> = new Map();
@@ -46,9 +71,9 @@ export function setupWatcher(
 
     if (isInternalSave) {
       try {
-        console.debug('[Watcher] Internal save detected:', relativePath);
+        safeDebug('[Watcher] Internal save detected:', relativePath);
       } catch {
-        // Silently ignore console errors
+        // Silently ignore errors
       }
       // Still update tasks for internal saves, but skip the file-changed event
       if (onFileChangeCallback) {
@@ -60,11 +85,14 @@ export function setupWatcher(
     // Debounce: wait for file system to stabilize
     debounce(relativePath, () => {
       try {
-        console.debug('[Watcher] File changed:', relativePath);
+        safeDebug('[Watcher] File changed:', relativePath);
       } catch {
-        // Silently ignore console errors
+        // Silently ignore errors
       }
-      mainWindow.webContents.send('vault:file-changed', relativePath);
+      // Only send if window is still valid
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('vault:file-changed', relativePath);
+      }
       // Trigger targeted re-indexing for this specific file
       if (onFileChangeCallback) {
         onFileChangeCallback(relativePath);
@@ -75,28 +103,34 @@ export function setupWatcher(
   watcher.on('unlink', (filePath) => {
     const relativePath = path.relative(vaultPath, filePath);
     try {
-      console.debug('[Watcher] File deleted:', relativePath);
+      safeDebug('[Watcher] File deleted:', relativePath);
     } catch {
-      // Silently ignore console errors
+      // Silently ignore errors
     }
-    mainWindow.webContents.send('vault:file-deleted', relativePath);
+    // Only send if window is still valid
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('vault:file-deleted', relativePath);
+    }
   });
 
   watcher.on('add', (filePath) => {
     const relativePath = path.relative(vaultPath, filePath);
     try {
-      console.debug('[Watcher] File added:', relativePath);
+      safeDebug('[Watcher] File added:', relativePath);
     } catch {
-      // Silently ignore console errors
+      // Silently ignore errors
     }
-    mainWindow.webContents.send('vault:file-added', relativePath);
+    // Only send if window is still valid
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('vault:file-added', relativePath);
+    }
   });
 
   watcher.on('error', (error) => {
-    console.error('[Watcher] Error:', error);
+    safeError('[Watcher] Error:', error);
   });
 
-  console.log('[Watcher] Started watching:', vaultPath);
+  safeLog('[Watcher] Started watching:', vaultPath);
 }
 
 /**
@@ -107,7 +141,7 @@ export function stopWatcher(): void {
     watcher.close();
     watcher = null;
     debounceTimers.clear();
-    console.log('[Watcher] Stopped');
+    safeLog('[Watcher] Stopped');
   }
 }
 

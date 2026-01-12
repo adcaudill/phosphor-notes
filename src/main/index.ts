@@ -6,6 +6,19 @@ import { setupIPC, getSavedVaultPath, openVaultPath, getActiveVaultPath } from '
 import { createMenu } from './menu';
 import { setupSettingsHandlers, initializeSettings } from './store';
 
+// Suppress EPIPE errors that occur when trying to write to stdout/stderr during shutdown
+// This prevents "write EPIPE" errors when the process is closing
+process.stdout.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code !== 'EPIPE') {
+    console.error('Unexpected stdout error:', err);
+  }
+});
+process.stderr.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code !== 'EPIPE') {
+    console.error('Unexpected stderr error:', err);
+  }
+});
+
 // Custom protocol for secure asset serving
 function setupProtocol(): void {
   protocol.handle('phosphor', async (request) => {

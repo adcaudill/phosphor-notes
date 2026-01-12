@@ -4,6 +4,31 @@ import { BrowserWindow } from 'electron';
 import * as fs from 'fs';
 import { promises as fsp } from 'fs';
 
+// Safe logging that ignores EPIPE errors during shutdown
+const safeLog = (...args: unknown[]): void => {
+  try {
+    console.log(...args);
+  } catch {
+    // Ignore EPIPE errors that occur during shutdown
+  }
+};
+
+const safeDebug = (msg: string): void => {
+  try {
+    console.debug(msg);
+  } catch {
+    // Ignore EPIPE errors that occur during shutdown
+  }
+};
+
+const safeError = (msg: string, err?: unknown): void => {
+  try {
+    console.error(msg, err);
+  } catch {
+    // Ignore EPIPE errors that occur during shutdown
+  }
+};
+
 interface WorkerMessage {
   type: string;
   data?: unknown;
@@ -32,10 +57,12 @@ async function tryStartWorkerFromFile(
 
   // Notify renderer that indexing has started
   try {
-    mainWindow.webContents.send('phosphor:status', {
-      type: 'indexing-started',
-      message: 'Indexing started'
-    });
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('phosphor:status', {
+        type: 'indexing-started',
+        message: 'Indexing started'
+      });
+    }
   } catch (err) {
     console.warn('Failed to send status to renderer:', err);
   }
@@ -45,21 +72,21 @@ async function tryStartWorkerFromFile(
       const msgData = msg.data as { graph: Record<string, string[]>; tasks: Task[] };
       const graph = msgData.graph;
       const tasks = msgData.tasks || [];
-      console.log(
-        'Graph indexing complete. Nodes:',
-        Object.keys(graph).length,
-        'Tasks:',
-        tasks.length
-      );
+      safeLog('Graph indexing complete. Nodes:', Object.keys(graph).length, 'Tasks:', tasks.length);
       lastGraph = graph as Record<string, string[]>;
       lastTasks = tasks;
-      mainWindow.webContents.send('phosphor:graph-update', graph);
-      mainWindow.webContents.send('phosphor:tasks-update', tasks);
+      // Only send if window is still valid
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('phosphor:graph-update', graph);
+        mainWindow.webContents.send('phosphor:tasks-update', tasks);
+      }
       try {
-        mainWindow.webContents.send('phosphor:status', {
-          type: 'indexing-complete',
-          message: 'Indexing complete'
-        });
+        if (!mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('phosphor:status', {
+            type: 'indexing-complete',
+            message: 'Indexing complete'
+          });
+        }
       } catch (err) {
         console.warn('Failed to send status to renderer:', err);
       }
@@ -73,9 +100,9 @@ async function tryStartWorkerFromFile(
           const outPath = join(cacheDir, 'graph.json');
           await fsp.writeFile(tmpPath, JSON.stringify(graph), 'utf-8');
           await fsp.rename(tmpPath, outPath);
-          console.log('Graph cache saved to', outPath);
+          safeLog('Graph cache saved to', outPath);
         } catch (err) {
-          console.error('Failed to persist graph cache:', err);
+          safeError('Failed to persist graph cache:', err);
         }
       })();
     } else if (msg?.type === 'search-results') {
@@ -107,10 +134,10 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
       indexerWorker = null;
     }
 
-    console.log('Indexer: workerPath=', workerPath, 'exists?', fs.existsSync(workerPath));
+    safeLog('Indexer: workerPath=', workerPath, 'exists?', fs.existsSync(workerPath));
     if (fs.existsSync(workerPath)) {
       // Normal: run compiled worker
-      console.log('Indexer: starting compiled worker');
+      safeLog('Indexer: starting compiled worker');
       await tryStartWorkerFromFile(workerPath, vaultPath, mainWindow);
       return;
     }
@@ -119,10 +146,7 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
     const possibleSrc = resolve(process.cwd(), 'src', 'main', 'worker', 'indexer.ts');
     if (fs.existsSync(possibleSrc)) {
       try {
-        console.log(
-          'Indexer: compiled worker missing, using runtime TS fallback from',
-          possibleSrc
-        );
+        safeLog('Indexer: compiled worker missing, using runtime TS fallback from', possibleSrc);
         const tsCode = fs.readFileSync(possibleSrc, 'utf-8');
         // Transpile with Typescript at runtime to CommonJS
         // Import lazily to avoid top-level dependency when not needed
@@ -140,10 +164,12 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
 
         // Notify renderer that indexing has started
         try {
-          mainWindow.webContents.send('phosphor:status', {
-            type: 'indexing-started',
-            message: 'Indexing started'
-          });
+          if (!mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('phosphor:status', {
+              type: 'indexing-started',
+              message: 'Indexing started'
+            });
+          }
         } catch (err) {
           console.warn('Failed to send status to renderer:', err);
         }
@@ -153,7 +179,7 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
             const msgData = msg.data as { graph: Record<string, string[]>; tasks: Task[] };
             const graph = msgData.graph;
             const tasks = msgData.tasks || [];
-            console.log(
+            safeLog(
               'Graph indexing complete. Nodes:',
               Object.keys(graph).length,
               'Tasks:',
@@ -161,13 +187,18 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
             );
             lastGraph = graph as Record<string, string[]>;
             lastTasks = tasks;
-            mainWindow.webContents.send('phosphor:graph-update', graph);
-            mainWindow.webContents.send('phosphor:tasks-update', tasks);
+            // Only send if window is still valid
+            if (!mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('phosphor:graph-update', graph);
+              mainWindow.webContents.send('phosphor:tasks-update', tasks);
+            }
             try {
-              mainWindow.webContents.send('phosphor:status', {
-                type: 'indexing-complete',
-                message: 'Indexing complete'
-              });
+              if (!mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('phosphor:status', {
+                  type: 'indexing-complete',
+                  message: 'Indexing complete'
+                });
+              }
             } catch (err) {
               console.warn('Failed to send status to renderer:', err);
             }
@@ -189,24 +220,24 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
           } else if (msg?.type === 'search-results') {
             searchResultsCallback?.(msg.data as unknown[]);
           } else if (msg?.type === 'graph-error') {
-            console.error('Indexer error:', msg.error);
+            safeError('Indexer error:', msg.error);
           }
         });
 
-        indexerWorker.on('error', (err) => console.error('Indexer worker error:', err));
+        indexerWorker.on('error', (err) => safeError('Indexer worker error:', err));
 
         indexerWorker.postMessage(vaultPath);
-        console.log('Indexer: runtime-transpiled worker started');
+        safeLog('Indexer: runtime-transpiled worker started');
         return;
       } catch (err) {
-        console.error('Runtime transpile failed:', err);
+        safeError('Runtime transpile failed:', err);
       }
     }
 
     // If we reach here, no worker could be started
-    console.error('Indexer worker not found at', workerPath, 'and no source fallback available.');
+    safeError(`Indexer worker not found at ${workerPath} and no source fallback available.`);
   } catch (err) {
-    console.error('Failed to start indexer worker:', err);
+    safeError('Failed to start indexer worker:', err);
   }
 }
 
@@ -297,13 +328,15 @@ export async function updateTasksForFile(
     }
 
     // Send updated tasks to renderer
-    mainWindow.webContents.send('phosphor:tasks-update', lastTasks);
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('phosphor:tasks-update', lastTasks);
+    }
     try {
-      console.debug(`Updated tasks for ${filename}: ${fileTasks.length} tasks`);
+      safeDebug(`Updated tasks for ${filename}: ${fileTasks.length} tasks`);
     } catch {
-      // Silently ignore console errors (EPIPE when stream is closed)
+      // Silently ignore errors
     }
   } catch (err) {
-    console.error('Failed to update tasks for file:', filename, err);
+    safeError(`Failed to update tasks for file: ${filename}`, err);
   }
 }
