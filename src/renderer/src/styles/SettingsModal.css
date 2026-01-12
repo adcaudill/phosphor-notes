@@ -194,6 +194,7 @@
 .settings-content::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-hover-color, #999);
 }
+
 /* Theme-specific styles */
 .settings-modal-content.theme-light {
   background: #ffffff;

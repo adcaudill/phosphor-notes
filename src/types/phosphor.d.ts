@@ -33,6 +33,7 @@ export interface PhosphorAPI {
 
 export interface UserSettings {
   theme: 'system' | 'light' | 'dark';
+  colorPalette: 'snow' | 'amber' | 'green';
   editorFontSize: number;
   vimMode: boolean;
   showLineNumbers: boolean;

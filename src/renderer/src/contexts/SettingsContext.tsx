@@ -1,13 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { useState, useEffect, ReactNode } from 'react';
+import { SettingsContext } from './SettingsContextValue';
 import type { UserSettings } from '../../../types/phosphor.d';
-
-interface SettingsContextType {
-  settings: UserSettings;
-  updateSetting: <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => Promise<void>;
-  updateSettings: (updates: Partial<UserSettings>) => Promise<void>;
-}
-
-const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [settings, setSettings] = useState<UserSettings | null>(null);
@@ -24,6 +17,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
         // Use defaults on error
         setSettings({
           theme: 'system',
+          colorPalette: 'snow',
           editorFontSize: 16,
           vimMode: false,
           showLineNumbers: false,
@@ -59,7 +53,11 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   if (isLoading || !settings) {
-    return <div>Loading settings...</div>;
+    return (
+      <div>
+        <div>Loading settings...</div>
+      </div>
+    );
   }
 
   return (
@@ -68,12 +66,3 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     </SettingsContext.Provider>
   );
 };
-
-// Export useSettings as a separate exported function
-export function useSettings(): SettingsContextType {
-  const context = useContext(SettingsContext);
-  if (!context) {
-    throw new Error('useSettings must be used within SettingsProvider');
-  }
-  return context;
-}

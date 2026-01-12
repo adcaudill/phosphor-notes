@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useSettings } from '../contexts/SettingsContext';
+import { useSettings } from '../hooks/useSettings';
 import '../styles/SettingsModal.css';
 
 interface SettingsModalProps {
@@ -126,6 +126,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                     <option value="system">System</option>
                     <option value="light">Light</option>
                     <option value="dark">Dark</option>
+                  </select>
+                </div>
+
+                <div className="setting-item">
+                  <label htmlFor="color-palette">Color Palette</label>
+                  <select
+                    id="color-palette"
+                    value={settings.colorPalette}
+                    onChange={(e) =>
+                      updateSetting('colorPalette', e.target.value as 'snow' | 'amber' | 'green')
+                    }
+                  >
+                    <option value="snow">Snow (Default)</option>
+                    <option value="amber">Amber</option>
+                    <option value="green">Green</option>
                   </select>
                 </div>
               </>

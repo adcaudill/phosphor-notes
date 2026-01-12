@@ -5,8 +5,11 @@ import StatusBar from './components/StatusBar';
 import { CommandPalette } from './components/CommandPalette';
 import { SettingsModal } from './components/SettingsModal';
 import { SettingsProvider } from './contexts/SettingsContext';
+import { useSettings } from './hooks/useSettings';
+import './styles/colorPalettes.css';
 
 function AppContent(): React.JSX.Element {
+  const { settings } = useSettings();
   const [content, setContent] = useState('');
   const [vaultName, setVaultName] = useState<string | null>(null);
   const [currentFile, setCurrentFile] = useState<string | null>(null);
@@ -20,6 +23,22 @@ function AppContent(): React.JSX.Element {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [conflict, setConflict] = useState<string | null>(null); // Filename that has a conflict
   const [isDirty, setIsDirty] = useState(false); // Whether current file has unsaved changes
+
+  // Apply color palette and theme to the document
+  useEffect(() => {
+    const html = document.documentElement;
+
+    // Determine the effective theme (resolve 'system' to actual light/dark)
+    let effectiveTheme = settings.theme;
+    if (settings.theme === 'system') {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      effectiveTheme = prefersDark ? 'dark' : 'light';
+    }
+
+    // Apply color palette and theme mode attributes
+    html.setAttribute('data-color-palette', settings.colorPalette);
+    html.setAttribute('data-theme-mode', effectiveTheme);
+  }, [settings.theme, settings.colorPalette]);
 
   useEffect(() => {
     const init = async (): Promise<void> => {

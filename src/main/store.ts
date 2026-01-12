@@ -2,10 +2,11 @@ import { ipcMain } from 'electron';
 import * as fsp from 'fs/promises';
 import * as path from 'path';
 import { app } from 'electron';
-import type { UserSettings } from '../types/settings';
+import type { UserSettings } from '../types/phosphor.d';
 
 const defaults: UserSettings = {
   theme: 'system',
+  colorPalette: 'snow',
   editorFontSize: 16,
   vimMode: false,
   showLineNumbers: false,
