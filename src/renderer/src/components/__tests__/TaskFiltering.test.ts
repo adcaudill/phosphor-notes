@@ -319,7 +319,6 @@ describe('Task Date Filtering', () => {
     });
 
     it('should include all days of current month', () => {
-      const today = new Date();
       // Use tasks that are definitely in current month
       const tasks: Task[] = [
         {
@@ -437,8 +436,6 @@ describe('Task Date Filtering', () => {
     });
 
     it('should handle filtering with no results', () => {
-      const today = getTodayString();
-      const tomorrow = getDatePlusDay(1);
       const twoMonthsLater = new Date();
       twoMonthsLater.setMonth(twoMonthsLater.getMonth() + 2);
       const startDate = getDateString(twoMonthsLater);

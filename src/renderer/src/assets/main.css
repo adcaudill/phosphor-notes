@@ -128,11 +128,23 @@ body {
 
 .editor-header {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
   padding: var(--spacing-md) var(--spacing-lg);
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
+  gap: var(--spacing-lg);
+}
+
+.editor-title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .relationships-toggle {
@@ -579,31 +591,59 @@ body {
    FRONTMATTER WIDGET
    ============================================ */
 
-.cm-frontmatter-pill {
-  display: inline-block;
-  padding: 6px 12px;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
-  color: var(--text-on-primary);
-  border-radius: 16px;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
+.cm-frontmatter-toggle {
+  background: none;
+  border: none;
+  padding: 6px 8px;
+  margin: 0 var(--spacing-sm) 0 0;
   cursor: pointer;
-  transition: all 0.2s ease;
+  font-size: 18px;
+  color: var(--color-text-secondary);
+  opacity: 0.7;
+  transition:
+    opacity 0.2s ease,
+    color 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   user-select: none;
-  box-shadow: var(--shadow-sm);
-  margin: var(--spacing-md) 0;
+  line-height: 1;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 4px;
 }
 
-.cm-frontmatter-pill:hover {
-  transform: scale(1.05);
-  box-shadow: var(--shadow-md);
+.cm-frontmatter-toggle:hover {
+  opacity: 1;
+  color: var(--color-text-primary);
+  background: var(--color-border);
+}
+
+.cm-frontmatter-toggle:active {
+  opacity: 0.9;
+  background: var(--color-surface);
+}
+
+.cm-frontmatter-arrow {
+  display: inline-block;
+  transition: transform 0.15s ease;
+  font-family: monospace;
+  font-weight: bold;
+  margin-right: 0;
 }
 
 @media (prefers-color-scheme: dark) {
-  .cm-frontmatter-pill {
-    background: linear-gradient(135deg, #5a7aff, #7095ff);
-    color: #fff;
+  .cm-frontmatter-toggle {
+    color: #9ca3af;
+  }
+
+  .cm-frontmatter-toggle:hover {
+    color: #d1d5db;
+    background: rgba(107, 114, 128, 0.2);
+  }
+
+  .cm-frontmatter-toggle:active {
+    background: rgba(107, 114, 128, 0.3);
   }
 }
 

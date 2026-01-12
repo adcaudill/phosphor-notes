@@ -6,38 +6,91 @@ import {
   ViewUpdate,
   WidgetType
 } from '@codemirror/view';
-import { RangeSetBuilder } from '@codemirror/state';
+import {
+  RangeSetBuilder,
+  StateField,
+  StateEffect,
+  EditorState,
+  Transaction
+} from '@codemirror/state';
 
-class FrontmatterWidget extends WidgetType {
-  constructor(readonly rawText: string) {
+// Track collapsed state per editor instance
+const frontmatterCollapsedEffect = StateEffect.define<boolean>();
+
+const frontmatterCollapsedField = StateField.define<boolean>({
+  create: () => true, // Default: collapsed
+  update(value, tr) {
+    for (const effect of tr.effects) {
+      if (effect.is(frontmatterCollapsedEffect)) {
+        return effect.value;
+      }
+    }
+    return value;
+  }
+});
+
+// Helper to get frontmatter end position
+function getFrontmatterEnd(docString: string): number | null {
+  if (!docString.startsWith('---')) return null;
+  const endMatch = docString.indexOf('\n---', 3);
+  if (endMatch === -1) return null;
+  return endMatch + 4; // Include the closing ---
+}
+
+// Transaction filter to prevent editing frontmatter when collapsed
+const preventFrontmatterEditFilter = EditorState.transactionFilter.of((tr: Transaction) => {
+  if (!tr.docChanged) return tr;
+
+  const isCollapsed = tr.startState.field(frontmatterCollapsedField);
+  if (!isCollapsed) return tr; // Allow edits when expanded
+
+  const docString = tr.startState.doc.toString();
+  const endOfBlock = getFrontmatterEnd(docString);
+  if (endOfBlock === null) return tr;
+
+  // Check if any change is within the frontmatter block
+  let changedInFrontmatter = false;
+  tr.changes.iterChanges((fromA) => {
+    if (fromA < endOfBlock) {
+      changedInFrontmatter = true;
+    }
+  });
+
+  if (changedInFrontmatter) {
+    // Reject any changes to the frontmatter block when collapsed
+    return [];
+  }
+
+  return tr;
+});
+
+class FrontmatterToggleWidget extends WidgetType {
+  constructor(
+    readonly isCollapsed: boolean,
+    readonly onToggle: () => void
+  ) {
     super();
   }
 
   toDOM(): HTMLElement {
-    const wrap = document.createElement('div');
-    wrap.className = 'cm-frontmatter-pill';
+    const wrap = document.createElement('button');
+    wrap.className = 'cm-frontmatter-toggle';
+    wrap.setAttribute('type', 'button');
+    wrap.setAttribute('aria-label', this.isCollapsed ? 'Show metadata' : 'Hide metadata');
+    wrap.title = this.isCollapsed ? 'Show metadata' : 'Hide metadata';
 
-    // Parse the frontmatter to extract and count tags
-    const lines = this.rawText.split('\n');
-    let tagCount = 0;
+    // Arrow indicator
+    const arrow = document.createElement('span');
+    arrow.className = 'cm-frontmatter-arrow';
+    arrow.innerText = this.isCollapsed ? '▸' : '▾';
 
-    for (const line of lines) {
-      if (line.match(/tags:\s*\[/)) {
-        const matches = line.match(/\w+/g);
-        if (matches) {
-          // Subtract 'tags' and ']' from the count
-          tagCount += matches.length - 1;
-        }
-      } else if (line.match(/#\w+/)) {
-        const matches = line.match(/#\w+/g);
-        if (matches) {
-          tagCount += matches.length;
-        }
-      }
-    }
+    wrap.appendChild(arrow);
 
-    const tagText = tagCount > 0 ? `${tagCount} ${tagCount === 1 ? 'Tag' : 'Tags'}` : 'Metadata';
-    wrap.innerText = tagText;
+    wrap.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.onToggle();
+    });
 
     return wrap;
   }
@@ -56,7 +109,12 @@ export const frontmatterPlugin = ViewPlugin.fromClass(
     }
 
     update(update: ViewUpdate): void {
-      if (update.docChanged || update.viewportChanged) {
+      if (
+        update.docChanged ||
+        update.viewportChanged ||
+        update.state.field(frontmatterCollapsedField) !==
+          update.startState.field(frontmatterCollapsedField)
+      ) {
         this.decorations = this.buildDecorations(update.view);
       }
     }
@@ -64,21 +122,41 @@ export const frontmatterPlugin = ViewPlugin.fromClass(
     buildDecorations(view: EditorView): DecorationSet {
       const builder = new RangeSetBuilder<Decoration>();
       const docString = view.state.doc.toString();
+      const isCollapsed = view.state.field(frontmatterCollapsedField);
 
-      // Only look at the very start of the file
-      if (docString.startsWith('---')) {
-        const endMatch = docString.indexOf('\n---', 3);
-        if (endMatch !== -1) {
-          // We found a valid block
-          const endOfBlock = endMatch + 4; // Include the closing ---
+      const endOfBlock = getFrontmatterEnd(docString);
+      if (endOfBlock !== null) {
+        // Add toggle widget at the start of the file
+        builder.add(
+          0,
+          0,
+          Decoration.widget({
+            widget: new FrontmatterToggleWidget(isCollapsed, () => {
+              // Dispatch effect to toggle state
+              view.dispatch({
+                effects: [frontmatterCollapsedEffect.of(!isCollapsed)]
+              });
+            }),
+            side: -1 // Place before text
+          })
+        );
 
-          builder.add(
-            0,
-            endOfBlock,
-            Decoration.replace({
-              widget: new FrontmatterWidget(docString.slice(0, endOfBlock))
-            })
-          );
+        // If collapsed, hide the frontmatter lines
+        if (isCollapsed) {
+          const lines = docString.slice(0, endOfBlock).split('\n');
+          let currentPos = 0;
+
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const lineEnd = currentPos + line.length;
+
+            // Replace the line content with nothing
+            if (lineEnd > currentPos) {
+              builder.add(currentPos, lineEnd, Decoration.replace({}));
+            }
+
+            currentPos = lineEnd + 1;
+          }
         }
       }
 
@@ -86,6 +164,7 @@ export const frontmatterPlugin = ViewPlugin.fromClass(
     }
   },
   {
-    decorations: (v) => v.decorations
+    decorations: (v) => v.decorations,
+    provide: () => [frontmatterCollapsedField, preventFrontmatterEditFilter]
   }
 );

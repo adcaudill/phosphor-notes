@@ -10,6 +10,26 @@ import { SettingsProvider } from './contexts/SettingsContext';
 import { useSettings } from './hooks/useSettings';
 import './styles/colorPalettes.css';
 
+/**
+ * Extract title from markdown frontmatter, or fallback to filename
+ */
+function getTitleFromContent(content: string, filename: string | null): string {
+  if (!filename) return 'No file selected';
+
+  // Try to extract title from frontmatter
+  const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+  if (frontmatterMatch) {
+    const frontmatter = frontmatterMatch[1];
+    const titleMatch = frontmatter.match(/title:\s*["']?([^"\'\n]+)["']?/);
+    if (titleMatch) {
+      return titleMatch[1].trim();
+    }
+  }
+
+  // Fallback to filename without extension
+  return filename.replace(/\.md$/, '');
+}
+
 function AppContent(): React.JSX.Element {
   const { settings } = useSettings();
   const [content, setContent] = useState('');
@@ -312,6 +332,7 @@ function AppContent(): React.JSX.Element {
               />
               <main className="main-content">
                 <div className="editor-header">
+                  <h1 className="editor-title">{getTitleFromContent(content, currentFile)}</h1>
                   <button
                     className="relationships-toggle"
                     onClick={() => setShowRelationshipsSidebar(!showRelationshipsSidebar)}

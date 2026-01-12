@@ -79,7 +79,11 @@ async function tryStartWorkerFromFile(
         }
       })();
     } else if (msg?.type === 'search-results') {
-      console.debug('Received search results:', msg.data);
+      try {
+        console.debug('Received search results:', msg.data);
+      } catch {
+        // Silently ignore console errors
+      }
       searchResultsCallback?.(msg.data as unknown[]);
     } else if (msg?.type === 'graph-error') {
       console.error('Indexer error:', msg.error);
@@ -233,7 +237,11 @@ export function performSearch(query: string, callback: (results: unknown[]) => v
     callback([]);
     return;
   }
-  console.debug('Performing search for:', query);
+  try {
+    console.debug('Performing search for:', query);
+  } catch {
+    // Silently ignore console errors
+  }
   searchResultsCallback = callback;
   indexerWorker.postMessage({ type: 'search', query });
 }
@@ -290,7 +298,11 @@ export async function updateTasksForFile(
 
     // Send updated tasks to renderer
     mainWindow.webContents.send('phosphor:tasks-update', lastTasks);
-    console.debug(`Updated tasks for ${filename}: ${fileTasks.length} tasks`);
+    try {
+      console.debug(`Updated tasks for ${filename}: ${fileTasks.length} tasks`);
+    } catch {
+      // Silently ignore console errors (EPIPE when stream is closed)
+    }
   } catch (err) {
     console.error('Failed to update tasks for file:', filename, err);
   }

@@ -45,7 +45,11 @@ export function setupWatcher(
     const isInternalSave = Date.now() - lastSaveTime < INTERNAL_SAVE_GRACE_MS;
 
     if (isInternalSave) {
-      console.debug('[Watcher] Internal save detected:', relativePath);
+      try {
+        console.debug('[Watcher] Internal save detected:', relativePath);
+      } catch {
+        // Silently ignore console errors
+      }
       // Still update tasks for internal saves, but skip the file-changed event
       if (onFileChangeCallback) {
         onFileChangeCallback(relativePath);
@@ -55,7 +59,11 @@ export function setupWatcher(
 
     // Debounce: wait for file system to stabilize
     debounce(relativePath, () => {
-      console.debug('[Watcher] File changed:', relativePath);
+      try {
+        console.debug('[Watcher] File changed:', relativePath);
+      } catch {
+        // Silently ignore console errors
+      }
       mainWindow.webContents.send('vault:file-changed', relativePath);
       // Trigger targeted re-indexing for this specific file
       if (onFileChangeCallback) {
@@ -66,13 +74,21 @@ export function setupWatcher(
 
   watcher.on('unlink', (filePath) => {
     const relativePath = path.relative(vaultPath, filePath);
-    console.debug('[Watcher] File deleted:', relativePath);
+    try {
+      console.debug('[Watcher] File deleted:', relativePath);
+    } catch {
+      // Silently ignore console errors
+    }
     mainWindow.webContents.send('vault:file-deleted', relativePath);
   });
 
   watcher.on('add', (filePath) => {
     const relativePath = path.relative(vaultPath, filePath);
-    console.debug('[Watcher] File added:', relativePath);
+    try {
+      console.debug('[Watcher] File added:', relativePath);
+    } catch {
+      // Silently ignore console errors
+    }
     mainWindow.webContents.send('vault:file-added', relativePath);
   });
 
