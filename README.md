@@ -4,7 +4,7 @@
 
 Phosphor Notes is designed to bridge the gap between "outliner" tools (like Logseq) and "long-form" writing environments (like iA Writer). It is built on a simple philosophy: **Your thoughts belong to you.** There are no proprietary databases, no cloud lock-ins, and no subscriptions. Just a folder of plain text files, supercharged by a local graph engine.
 
-Whether you are managing complex projects, journaling your daily life, or writing your next book, Phosphor adapts to your flow — offering a distraction-free writing experience when you need it, and a powerful task management engine when you don't.
+Whether you are managing complex projects, journaling your daily life, or writing your next book, Phosphor adapts to your flow - offering a distraction-free writing experience when you need it, and a powerful task management engine when you don't.
 
 ⚠️ WARNING: This project is under active development and may be unstable. Expect breaking changes, incomplete features, and bugs. Use on non-critical data or keep backups of your notes.
 
@@ -23,7 +23,7 @@ Whether you are managing complex projects, journaling your daily life, or writin
 - **Typewriter Scrolling:** Keeps your active line vertically centered on the screen so you never have to crane your neck to look at the bottom of the monitor.
 - **Active Paragraph Dimming:** Automatically dims inactive paragraphs, helping you focus strictly on the sentence you are writing right now.
 - **Live Stats:** Unobtrusive word count and reading time metrics.
-- **Grammar & Style Checking:** Real-time feedback on passive voice, sentence simplification, inclusive language, readability, and profanities - all customizable in preferences.
+- **Grammar & Style Checking:** Real-time feedback on passive voice, sentence simplification, inclusive language, readability, profanities, and more - all customizable in preferences.
 
 ### Productivity Engine
 
