@@ -1,0 +1,39 @@
+.graph-view {
+  position: relative;
+  width: 100%;
+  height: calc(100vh - 180px);
+  min-height: 420px;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.04), transparent 32%),
+    radial-gradient(circle at 82% 12%, rgba(255, 255, 255, 0.04), transparent 24%), #0b1224;
+  border: 1px solid #1f2937;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.32);
+}
+
+.graph-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+}
+
+.graph-view:active .graph-canvas {
+  cursor: grabbing;
+}
+
+.graph-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  color: #cbd5e1;
+  font-size: 14px;
+  letter-spacing: 0.2px;
+  text-align: center;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(11, 18, 36, 0.9), rgba(11, 18, 36, 0.6));
+}

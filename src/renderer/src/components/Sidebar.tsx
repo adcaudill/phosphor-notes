@@ -4,16 +4,18 @@ interface SidebarProps {
   onFileSelect: (filename: string) => void;
   onTasksClick?: () => void;
   onEditorClick?: () => void;
+  onGraphClick?: () => void;
   activeFile: string | null;
   isDirty: boolean;
   refreshSignal?: number;
-  viewMode?: 'editor' | 'tasks';
+  viewMode?: 'editor' | 'tasks' | 'graph';
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   onFileSelect,
   onTasksClick,
   onEditorClick,
+  onGraphClick,
   activeFile,
   isDirty,
   refreshSignal,
@@ -56,6 +58,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           title="Tasks view"
         >
           ✓
+        </button>
+        <button
+          className={`nav-btn ${viewMode === 'graph' ? 'active' : ''}`}
+          onClick={onGraphClick}
+          title="Graph view"
+        >
+          🕸️
         </button>
       </div>
       <h2

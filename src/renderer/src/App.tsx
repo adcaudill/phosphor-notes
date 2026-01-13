@@ -9,6 +9,7 @@ import { FrontmatterModal } from './components/FrontmatterModal';
 import { TasksView } from './components/TasksView';
 import { EncryptionModal } from './components/EncryptionModal';
 import { AboutModal } from './components/AboutModal';
+import { GraphView } from './components/GraphView';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { useSettings } from './hooks/useSettings';
 import { extractFrontmatter, generateDefaultFrontmatter } from './utils/frontmatterUtils';
@@ -51,7 +52,7 @@ function AppContent(): React.JSX.Element {
   const [aboutModalOpen, setAboutModalOpen] = useState(false); // Toggle for about modal
   const [conflict, setConflict] = useState<string | null>(null); // Filename that has a conflict
   const [isDirty, setIsDirty] = useState(false); // Whether current file has unsaved changes
-  const [viewMode, setViewMode] = useState<'editor' | 'tasks'>('editor'); // Switch between editor and tasks view
+  const [viewMode, setViewMode] = useState<'editor' | 'tasks' | 'graph'>('editor'); // Switch between editor, tasks, and graph views
   const [showRelationshipsSidebar, setShowRelationshipsSidebar] = useState(false); // Toggle for relationships sidebar
   const [frontmatterModalOpen, setFrontmatterModalOpen] = useState(false); // Toggle for frontmatter modal
   const [focusMode, setFocusMode] = useState(false); // Toggle for focus/zen mode
@@ -503,6 +504,7 @@ function AppContent(): React.JSX.Element {
                 onFileSelect={handleFileSelect}
                 onTasksClick={() => setViewMode('tasks')}
                 onEditorClick={() => setViewMode('editor')}
+                onGraphClick={() => setViewMode('graph')}
                 activeFile={currentFile}
                 isDirty={isDirty}
                 refreshSignal={filesVersion}
@@ -510,23 +512,31 @@ function AppContent(): React.JSX.Element {
               />
               <main className="main-content">
                 <div className="editor-header">
-                  <h1 className="editor-title">{getTitleFromContent(content, currentFile)}</h1>
-                  <div className="editor-header-actions">
-                    <button
-                      className="settings-btn"
-                      onClick={() => setFrontmatterModalOpen(true)}
-                      title="Edit file settings"
-                    >
-                      🔧
-                    </button>
-                    <button
-                      className="relationships-toggle"
-                      onClick={() => setShowRelationshipsSidebar(!showRelationshipsSidebar)}
-                      title="Toggle relationships panel"
-                    >
-                      🔗
-                    </button>
-                  </div>
+                  <h1 className="editor-title">
+                    {viewMode === 'tasks'
+                      ? 'Tasks'
+                      : viewMode === 'graph'
+                        ? 'Graph'
+                        : getTitleFromContent(content, currentFile)}
+                  </h1>
+                  {viewMode === 'editor' && (
+                    <div className="editor-header-actions">
+                      <button
+                        className="settings-btn"
+                        onClick={() => setFrontmatterModalOpen(true)}
+                        title="Edit file settings"
+                      >
+                        🔧
+                      </button>
+                      <button
+                        className="relationships-toggle"
+                        onClick={() => setShowRelationshipsSidebar(!showRelationshipsSidebar)}
+                        title="Toggle relationships panel"
+                      >
+                        🔗
+                      </button>
+                    </div>
+                  )}
                 </div>
                 {conflict && (
                   <div className="conflict-banner">
@@ -574,20 +584,30 @@ function AppContent(): React.JSX.Element {
                   </>
                 ) : (
                   <>
-                    <TasksView
-                      onTaskClick={(filename) => {
-                        // Switch to editor view and open file
-                        setViewMode('editor');
-                        handleFileSelect(filename);
-                        // Scroll to line after a brief delay to ensure file is loaded
-                        setTimeout(() => {
-                          const view = document.querySelector('.cm-editor');
-                          if (view) {
-                            view.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                          }
-                        }, 100);
-                      }}
-                    />
+                    {viewMode === 'tasks' ? (
+                      <TasksView
+                        onTaskClick={(filename) => {
+                          // Switch to editor view and open file
+                          setViewMode('editor');
+                          handleFileSelect(filename);
+                          // Scroll to line after a brief delay to ensure file is loaded
+                          setTimeout(() => {
+                            const view = document.querySelector('.cm-editor');
+                            if (view) {
+                              view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }
+                          }, 100);
+                        }}
+                      />
+                    ) : (
+                      <GraphView
+                        graph={graph}
+                        onFileSelect={(filename) => {
+                          setViewMode('editor');
+                          handleFileSelect(filename);
+                        }}
+                      />
+                    )}
                   </>
                 )}
               </main>
