@@ -117,7 +117,7 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps): React.ReactEle
           <h1 className="about-title">{appName}</h1>
           <p className="about-version">Version {appVersion}</p>
           <p className="about-description">
-            A minimal, encrypted note-taking application for the modern knowledge worker.
+            A minimal, secure, and focused knowledge studio for the modern thinker.
           </p>
 
           {/* Links */}

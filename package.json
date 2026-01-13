@@ -1,7 +1,7 @@
 {
   "name": "phosphor-notes",
   "version": "1.0.0",
-  "description": "A minimal, encrypted note-taking application for the modern knowledge worker.",
+  "description": "A minimal, secure, and focused knowledge studio for the modern thinker.",
   "main": "./out/main/index.js",
   "author": "adamcaudill.com",
   "homepage": "https://github.com/adcaudill/phosphor-notes",

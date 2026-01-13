@@ -1,42 +1,97 @@
 # Phosphor Notes
 
-_A minimal, encrypted note-taking application for the modern knowledge worker._
+**A minimal, secure, and focused knowledge studio for the modern thinker.**
 
-Phosphor Notes is a lightweight note-taking Electron app built with React and TypeScript. It
-focuses on simple Markdown editing and local vaults (folders of .md files) with basic
-wiki-style [[links]] and a background indexer that builds a link graph for backlinks.
+Phosphor Notes is designed to bridge the gap between "outliner" tools (like Logseq) and "long-form" writing environments (like iA Writer). It is built on a simple philosophy: **Your thoughts belong to you.** There are no proprietary databases, no cloud lock-ins, and no subscriptions. Just a folder of plain text files, supercharged by a local graph engine.
 
-⚠️ WARNING: This project is under active development and may be unstable. Expect breaking
-changes, incomplete features, and bugs. Use on non-critical data or keep backups of your
-notes.
+Whether you are managing complex projects, journaling your daily life, or writing your next book, Phosphor adapts to your flow — offering a distraction-free writing experience when you need it, and a powerful task management engine when you don't.
 
-## Recommended IDE Setup
+⚠️ WARNING: This project is under active development and may be unstable. Expect breaking changes, incomplete features, and bugs. Use on non-critical data or keep backups of your notes.
 
-- [VSCode](https://code.visualstudio.com/) + [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) + [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)
+## Features
 
-## Project Setup
+### Personal Knowledge Management (PKM)
 
-### Install
+* **Local First:** All data is stored as plain Markdown (`.md`) files on your hard drive. You own your data forever.
+* **Wiki-Links:** Connect thoughts instantly using `[[WikiLinks]]`. Supports nested namespaces (e.g., `[[Projects/Phosphor/Roadmap]]`).
+* **The Graph:** An integrated graph engine maps your knowledge, automatically generating **Backlinks** so you can see every page that references your current note.
+* **Omni-Search:** A lightning-fast Command Palette (`Cmd+K`) lets you fuzzy-search thousands of notes and jump to content instantly.
+
+### The Writer's Studio
+
+* **Focus Mode:** Toggle `Cmd+D` to fade away the UI, sidebar, and window chrome, leaving only your text.
+* **Typewriter Scrolling:** Keeps your active line vertically centered on the screen so you never have to crane your neck to look at the bottom of the monitor.
+* **Active Paragraph Dimming:** Automatically dims inactive paragraphs, helping you focus strictly on the sentence you are writing right now.
+* **Live Stats:** Unobtrusive word count and reading time metrics.
+
+### Productivity Engine
+
+* **Logseq-Style Tasks:** Manage tasks directly in your text using standard syntax (`- [ ]`, `- [/]`, `- [x]`).
+* **Recurring & Scheduled:** Support for due dates and recurrence logic (e.g., `📅 2026-01-15 🔁 +1w`).
+* **Task Dashboard:** A dynamic view to aggregate and manage open tasks across your entire vault.
+* **Daily Journals:** Automatic creation of daily notes (`YYYY-MM-DD.md`) to capture fleeting thoughts and logs.
+
+### Security & Architecture
+
+* **Zero-Knowledge Encryption:** Optional, robust vault encryption using **Argon2id** (Key Derivation) and **XChaCha20-Poly1305** (Authenticated Encryption). Your password is never stored; your data is unreadable without it.
+* **Rich Media:** Drag-and-drop images (`.png`, `.jpg`) directly into the editor. Assets are stored locally (and encrypted if the vault is locked).
+* **Native Performance:** Built on Electron and React with a custom **Node worker** architecture to handle indexing thousands of files without UI lag.
+
+## Development Setup
+
+Phosphor Notes is built for **macOS** (initially) using modern web technologies. Follow these steps to set up your local development environment. While the current focus is on macOS, contributions for Windows and Linux support are welcome & the application _should_ work cross-platform though testing is limited.
+
+### Prerequisites
+
+You will need **Node.js v22+**. We recommend managing this via Homebrew.
+
+**1. Install Homebrew (if not installed):**
 
 ```bash
-$ npm install
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
 ```
 
-### Development
+**2. Install Node.js:**
 
 ```bash
-$ npm run dev
+brew install node
+# Verify version is 22 or higher
+node -v
+
 ```
 
-### Build
+**3. Install Git:**
 
 ```bash
-# For windows
-$ npm run build:win
+brew install git
 
-# For macOS
-$ npm run build:mac
-
-# For Linux
-$ npm run build:linux
 ```
+
+### Getting Started
+
+**1. Clone the repository:**
+
+```bash
+git clone https://github.com/adcaudill/phosphor-notes.git
+cd phosphor-notes
+
+```
+
+**2. Install dependencies:**
+We use `npm` for package management. This will install Electron, React, CodeMirror, and the encryption bindings.
+
+```bash
+npm install
+
+```
+
+**3. Run the development server:**
+This command spins up the Vite renderer server and launches the Electron main process.
+
+```bash
+npm run dev
+
+```
+
+The app should launch immediately. You can now edit files in `src/renderer` (UI) or `src/main` (Backend) and see changes live.
