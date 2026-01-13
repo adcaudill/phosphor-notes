@@ -107,9 +107,18 @@ export function FrontmatterModal({
   };
 
   const handleSave = (): void => {
+    // If there's a pending new field, add it first
+    let fieldsToSave = formState.editedFields;
+    if (formState.newFieldName.trim()) {
+      fieldsToSave = {
+        ...formState.editedFields,
+        [formState.newFieldName]: formState.newFieldValue
+      };
+    }
+
     // Reconstruct frontmatter with edited fields
     const lines = ['---'];
-    Object.entries(formState.editedFields).forEach(([key, value]) => {
+    Object.entries(fieldsToSave).forEach(([key, value]) => {
       lines.push(`${key}: ${value}`);
     });
     lines.push('---');
@@ -143,6 +152,32 @@ export function FrontmatterModal({
         {Object.keys(formState.editedFields).length === 0 ? (
           <div className="modal-body">
             <p>No frontmatter found. Add fields to create frontmatter.</p>
+            <div className="add-field">
+              <h3>Add Field</h3>
+              <div className="field-row">
+                <input
+                  type="text"
+                  placeholder="Field name"
+                  value={formState.newFieldName}
+                  onChange={(e) =>
+                    dispatch({ type: 'CHANGE_NEW_FIELD_NAME', value: e.target.value })
+                  }
+                  className="field-input"
+                />
+                <input
+                  type="text"
+                  placeholder="Value"
+                  value={formState.newFieldValue}
+                  onChange={(e) =>
+                    dispatch({ type: 'CHANGE_NEW_FIELD_VALUE', value: e.target.value })
+                  }
+                  className="field-input"
+                />
+                <button className="field-add-btn" onClick={handleAddField}>
+                  +
+                </button>
+              </div>
+            </div>
           </div>
         ) : (
           <div className="modal-body">
