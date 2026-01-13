@@ -1,5 +1,5 @@
 import { Decoration, ViewPlugin, EditorView, ViewUpdate } from '@codemirror/view';
-import { RangeSetBuilder, RangeSet } from '@codemirror/state';
+import { RangeSetBuilder, RangeSet, StateEffect } from '@codemirror/state';
 
 /**
  * Paragraph Dimming Plugin
@@ -14,23 +14,69 @@ import { RangeSetBuilder, RangeSet } from '@codemirror/state';
 
 // Define the dimmed decoration
 const dimmedDeco = Decoration.line({ class: 'cm-dimmed-line' });
+const toggleDimmingEffect = StateEffect.define<boolean>();
 
 export const dimmingPlugin = ViewPlugin.fromClass(
   class {
     decorations;
+    dimmingEnabled: boolean;
+    view: EditorView;
+    scrollHandler: (event: Event) => void;
+    lastInputTs: number;
 
     constructor(view: EditorView) {
+      this.view = view;
+      this.dimmingEnabled = true;
       this.decorations = this.getDeco(view);
+      this.lastInputTs = Date.now();
+
+      // Disable dimming immediately on any manual scroll so newly revealed content stays readable
+      this.scrollHandler = (event: Event) => {
+        // Ignore programmatic scrolls and scrolls that occur immediately after cursor moves/typing
+        if (!event.isTrusted) return;
+        if (Date.now() - this.lastInputTs < 750) return;
+        view.dispatch({ effects: toggleDimmingEffect.of(false) });
+      };
+      view.scrollDOM.addEventListener('scroll', this.scrollHandler, { passive: true });
     }
 
     update(update: ViewUpdate): void {
-      // Recalculate decorations when:
-      // - The selection changed (cursor moved to different paragraph)
-      // - The document changed (user typed, affecting line structure)
-      // - Viewport changed (visible area changed)
-      if (update.docChanged || update.selectionSet) {
+      const { docChanged, selectionSet } = update;
+
+      // Apply explicit toggle requests (e.g., from scroll handler)
+      let toggle: boolean | null = null;
+      for (const tr of update.transactions) {
+        for (const ef of tr.effects) {
+          if (ef.is(toggleDimmingEffect)) {
+            toggle = ef.value;
+          }
+        }
+      }
+
+      if (toggle === false) {
+        this.dimmingEnabled = false;
+        this.view.dom.classList.add('cm-dimming-off');
+        return;
+      }
+
+      // Resume dimming when the user types or moves the cursor
+      if (docChanged || selectionSet) {
+        this.lastInputTs = Date.now();
+        if (!this.dimmingEnabled) {
+          this.dimmingEnabled = true;
+          this.view.dom.classList.remove('cm-dimming-off');
+        }
         this.decorations = this.getDeco(update.view);
       }
+
+      // Recalculate decorations when user input changes the active paragraph
+      // - The selection changed (cursor moved to different paragraph)
+      // - The document changed (user typed, affecting line structure)
+    }
+
+    destroy(): void {
+      this.view.dom.classList.remove('cm-dimming-off');
+      this.view.scrollDOM.removeEventListener('scroll', this.scrollHandler);
     }
 
     getDeco(view: EditorView): RangeSet<Decoration> {

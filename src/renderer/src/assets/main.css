@@ -577,9 +577,19 @@ body {
 /* Paragraph Dimming */
 .cm-dimmed-line {
   opacity: 0.4;
-  transition: opacity 0.2s ease;
+  transition:
+    opacity 0.5s ease,
+    filter 0.5s ease;
   color: var(--color-text-secondary);
   filter: saturate(0.8) brightness(0.85);
+}
+
+.cm-dimming-off .cm-dimmed-line {
+  opacity: 1;
+  filter: saturate(1) brightness(1);
+  transition:
+    opacity 0.75s ease,
+    filter 0.75s ease;
 }
 
 /* Highlight the active paragraph */
@@ -587,7 +597,7 @@ body {
   opacity: 1;
   color: var(--color-text-primary);
   transition:
-    opacity 0.2s ease,
+    opacity 0.5s ease,
     color 0.2s ease;
 }
 
