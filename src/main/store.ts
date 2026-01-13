@@ -12,7 +12,12 @@ const defaults: UserSettings = {
   showLineNumbers: false,
   lineHeight: 1.5,
   enableTypewriterScrolling: true,
-  enableParagraphDimming: false
+  enableParagraphDimming: false,
+  checkPassiveVoice: false,
+  checkSimplification: false,
+  checkInclusiveLanguage: false,
+  checkReadability: false,
+  checkProfanities: false
 };
 
 const CONFIG_DIR = path.join(app.getPath('userData'), '.phosphor');
