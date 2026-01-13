@@ -66,6 +66,26 @@ function extractWikilinks(content: string): string[] {
 }
 
 /**
+ * Get implicit parent links for a nested filepath
+ * e.g., "People/John.md" returns ["People.md"]
+ * For deeply nested paths, returns parents from shallowest to deepest
+ */
+function getImplicitPathLinks(filename: string): string[] {
+  const implicitLinks: string[] = [];
+
+  if (filename.includes('/')) {
+    const parts = filename.split('/');
+    // Create links to each parent level, from shallowest to deepest
+    for (let i = 1; i < parts.length; i++) {
+      const parentPath = parts.slice(0, i).join('/') + '.md';
+      implicitLinks.push(parentPath);
+    }
+  }
+
+  return implicitLinks;
+}
+
+/**
  * Extract tags from YAML frontmatter
  * Supports multiple formats:
  * 1. tags: [tag1, tag2, tag3]
@@ -220,9 +240,15 @@ parentPort?.on(
           try {
             const { filename, content } = file;
 
-            // Extract wikilinks
+            // Extract wikilinks from content
             const links = extractWikilinks(content);
-            graph[filename] = links;
+
+            // Also add implicit links from the file's own nested path
+            // e.g., if file is "People/John.md", it implicitly links to "People.md"
+            const implicitLinks = getImplicitPathLinks(filename);
+            const allLinks = [...links, ...implicitLinks];
+
+            graph[filename] = allLinks;
 
             // Extract tasks from this file
             const fileTasks = extractTasks(content, filename);

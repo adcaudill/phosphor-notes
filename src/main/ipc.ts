@@ -46,6 +46,74 @@ let activeVaultPath: string | null = null;
 // This variable is only set after successful password authentication
 let activeMasterKey: Buffer | null = null;
 
+// Store mainWindow reference for sending updates
+let mainWindow: BrowserWindow | null = null;
+
+/**
+ * Safely resolve a filename relative to the vault, preventing directory traversal attacks.
+ * Allows nested paths like "People/John.md" but rejects "../../../etc/passwd"
+ */
+function validateAndResolvePath(vaultPath: string, filename: string): string {
+  // Resolve both paths to absolute to compare them properly
+  const resolvedVault = path.resolve(vaultPath);
+  const resolvedPath = path.resolve(vaultPath, filename);
+
+  // Ensure resolved path is within vault directory
+  if (!resolvedPath.startsWith(resolvedVault + path.sep) && resolvedPath !== resolvedVault) {
+    throw new Error('Path traversal attempt detected');
+  }
+
+  return resolvedPath;
+}
+
+/**
+ * Auto-create parent files for nested paths.
+ * For example, if creating People/John/Notes.md, also creates:
+ * - People.md
+ * - People/John.md
+ * Returns true if any parent files were created
+ */
+async function ensureParentFilesExist(vaultPath: string, filePath: string): Promise<boolean> {
+  const relativePath = filePath.substring(vaultPath.length + 1).replace(/\\/g, '/');
+  const parts = relativePath.split('/');
+
+  // Don't process if it's a top-level file (no slashes)
+  if (parts.length <= 1) return false;
+
+  let anyCreated = false;
+
+  // Create parent files for each level (except the last one, which is the file itself)
+  for (let i = 1; i < parts.length; i++) {
+    const parentPath = parts.slice(0, i).join('/') + '.md';
+    const parentFilePath = path.join(vaultPath, parentPath);
+
+    try {
+      // Check if parent file already exists
+      await fsp.access(parentFilePath);
+      // File exists, continue
+    } catch {
+      // File doesn't exist, create it
+      try {
+        let buffer: Buffer;
+        if (activeMasterKey) {
+          // If vault is encrypted, encrypt the empty file
+          buffer = encryptBuffer(Buffer.from('', 'utf-8'), activeMasterKey);
+        } else {
+          // Otherwise, write as plain text
+          buffer = Buffer.from('', 'utf-8');
+        }
+        await fsp.writeFile(parentFilePath, buffer);
+        safeLog(`[Auto-create] Created parent file: ${parentPath}`);
+        anyCreated = true;
+      } catch (err) {
+        safeError(`[Auto-create] Failed to create parent file ${parentPath}:`, err);
+      }
+    }
+  }
+
+  return anyCreated;
+}
+
 const CONFIG_DIR = path.join(app.getPath('userData'), '.phosphor');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 
@@ -253,90 +321,107 @@ async function encryptAllNotes(vaultPath: string): Promise<void> {
 /**
  * Scan vault for unencrypted files and encrypt them
  * This is a safety feature to catch files added from outside the app
+ * Recursively handles nested directories
  */
 async function scanAndEncryptUnencryptedFiles(vaultPath: string): Promise<void> {
   if (!activeMasterKey) return; // Only run if vault is unlocked
 
+  const masterKey = activeMasterKey; // Type guard: activeMasterKey is non-null in this scope
+
   try {
-    const entries = await fsp.readdir(vaultPath);
+    // Recursively process all files in the vault
+    async function processDirectory(dir: string): Promise<void> {
+      const entries = await fsp.readdir(dir, { withFileTypes: true });
 
-    for (const entry of entries) {
-      // Skip hidden files and directories except _assets
-      if (entry.startsWith('.')) continue;
+      for (const entry of entries) {
+        // Skip hidden files and directories
+        if (entry.name.startsWith('.')) continue;
 
-      const fullPath = path.join(vaultPath, entry);
-      const stat = await fsp.stat(fullPath);
+        const fullPath = path.join(dir, entry.name);
 
-      if (entry === '_assets' && stat.isDirectory()) {
-        // Check asset files
-        try {
-          const assetEntries = await fsp.readdir(fullPath);
-          for (const assetFile of assetEntries) {
-            const assetPath = path.join(fullPath, assetFile);
-            const assetStat = await fsp.stat(assetPath);
+        if (entry.isDirectory()) {
+          // Special handling for _assets folder
+          if (entry.name === '_assets') {
+            // Check asset files
+            try {
+              const assetEntries = await fsp.readdir(fullPath);
+              for (const assetFile of assetEntries) {
+                const assetPath = path.join(fullPath, assetFile);
+                const assetStat = await fsp.stat(assetPath);
 
-            if (assetStat.isFile()) {
-              try {
-                const buffer = await fsp.readFile(assetPath);
+                if (assetStat.isFile()) {
+                  try {
+                    const buffer = await fsp.readFile(assetPath);
 
-                // Try to decrypt - if it fails, the file is unencrypted
-                try {
-                  decryptBuffer(buffer, activeMasterKey);
-                  // Decryption succeeded, file is already encrypted
-                } catch {
-                  // Decryption failed, file is unencrypted - encrypt it
-                  const encryptedBuffer = encryptBuffer(buffer, activeMasterKey);
-                  await fsp.writeFile(assetPath, encryptedBuffer);
-                  safeLog(`[Encryption] Auto-encrypted unencrypted asset: ${assetFile}`);
+                    // Try to decrypt - if it fails, the file is unencrypted
+                    try {
+                      decryptBuffer(buffer, masterKey);
+                      // Decryption succeeded, file is already encrypted
+                    } catch {
+                      // Decryption failed, file is unencrypted - encrypt it
+                      const encryptedBuffer = encryptBuffer(buffer, masterKey);
+                      await fsp.writeFile(assetPath, encryptedBuffer);
+                      safeLog(`[Encryption] Auto-encrypted unencrypted asset: ${assetFile}`);
+                    }
+                  } catch (err) {
+                    safeError(`[Encryption] Failed to process asset ${assetFile}:`, err);
+                  }
                 }
-              } catch (err) {
-                safeError(`[Encryption] Failed to process asset ${assetFile}:`, err);
+              }
+            } catch (err) {
+              safeError('[Encryption] Failed to scan _assets folder:', err);
+            }
+          } else if (!entry.name.startsWith('_')) {
+            // Recurse into other non-hidden, non-underscore directories
+            await processDirectory(fullPath);
+          }
+        } else if (!entry.name.startsWith('_') && entry.name.endsWith('.md')) {
+          // Check markdown files by trying to read as UTF-8
+          try {
+            const buffer = await fsp.readFile(fullPath);
+
+            // Try to decrypt first
+            let isEncrypted = true;
+            try {
+              decryptBuffer(buffer, masterKey);
+            } catch {
+              // Decryption failed, check if it's plain UTF-8 text
+              const text = buffer.toString('utf-8');
+              // If it's valid UTF-8 and doesn't look like encrypted binary, it's unencrypted
+              if (text && !buffer.includes(0)) {
+                isEncrypted = false;
               }
             }
-          }
-        } catch (err) {
-          safeError('[Encryption] Failed to scan _assets folder:', err);
-        }
-      } else if (!entry.startsWith('_') && stat.isFile() && entry.endsWith('.md')) {
-        // Check markdown files by trying to read as UTF-8
-        try {
-          const buffer = await fsp.readFile(fullPath);
 
-          // Try to decrypt first
-          let isEncrypted = true;
-          try {
-            decryptBuffer(buffer, activeMasterKey);
-          } catch {
-            // Decryption failed, check if it's plain UTF-8 text
-            const text = buffer.toString('utf-8');
-            // If it's valid UTF-8 and doesn't look like encrypted binary, it's unencrypted
-            if (text && !buffer.includes(0)) {
-              isEncrypted = false;
+            if (!isEncrypted) {
+              // File is unencrypted, encrypt it
+              const content = buffer.toString('utf-8');
+              const encryptedBuffer = encryptBuffer(Buffer.from(content, 'utf-8'), masterKey);
+              await fsp.writeFile(fullPath, encryptedBuffer);
+              safeLog(`[Encryption] Auto-encrypted unencrypted note: ${entry.name}`);
             }
+          } catch (err) {
+            safeError(`[Encryption] Failed to process ${entry.name}:`, err);
           }
-
-          if (!isEncrypted) {
-            // File is unencrypted, encrypt it
-            const content = buffer.toString('utf-8');
-            const encryptedBuffer = encryptBuffer(Buffer.from(content, 'utf-8'), activeMasterKey);
-            await fsp.writeFile(fullPath, encryptedBuffer);
-            safeLog(`[Encryption] Auto-encrypted unencrypted note: ${entry}`);
-          }
-        } catch (err) {
-          safeError(`[Encryption] Failed to process ${entry}:`, err);
         }
       }
     }
+
+    await processDirectory(vaultPath);
   } catch (err) {
-    safeError('[Encryption] Failed to scan vault for unencrypted files:', err);
+    safeError('[Encryption] Failed to encrypt vault:', err);
+    throw err;
   }
 }
 
-export function setupIPC(mainWindow: BrowserWindow): void {
+export function setupIPC(mainWindowArg: BrowserWindow): void {
+  // Store mainWindow reference for use in handlers
+  mainWindow = mainWindowArg;
+
   // 1. Select Vault
   ipcMain.handle('vault:select', async () => {
     // Delegate to the dialog-based opener
-    const result = await dialog.showOpenDialog(mainWindow, {
+    const result = await dialog.showOpenDialog(mainWindowArg, {
       properties: ['openDirectory', 'createDirectory'],
       title: 'Select Phosphor Vault',
       buttonLabel: 'Open Vault'
@@ -347,7 +432,9 @@ export function setupIPC(mainWindow: BrowserWindow): void {
     }
 
     const chosen = result.filePaths[0];
-    await openVaultPath(chosen, mainWindow);
+    if (mainWindow) {
+      await openVaultPath(chosen, mainWindow);
+    }
     return path.basename(chosen);
   });
 
@@ -398,9 +485,8 @@ export function setupIPC(mainWindow: BrowserWindow): void {
   ipcMain.handle('note:read', async (_, filename: string) => {
     if (!activeVaultPath) throw new Error('No vault selected');
 
-    // Security: Sanitize filename to prevent directory traversal (e.g. "../../../secret.txt")
-    const safeName = path.basename(filename);
-    const filePath = path.join(activeVaultPath, safeName);
+    // Security: Validate path to prevent directory traversal while allowing nested paths
+    const filePath = validateAndResolvePath(activeVaultPath, filename);
 
     try {
       const buffer = await fs.readFile(filePath);
@@ -422,7 +508,21 @@ export function setupIPC(mainWindow: BrowserWindow): void {
       // If file doesn't exist, return empty string or create it
       const e = err as { code?: string };
       if (e.code === 'ENOENT') {
+        // Ensure parent directories exist for nested files
+        const dir = path.dirname(filePath);
+        await fsp.mkdir(dir, { recursive: true });
+        // Auto-create parent .md files and check if we created any
+        const parentFilesCreated = await ensureParentFilesExist(activeVaultPath, filePath);
         await fs.writeFile(filePath, ''); // Create empty file
+
+        // If we created parent files, trigger a graph re-index
+        if (parentFilesCreated && mainWindow && !mainWindow.isDestroyed()) {
+          safeLog('[Auto-create] Triggering graph re-index due to parent file creation');
+          const mw = mainWindow; // Type-narrow mainWindow for TS type safety
+          stopIndexing();
+          startIndexing(activeVaultPath, mw);
+        }
+
         return '';
       }
       throw err;
@@ -433,8 +533,15 @@ export function setupIPC(mainWindow: BrowserWindow): void {
   ipcMain.handle('note:save', async (_, filename: string, content: string) => {
     if (!activeVaultPath) throw new Error('No vault selected');
 
-    const safeName = path.basename(filename);
-    const filePath = path.join(activeVaultPath, safeName);
+    // Security: Validate path to prevent directory traversal while allowing nested paths
+    const filePath = validateAndResolvePath(activeVaultPath, filename);
+
+    // Ensure parent directories exist for nested files
+    const dir = path.dirname(filePath);
+    await fsp.mkdir(dir, { recursive: true });
+
+    // Auto-create parent .md files and check if we created any
+    const parentFilesCreated = await ensureParentFilesExist(activeVaultPath, filePath);
 
     try {
       markInternalSave(); // Mark this as an internal save to avoid false conflict detection
@@ -448,6 +555,15 @@ export function setupIPC(mainWindow: BrowserWindow): void {
       }
 
       await fs.writeFile(filePath, buffer);
+
+      // If we created parent files, trigger a graph re-index
+      if (parentFilesCreated && mainWindow && !mainWindow.isDestroyed()) {
+        safeLog('[Auto-create] Triggering graph re-index due to parent file creation');
+        const mw = mainWindow; // Type-narrow mainWindow for TS type safety
+        stopIndexing();
+        startIndexing(activeVaultPath, mw);
+      }
+
       return true;
     } catch (err) {
       safeError('Failed to save:', err);
@@ -492,11 +608,30 @@ export function setupIPC(mainWindow: BrowserWindow): void {
     if (!activeVaultPath) return [];
 
     try {
-      const files = await fs.readdir(activeVaultPath);
+      const mdFiles: string[] = [];
 
-      // Filter for .md files and ignore hidden system files (like .DS_Store)
-      const mdFiles = files.filter((file) => file.endsWith('.md') && !file.startsWith('.'));
+      // Recursively find all .md files in the vault
+      async function findMdFiles(dir: string, relativePrefix: string = ''): Promise<void> {
+        const entries = await fsp.readdir(dir, { withFileTypes: true });
 
+        for (const entry of entries) {
+          // Skip hidden files and directories except _assets (we don't list assets)
+          if (entry.name.startsWith('.')) continue;
+
+          const fullPath = path.join(dir, entry.name);
+          const relativePath = relativePrefix ? `${relativePrefix}/${entry.name}` : entry.name;
+
+          if (entry.isDirectory()) {
+            // Recurse into subdirectories
+            await findMdFiles(fullPath, relativePath);
+          } else if (entry.name.endsWith('.md')) {
+            // Add markdown file with relative path preserved
+            mdFiles.push(relativePath);
+          }
+        }
+      }
+
+      await findMdFiles(activeVaultPath);
       return mdFiles;
     } catch (err) {
       safeError('Failed to list vault files:', err);
@@ -508,8 +643,8 @@ export function setupIPC(mainWindow: BrowserWindow): void {
   ipcMain.handle('note:delete', async (_, filename: string) => {
     if (!activeVaultPath) throw new Error('No vault selected');
 
-    const safeName = path.basename(filename);
-    const filePath = path.join(activeVaultPath, safeName);
+    // Security: Validate path to prevent directory traversal while allowing nested paths
+    const filePath = validateAndResolvePath(activeVaultPath, filename);
 
     try {
       await fs.unlink(filePath);
@@ -537,7 +672,9 @@ export function setupIPC(mainWindow: BrowserWindow): void {
       await scanAndEncryptUnencryptedFiles(activeVaultPath);
       // Re-index vault with decrypted content
       stopIndexing();
-      startIndexing(activeVaultPath, mainWindow);
+      if (mainWindow) {
+        startIndexing(activeVaultPath, mainWindow);
+      }
     }
     return success;
   });
@@ -558,7 +695,10 @@ export function setupIPC(mainWindow: BrowserWindow): void {
     if (!activeVaultPath) return false;
     try {
       stopIndexing();
-      startIndexing(activeVaultPath, mainWindow);
+      if (mainWindow) {
+        const mw = mainWindow;
+        startIndexing(activeVaultPath, mw);
+      }
       return true;
     } catch (err) {
       safeError('[Vault] Failed to re-index:', err);
