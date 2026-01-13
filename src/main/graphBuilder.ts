@@ -6,6 +6,99 @@
 export type WikiGraph = Record<string, string[]>;
 
 /**
+ * Virtual node types for graph organization
+ * These represent temporal hierarchy and other conceptual nodes without backing files
+ */
+export enum VirtualNodeType {
+  YEAR = 'year',
+  MONTH = 'month',
+  TAG = 'tag'
+}
+
+/**
+ * Check if a filename matches the daily note pattern (YYYY-MM-DD.md)
+ *
+ * @param filename - The filename to check
+ * @returns True if the filename matches the daily note format
+ */
+export function isDailyNote(filename: string): boolean {
+  return /(\d{4})-(\d{2})-(\d{2})\.md$/.test(filename);
+}
+
+/**
+ * Extract year-month and year from daily note filename
+ * Returns { year: '2026', month: '2026-01' } for '2026-01-13.md'
+ *
+ * @param filename - Daily note filename in format YYYY-MM-DD.md
+ * @returns Object with year and month virtual node IDs, or null if not a daily note
+ */
+export function extractDateHierarchy(filename: string): { year: string; month: string } | null {
+  const match = filename.match(/(\d{4})-(\d{2})-(\d{2})\.md$/);
+  if (!match) return null;
+
+  const [, year, month] = match;
+  return {
+    year: `${year}.md`,
+    month: `${year}-${month}.md`
+  };
+}
+
+/**
+ * Generate virtual temporal nodes from daily notes in the file list
+ * Creates year and month virtual nodes that connect daily notes hierarchically
+ *
+ * @param files - List of filenames in the vault
+ * @returns WikiGraph containing only virtual temporal nodes
+ */
+export function generateVirtualTemporalNodes(files: string[]): WikiGraph {
+  const virtualGraph: WikiGraph = {};
+  const yearNodes = new Set<string>();
+  const monthNodes = new Set<string>();
+  const monthToYear = new Map<string, string>();
+
+  // Collect all year and month nodes from daily notes
+  for (const file of files) {
+    if (isDailyNote(file)) {
+      const hierarchy = extractDateHierarchy(file);
+      if (hierarchy) {
+        yearNodes.add(hierarchy.year);
+        monthNodes.add(hierarchy.month);
+        monthToYear.set(hierarchy.month, hierarchy.year);
+      }
+    }
+  }
+
+  // Create year nodes that link to their months
+  const monthsByYear = new Map<string, Set<string>>();
+  for (const [month, year] of monthToYear.entries()) {
+    if (!monthsByYear.has(year)) {
+      monthsByYear.set(year, new Set());
+    }
+    monthsByYear.get(year)!.add(month);
+  }
+
+  for (const [year, months] of monthsByYear.entries()) {
+    virtualGraph[year] = Array.from(months).sort();
+  }
+
+  // Create month nodes that link to their daily notes
+  for (const file of files) {
+    if (isDailyNote(file)) {
+      const hierarchy = extractDateHierarchy(file);
+      if (hierarchy) {
+        if (!virtualGraph[hierarchy.month]) {
+          virtualGraph[hierarchy.month] = [];
+        }
+        virtualGraph[hierarchy.month].push(file);
+        virtualGraph[hierarchy.month].sort();
+      }
+    }
+  }
+
+  return virtualGraph;
+}
+
+/**
  * Extract wikilinks from markdown content
  * Converts [[filename]], [[filename.md]], or [[path/to/file]] format
  * Always returns filenames with .md extension
@@ -91,12 +184,14 @@ export function extractTags(content: string): string[] {
 /**
  * Build a graph of wikilinks from markdown files
  * Maps each filename to its outgoing links
- * Includes explicit links from [[...]] syntax and implicit links from nested paths
+ * Includes explicit links from [[...]] syntax, implicit links from nested paths,
+ * and virtual temporal nodes for daily notes
  *
  * @param fileContents - Map of filename to file content
+ * @param files - Optional list of all filenames in vault (for virtual node generation)
  * @returns Graph object with filename keys and link arrays
  */
-export function buildWikiGraph(fileContents: Record<string, string>): WikiGraph {
+export function buildWikiGraph(fileContents: Record<string, string>, files?: string[]): WikiGraph {
   const graph: WikiGraph = {};
 
   for (const [filename, content] of Object.entries(fileContents)) {
@@ -108,6 +203,17 @@ export function buildWikiGraph(fileContents: Record<string, string>): WikiGraph 
     const allLinks = [...links, ...ownPathLinks];
 
     graph[filename] = allLinks;
+  }
+
+  // Add virtual temporal nodes for daily notes if file list is provided
+  if (files) {
+    const virtualNodes = generateVirtualTemporalNodes(files);
+    // Merge virtual nodes into graph (don't overwrite existing files)
+    for (const [node, links] of Object.entries(virtualNodes)) {
+      if (!graph[node]) {
+        graph[node] = links;
+      }
+    }
   }
 
   return graph;

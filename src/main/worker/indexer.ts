@@ -173,6 +173,80 @@ function extractTasks(content: string, filename: string): Task[] {
   return tasks;
 }
 
+/**
+ * Check if a filename matches the daily note pattern (YYYY-MM-DD.md)
+ */
+function isDailyNote(filename: string): boolean {
+  return /(\d{4})-(\d{2})-(\d{2})\.md$/.test(filename);
+}
+
+/**
+ * Extract year-month and year from daily note filename
+ * Returns { year: '2026', month: '2026-01' } for '2026-01-13.md'
+ */
+function extractDateHierarchy(filename: string): { year: string; month: string } | null {
+  const match = filename.match(/(\d{4})-(\d{2})-(\d{2})\.md$/);
+  if (!match) return null;
+
+  const [, year, month] = match;
+  return {
+    year: `${year}.md`,
+    month: `${year}-${month}.md`
+  };
+}
+
+/**
+ * Generate virtual temporal nodes from daily notes in the file list
+ * Creates year and month virtual nodes that connect daily notes hierarchically
+ */
+function generateVirtualTemporalNodes(files: string[]): Graph {
+  const virtualGraph: Graph = {};
+  const yearNodes = new Set<string>();
+  const monthNodes = new Set<string>();
+  const monthToYear = new Map<string, string>();
+
+  // Collect all year and month nodes from daily notes
+  for (const file of files) {
+    if (isDailyNote(file)) {
+      const hierarchy = extractDateHierarchy(file);
+      if (hierarchy) {
+        yearNodes.add(hierarchy.year);
+        monthNodes.add(hierarchy.month);
+        monthToYear.set(hierarchy.month, hierarchy.year);
+      }
+    }
+  }
+
+  // Create year nodes that link to their months
+  const monthsByYear = new Map<string, Set<string>>();
+  for (const [month, year] of monthToYear.entries()) {
+    if (!monthsByYear.has(year)) {
+      monthsByYear.set(year, new Set());
+    }
+    monthsByYear.get(year)!.add(month);
+  }
+
+  for (const [year, months] of monthsByYear.entries()) {
+    virtualGraph[year] = Array.from(months).sort();
+  }
+
+  // Create month nodes that link to their daily notes
+  for (const file of files) {
+    if (isDailyNote(file)) {
+      const hierarchy = extractDateHierarchy(file);
+      if (hierarchy) {
+        if (!virtualGraph[hierarchy.month]) {
+          virtualGraph[hierarchy.month] = [];
+        }
+        virtualGraph[hierarchy.month].push(file);
+        virtualGraph[hierarchy.month].sort();
+      }
+    }
+  }
+
+  return virtualGraph;
+}
+
 // Initialize MiniSearch
 const initSearch = (): void => {
   if (!MiniSearch) {
@@ -271,6 +345,10 @@ parentPort?.on(
           }
         })
       );
+
+      // Generate virtual temporal nodes for daily notes
+      const virtualNodes = generateVirtualTemporalNodes(fileContents.map((f) => f.filename));
+      Object.assign(graph, virtualNodes);
 
       parentPort?.postMessage({ type: 'graph-complete', data: { graph, tasks } });
     } catch (err) {

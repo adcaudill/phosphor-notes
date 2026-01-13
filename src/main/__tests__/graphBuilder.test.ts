@@ -9,6 +9,9 @@ import {
   findIsolatedFiles,
   detectCycles,
   getGraphStats,
+  isDailyNote,
+  extractDateHierarchy,
+  generateVirtualTemporalNodes,
   WikiGraph
 } from '../graphBuilder';
 
@@ -260,6 +263,195 @@ Content`;
       const files = { 'People/John.md': '[[Skills]]' };
       const graph = buildWikiGraph(files);
       expect(graph['People/John.md']).toEqual(['Skills.md', 'People.md']);
+    });
+
+    it('should include virtual temporal nodes for daily notes', () => {
+      const fileContents = {
+        'index.md': '[[2026-01-13]]',
+        '2026-01-13.md': 'Daily note content'
+      };
+      const allFiles = ['index.md', '2026-01-13.md'];
+
+      const graph = buildWikiGraph(fileContents, allFiles);
+
+      // Check that virtual nodes were created
+      expect(graph['2026.md']).toBeDefined();
+      expect(graph['2026-01.md']).toBeDefined();
+
+      // Check the hierarchy
+      expect(graph['2026.md']).toContain('2026-01.md');
+      expect(graph['2026-01.md']).toContain('2026-01-13.md');
+    });
+
+    it('should handle multiple daily notes in same month', () => {
+      const fileContents = {
+        '2026-01-10.md': 'Content',
+        '2026-01-11.md': 'Content',
+        '2026-01-12.md': 'Content'
+      };
+      const allFiles = ['2026-01-10.md', '2026-01-11.md', '2026-01-12.md'];
+
+      const graph = buildWikiGraph(fileContents, allFiles);
+
+      // Month node should link to all daily notes
+      expect(graph['2026-01.md']).toEqual(['2026-01-10.md', '2026-01-11.md', '2026-01-12.md']);
+      // Year node should link to month node
+      expect(graph['2026.md']).toEqual(['2026-01.md']);
+    });
+
+    it('should handle daily notes across multiple months', () => {
+      const fileContents = {
+        '2026-01-15.md': 'Content',
+        '2026-02-20.md': 'Content',
+        '2026-03-10.md': 'Content'
+      };
+      const allFiles = ['2026-01-15.md', '2026-02-20.md', '2026-03-10.md'];
+
+      const graph = buildWikiGraph(fileContents, allFiles);
+
+      // Year node should link to all months
+      expect(graph['2026.md']).toContain('2026-01.md');
+      expect(graph['2026.md']).toContain('2026-02.md');
+      expect(graph['2026.md']).toContain('2026-03.md');
+
+      // Month nodes should link to their daily notes
+      expect(graph['2026-01.md']).toEqual(['2026-01-15.md']);
+      expect(graph['2026-02.md']).toEqual(['2026-02-20.md']);
+      expect(graph['2026-03.md']).toEqual(['2026-03-10.md']);
+    });
+
+    it('should handle mixed daily notes and regular files', () => {
+      const fileContents = {
+        'index.md': 'Content',
+        '2026-01-13.md': 'Daily note'
+      };
+      const allFiles = ['index.md', '2026-01-13.md'];
+
+      const graph = buildWikiGraph(fileContents, allFiles);
+
+      // Regular files should not be affected
+      expect(graph['index.md']).toEqual([]);
+
+      // Virtual nodes should be created
+      expect(graph['2026.md']).toBeDefined();
+      expect(graph['2026-01.md']).toBeDefined();
+      expect(graph['2026-01-13.md']).toEqual([]);
+    });
+
+    it('should not add virtual nodes without file list', () => {
+      const fileContents = {
+        '2026-01-13.md': 'Daily note'
+      };
+
+      const graph = buildWikiGraph(fileContents);
+
+      // Virtual nodes should not be created without file list
+      expect(graph['2026.md']).toBeUndefined();
+      expect(graph['2026-01.md']).toBeUndefined();
+      expect(graph['2026-01-13.md']).toEqual([]);
+    });
+  });
+
+  describe('isDailyNote', () => {
+    it('should identify daily notes with valid format', () => {
+      expect(isDailyNote('2026-01-13.md')).toBe(true);
+      expect(isDailyNote('2025-12-25.md')).toBe(true);
+      expect(isDailyNote('2024-02-29.md')).toBe(true);
+    });
+
+    it('should reject non-daily-note filenames', () => {
+      expect(isDailyNote('index.md')).toBe(false);
+      expect(isDailyNote('2026-01.md')).toBe(false);
+      expect(isDailyNote('2026.md')).toBe(false);
+      expect(isDailyNote('January-13-2026.md')).toBe(false);
+    });
+
+    it('should handle edge cases', () => {
+      expect(isDailyNote('2026-1-13.md')).toBe(false); // Single digit month
+      expect(isDailyNote('2026-01-3.md')).toBe(false); // Single digit day
+      expect(isDailyNote('26-01-13.md')).toBe(false); // Two digit year
+      expect(isDailyNote('2026-01-13')).toBe(false); // Missing .md extension
+    });
+  });
+
+  describe('extractDateHierarchy', () => {
+    it('should extract year and month from daily note', () => {
+      const result = extractDateHierarchy('2026-01-13.md');
+      expect(result).toEqual({
+        year: '2026.md',
+        month: '2026-01.md'
+      });
+    });
+
+    it('should handle different months', () => {
+      const result = extractDateHierarchy('2025-12-25.md');
+      expect(result).toEqual({
+        year: '2025.md',
+        month: '2025-12.md'
+      });
+    });
+
+    it('should return null for non-daily notes', () => {
+      expect(extractDateHierarchy('index.md')).toBeNull();
+      expect(extractDateHierarchy('2026-01.md')).toBeNull();
+      expect(extractDateHierarchy('regular-note.md')).toBeNull();
+    });
+  });
+
+  describe('generateVirtualTemporalNodes', () => {
+    it('should create year and month nodes for single daily note', () => {
+      const files = ['2026-01-13.md'];
+      const graph = generateVirtualTemporalNodes(files);
+
+      expect(graph['2026.md']).toEqual(['2026-01.md']);
+      expect(graph['2026-01.md']).toEqual(['2026-01-13.md']);
+    });
+
+    it('should group daily notes by month', () => {
+      const files = ['2026-01-10.md', '2026-01-13.md', '2026-01-20.md'];
+      const graph = generateVirtualTemporalNodes(files);
+
+      expect(graph['2026-01.md']).toEqual(['2026-01-10.md', '2026-01-13.md', '2026-01-20.md']);
+      expect(graph['2026.md']).toEqual(['2026-01.md']);
+    });
+
+    it('should handle multiple years', () => {
+      const files = ['2025-12-25.md', '2026-01-13.md', '2027-03-15.md'];
+      const graph = generateVirtualTemporalNodes(files);
+
+      expect(graph['2025.md']).toEqual(['2025-12.md']);
+      expect(graph['2026.md']).toEqual(['2026-01.md']);
+      expect(graph['2027.md']).toEqual(['2027-03.md']);
+    });
+
+    it('should handle multiple months in same year', () => {
+      const files = ['2026-01-15.md', '2026-02-20.md', '2026-03-10.md'];
+      const graph = generateVirtualTemporalNodes(files);
+
+      expect(graph['2026.md']).toEqual(['2026-01.md', '2026-02.md', '2026-03.md']);
+    });
+
+    it('should ignore non-daily-note files', () => {
+      const files = ['2026-01-13.md', 'index.md', 'Notes.md'];
+      const graph = generateVirtualTemporalNodes(files);
+
+      expect(Object.keys(graph)).not.toContain('index.md');
+      expect(Object.keys(graph)).not.toContain('Notes.md');
+      expect(graph['2026.md']).toBeDefined();
+    });
+
+    it('should return empty graph for no daily notes', () => {
+      const files = ['index.md', 'about.md', 'contact.md'];
+      const graph = generateVirtualTemporalNodes(files);
+
+      expect(Object.keys(graph)).toHaveLength(0);
+    });
+
+    it('should handle empty file list', () => {
+      const files: string[] = [];
+      const graph = generateVirtualTemporalNodes(files);
+
+      expect(Object.keys(graph)).toHaveLength(0);
     });
   });
 
