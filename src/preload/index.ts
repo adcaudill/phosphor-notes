@@ -69,8 +69,11 @@ const api = {
 
   getDailyNoteFilename: () => {
     const today = new Date();
-    // Format: YYYY-MM-DD.md
-    const filename = today.toISOString().split('T')[0] + '.md';
+    // Use local date components to avoid UTC-based rollovers
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const filename = `${year}-${month}-${day}.md`;
     return Promise.resolve(filename);
   },
   // Load cached graph from the currently opened vault (if any)
