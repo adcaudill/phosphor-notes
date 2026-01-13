@@ -37,6 +37,26 @@ Whether you are managing complex projects, journaling your daily life, or writin
 * **Rich Media:** Drag-and-drop images (`.png`, `.jpg`) directly into the editor. Assets are stored locally (and encrypted if the vault is locked).
 * **Native Performance:** Built on Electron and React with a custom **Node worker** architecture to handle indexing thousands of files without UI lag.
 
+### Inspiration & Acknowledgements
+
+This application stands on the shoulders of giants. It draws inspiration from:
+
+* [Logseq](https://logseq.com/) - for pioneering local-first PKM with plain text files.
+* [Obsidian](https://obsidian.md/) - for popularizing the Markdown-based knowledge graph.
+* [iA Writer](https://ia.net/writer) - for setting the gold standard in distraction-free writing.
+* [Roam Research](https://roamresearch.com/) - for introducing bi-directional linking to the masses.
+* [Drafts](https://getdrafts.com/) - for empowering quick capture and processing of text.
+
+While Phosphor Notes is a unique project, it owes a debt of gratitude to these trailblazers for shaping the landscape of personal knowledge management and writing tools. Phosphor aims to combine the best elements of these applications into a cohesive, secure, and user-friendly experience.
+
+This project would not be possible without the incredible open-source libraries and tools that power it, including:
+
+* [Electron](https://www.electronjs.org/)
+* [React](https://reactjs.org/)
+* [Vite](https://vitejs.dev/)
+* [CodeMirror](https://codemirror.net/)
+* [sodium](https://github.com/jedisct1/libsodium)
+
 ## Development Setup
 
 Phosphor Notes is built for **macOS** (initially) using modern web technologies. Follow these steps to set up your local development environment. While the current focus is on macOS, contributions for Windows and Linux support are welcome & the application _should_ work cross-platform though testing is limited.
