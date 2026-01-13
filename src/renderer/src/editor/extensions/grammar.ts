@@ -7,9 +7,10 @@ interface GrammarSettings {
   checkInclusiveLanguage: boolean;
   checkReadability: boolean;
   checkProfanities: boolean;
+  checkCliches: boolean;
 }
 
-export function createGrammarLint(settings: GrammarSettings) {
+export function createGrammarLint(settings: GrammarSettings): ReturnType<typeof linter> {
   // Create a new worker instance for this editor instance
   const grammarWorker = new grammarWorkerModule();
 
@@ -22,7 +23,7 @@ export function createGrammarLint(settings: GrammarSettings) {
 
       return new Promise<Diagnostic[]>((resolve) => {
         // Set up a one-time listener for this specific request
-        const handler = (e: MessageEvent<Diagnostic[]>) => {
+        const handler = (e: MessageEvent<Diagnostic[]>): void => {
           grammarWorker.removeEventListener('message', handler);
           resolve(e.data);
         };

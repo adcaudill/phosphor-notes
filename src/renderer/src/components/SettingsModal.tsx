@@ -277,6 +277,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   </label>
                   <p className="setting-hint">Detects profane, vulgar, or offensive language.</p>
                 </div>
+
+                <div className="setting-item setting-checkbox">
+                  <label htmlFor="check-cliches">
+                    <input
+                      id="check-cliches"
+                      type="checkbox"
+                      checked={settings.checkCliches}
+                      onChange={(e) => updateSetting('checkCliches', e.target.checked)}
+                    />
+                    Flag Cliches
+                  </label>
+                  <p className="setting-hint">Highlights cliched phrases so you can rephrase.</p>
+                </div>
               </>
             )}
 

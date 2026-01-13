@@ -29,7 +29,8 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
           checkSimplification: true,
           checkInclusiveLanguage: true,
           checkReadability: true,
-          checkProfanities: true
+          checkProfanities: true,
+          checkCliches: false
         });
       } finally {
         setIsLoading(false);

@@ -116,7 +116,8 @@ export const Editor: React.FC<EditorProps> = ({
           checkSimplification: settings.checkSimplification,
           checkInclusiveLanguage: settings.checkInclusiveLanguage,
           checkReadability: settings.checkReadability,
-          checkProfanities: settings.checkProfanities
+          checkProfanities: settings.checkProfanities,
+          checkCliches: settings.checkCliches
         }), // Grammar and style checking
         ...(enableDimming ? [dimmingPlugin] : []), // Paragraph dimming (optional)
 
@@ -262,7 +263,8 @@ export const Editor: React.FC<EditorProps> = ({
     settings.checkSimplification,
     settings.checkInclusiveLanguage,
     settings.checkReadability,
-    settings.checkProfanities
+    settings.checkProfanities,
+    settings.checkCliches
   ]); // Re-create editor when content, mode, or grammar settings change
 
   // Handle external updates (e.g. clicking a different file in sidebar)

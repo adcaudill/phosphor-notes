@@ -1,3 +1,5 @@
+import { CLICHES } from './cliches';
+
 export interface Diagnostic {
   from: number;
   to: number;
@@ -6,7 +8,11 @@ export interface Diagnostic {
   source: string;
 }
 
-export type CustomCheck = (text: string) => Diagnostic[];
+export interface CustomCheckSettings {
+  checkCliches?: boolean;
+}
+
+export type CustomCheck = (text: string, settings?: CustomCheckSettings) => Diagnostic[];
 
 type Locale = 'en-US' | 'en-GB';
 
@@ -106,6 +112,8 @@ const normalizeToken = (raw: string): string =>
   String(raw)
     .trim()
     .replace(/^["'‘“]+|[’”"']+$/g, '');
+
+const escapeRegex = (str: string): string => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const inferArticleForLocale = (raw: string, locale: Locale): 'a' | 'an' => {
   if (!raw) {
@@ -211,7 +219,34 @@ const checkIndefiniteArticles: CustomCheck = (text: string) => {
   return diagnostics;
 };
 
-const customChecks: CustomCheck[] = [checkIndefiniteArticles];
+const checkCliches: CustomCheck = (text: string, settings?: CustomCheckSettings) => {
+  const diagnostics: Diagnostic[] = [];
 
-export const runCustomChecks = (text: string): Diagnostic[] =>
-  customChecks.flatMap((check) => check(text));
+  if (settings?.checkCliches === false) {
+    return diagnostics;
+  }
+
+  for (const phrase of CLICHES) {
+    // Match case-insensitively with word boundaries on both ends where possible.
+    // Many entries contain spaces/punctuation; we still try to anchor to boundaries to avoid substrings.
+    const pattern = new RegExp(`\\b${escapeRegex(phrase)}\\b`, 'gi');
+    let m: RegExpExecArray | null;
+    // eslint-disable-next-line no-cond-assign
+    while ((m = pattern.exec(text)) !== null) {
+      diagnostics.push({
+        from: m.index,
+        to: m.index + m[0].length,
+        severity: 'info',
+        message: 'Cliché detected; consider rephrasing',
+        source: 'Clichés'
+      });
+    }
+  }
+
+  return diagnostics;
+};
+
+const customChecks: CustomCheck[] = [checkIndefiniteArticles, checkCliches];
+
+export const runCustomChecks = (text: string, settings?: CustomCheckSettings): Diagnostic[] =>
+  customChecks.flatMap((check) => check(text, settings));

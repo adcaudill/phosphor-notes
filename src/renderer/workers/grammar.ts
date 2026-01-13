@@ -16,6 +16,7 @@ interface GrammarSettings {
   checkInclusiveLanguage: boolean;
   checkReadability: boolean;
   checkProfanities: boolean;
+  checkCliches: boolean;
 }
 
 interface WorkerMessage {
@@ -125,7 +126,7 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
       };
     });
 
-    const customDiagnostics = runCustomChecks(text);
+    const customDiagnostics = runCustomChecks(text, { checkCliches: settings.checkCliches });
     const allDiagnostics = [...diagnostics, ...customDiagnostics];
 
     self.postMessage(allDiagnostics);
