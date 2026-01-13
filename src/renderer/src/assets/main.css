@@ -136,6 +136,22 @@ body {
   gap: var(--spacing-lg);
 }
 
+/* Make the editor header a draggable region for the window
+   while keeping interactive children (buttons, inputs) clickable. */
+.editor-header {
+  -webkit-app-region: drag;
+}
+
+/* Only make interactive controls non-draggable so the rest of the header
+   (including the title) remains a large, consistent drag target. */
+.editor-header .editor-header-actions,
+.editor-header .editor-header-actions *,
+.editor-header button,
+.editor-header a,
+.editor-header input {
+  -webkit-app-region: no-drag;
+}
+
 .editor-title {
   margin: 0;
   font-size: var(--font-size-lg);
