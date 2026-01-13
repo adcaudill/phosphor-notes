@@ -19,6 +19,9 @@ export const commonIssues = {
   'ad nauseum': {
     replace: 'ad nauseam'
   },
+  affrontery: {
+    replace: 'effrontery'
+  },
   'advanced notice': {
     replace: 'advance notice'
   },
@@ -58,6 +61,9 @@ export const commonIssues = {
   ampitheater: {
     replace: 'amphitheater'
   },
+  analyzation: {
+    replace: 'analysis'
+  },
   'and also': {
     replace: ['and', 'also']
   },
@@ -78,6 +84,9 @@ export const commonIssues = {
   },
   anywheres: {
     replace: 'anywhere'
+  },
+  annoyment: {
+    replace: 'annoyance'
   },
   appauled: {
     replace: 'appalled'
@@ -323,6 +332,12 @@ export const commonIssues = {
   conservativism: {
     replace: 'conservatism'
   },
+  confirmant: {
+    replace: 'confirmand'
+  },
+  confirmants: {
+    replace: 'confirmands'
+  },
   conversate: {
     replace: 'converse'
   },
@@ -340,6 +355,9 @@ export const commonIssues = {
   },
   'could of': {
     replace: ["could've", 'could have']
+  },
+  crained: {
+    replace: 'craned'
   },
   'should of': {
     replace: ["should've", 'should have']
@@ -398,6 +416,12 @@ export const commonIssues = {
   dieties: {
     replace: 'deities'
   },
+  discomforture: {
+    replace: ['discomfort', 'discomfiture']
+  },
+  dispersement: {
+    replace: ['disbursement', 'dispersal']
+  },
   'different than': {
     replace: 'different from'
   },
@@ -435,7 +459,7 @@ export const commonIssues = {
     replace: 'doughnut'
   },
   doubtlessly: {
-    replace: 'doubtless'
+    replace: ['doubtless', 'undoubtedly']
   },
   'drips and drabs': {
     replace: 'dribs and drabs'
@@ -520,6 +544,9 @@ export const commonIssues = {
   },
   'extract revenge': {
     replace: 'exact revenge'
+  },
+  forebearance: {
+    replace: 'forbearance'
   },
   'far be it for me': {
     replace: 'far be it from me'
@@ -619,6 +646,15 @@ export const commonIssues = {
   },
   'had ought': {
     replace: 'ought'
+  },
+  improprietous: {
+    replace: 'improper'
+  },
+  inclimate: {
+    replace: 'inclement'
+  },
+  inimicable: {
+    replace: 'inimical'
   },
   "hadn't have": {
     replace: "hadn't"
@@ -953,14 +989,62 @@ export const commonIssues = {
   'myriad of': {
     replace: 'myriad'
   },
+  minimalize: {
+    replace: 'minimize'
+  },
+  minimalized: {
+    replace: 'minimized'
+  },
+  minimalizes: {
+    replace: 'minimizes'
+  },
+  minimalizing: {
+    replace: 'minimizing'
+  },
+  optimalize: {
+    replace: 'optimize'
+  },
+  paralyzation: {
+    replace: 'paralysis'
+  },
+  pettifogger: {
+    replace: 'pettifog'
+  },
+  proprietous: {
+    replace: 'proper'
+  },
+  'relative inexpense': {
+    replace: ['relatively low price', 'affordability']
+  },
   "she don't": {
     replace: "she doesn't"
+  },
+  seldomly: {
+    replace: 'seldom'
   },
   'time progressed': {
     replace: 'time passed'
   },
   'time progresses': {
     replace: 'time passes'
+  },
+  thusly: {
+    replace: 'thus'
+  },
+  uncategorically: {
+    replace: 'categorically'
+  },
+  undoubtably: {
+    replace: ['undoubtedly', 'indubitably']
+  },
+  unequivocable: {
+    replace: 'unequivocal'
+  },
+  unmercilessly: {
+    replace: 'mercilessly'
+  },
+  unrelentlessly: {
+    replace: ['unrelentingly', 'relentlessly']
   },
   'would of': {
     replace: ["would've", 'would have']
