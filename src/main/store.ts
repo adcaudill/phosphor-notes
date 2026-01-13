@@ -91,3 +91,13 @@ export function setupSettingsHandlers(): void {
 export function getDefaultSettings(): UserSettings {
   return defaults;
 }
+
+// Update settings programmatically from main process
+export async function updateSettings(updates: Partial<UserSettings>): Promise<UserSettings> {
+  if (!cachedSettings) {
+    cachedSettings = await loadSettings();
+  }
+  cachedSettings = { ...cachedSettings, ...updates };
+  await saveSettings(cachedSettings);
+  return cachedSettings;
+}

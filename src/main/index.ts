@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, protocol, ipcMain } from 'electron';
+import { app, shell, BrowserWindow, protocol, ipcMain, screen } from 'electron';
 import { join } from 'path';
 import { readFile } from 'fs/promises';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
@@ -11,7 +11,8 @@ import {
   getActiveMasterKey
 } from './ipc';
 import { createMenu } from './menu';
-import { setupSettingsHandlers, initializeSettings } from './store';
+import { setupSettingsHandlers, initializeSettings, updateSettings } from './store';
+import type { UserSettings } from '../types/phosphor.d';
 import { decryptBuffer, isEncrypted } from './crypto';
 
 // Suppress EPIPE errors that occur when trying to write to stdout/stderr during shutdown
@@ -73,11 +74,51 @@ function setupProtocol(): void {
   });
 }
 
-function createWindow(): BrowserWindow {
-  // Create the browser window.
-  const mainWindow = new BrowserWindow({
+function createWindow(settings?: UserSettings): BrowserWindow {
+  // Create the browser window. Use persisted bounds if present, but
+  // constrain them to the display work area so windows don't appear off-screen.
+  const bounds = settings?.windowBounds;
+
+  let initialOpts: { width: number; height: number; x?: number; y?: number } = {
     width: 1100,
-    height: 800,
+    height: 800
+  };
+
+  if (bounds) {
+    // Find the display that best matches the previous bounds
+    const matchRect = {
+      x: bounds.x ?? 0,
+      y: bounds.y ?? 0,
+      width: bounds.width,
+      height: bounds.height
+    };
+    const disp = screen.getDisplayMatching(matchRect);
+    const wa = disp.workArea; // { x, y, width, height }
+
+    // Clamp width/height to work area size
+    const w = Math.min(bounds.width, wa.width);
+    const h = Math.min(bounds.height, wa.height);
+
+    // Default to previous x/y when available, otherwise center on work area
+    let x = typeof bounds.x === 'number' ? bounds.x : wa.x + Math.floor((wa.width - w) / 2);
+    let y = typeof bounds.y === 'number' ? bounds.y : wa.y + Math.floor((wa.height - h) / 2);
+
+    // Ensure the window is fully within the work area
+    const maxX = wa.x + wa.width - w;
+    const maxY = wa.y + wa.height - h;
+    if (x < wa.x) x = wa.x;
+    if (y < wa.y) y = wa.y;
+    if (x > maxX) x = Math.max(wa.x, maxX);
+    if (y > maxY) y = Math.max(wa.y, maxY);
+
+    initialOpts = { width: w, height: h, x, y };
+  }
+
+  const mainWindow = new BrowserWindow({
+    width: initialOpts.width,
+    height: initialOpts.height,
+    x: initialOpts.x,
+    y: initialOpts.y,
     show: false,
     autoHideMenuBar: true,
     // macOS native window styling
@@ -130,18 +171,29 @@ app.whenReady().then(async () => {
     optimizer.watchWindowShortcuts(window);
   });
 
-  const mainWindow = createWindow();
-  setupIPC(mainWindow);
+  // Ensure IPC handlers for settings are registered, then load settings
   setupSettingsHandlers();
-  createMenu(mainWindow);
-
-  // Initialize settings on startup
+  let settings: UserSettings | undefined;
   try {
-    await initializeSettings();
+    settings = await initializeSettings();
     console.log('Settings initialized');
   } catch (err) {
     console.error('Failed to initialize settings:', err);
   }
+
+  const mainWindow = createWindow(settings);
+  setupIPC(mainWindow);
+  createMenu(mainWindow);
+
+  // Persist window bounds on close so we can restore on next launch
+  mainWindow.on('close', async () => {
+    try {
+      const b = mainWindow.getBounds();
+      await updateSettings({ windowBounds: { width: b.width, height: b.height, x: b.x, y: b.y } });
+    } catch (err) {
+      console.error('Failed to save window bounds:', err);
+    }
+  });
 
   // Try to auto-open the last used vault if present
   try {

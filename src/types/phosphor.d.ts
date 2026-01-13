@@ -67,6 +67,13 @@ export interface UserSettings {
   lineHeight: number;
   enableTypewriterScrolling: boolean;
   enableParagraphDimming: boolean;
+  // Optional persisted window bounds from the last session
+  windowBounds?: {
+    width: number;
+    height: number;
+    x?: number;
+    y?: number;
+  };
 }
 
 declare global {
