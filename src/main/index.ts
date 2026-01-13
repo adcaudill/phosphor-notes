@@ -148,6 +148,67 @@ function createWindow(settings?: UserSettings): BrowserWindow {
   mainWindow.webContents.on('context-menu', (_event, params: Electron.ContextMenuParams) => {
     const template: Electron.MenuItemConstructorOptions[] = [];
 
+    // Spell check options first (macOS convention)
+    if (params.misspelledWord) {
+      // Add spelling suggestions
+      if (params.dictionarySuggestions && params.dictionarySuggestions.length > 0) {
+        params.dictionarySuggestions.forEach((suggestion) => {
+          template.push({
+            label: suggestion,
+            click: () => {
+              mainWindow.webContents.replaceMisspelling(suggestion);
+            }
+          });
+        });
+      }
+
+      // Add Ignore and Learn spelling options
+      if (params.dictionarySuggestions && params.dictionarySuggestions.length > 0) {
+        template.push({ type: 'separator' });
+      }
+
+      template.push({
+        label: 'Ignore Spelling',
+        click: () => {
+          const wcSession = mainWindow.webContents.session as unknown as {
+            spellCheckerDictionary?: { addWord(word: string): void };
+          };
+          wcSession.spellCheckerDictionary?.addWord(params.misspelledWord);
+        }
+      });
+
+      template.push({
+        label: 'Learn Spelling',
+        click: () => {
+          const wcSession = mainWindow.webContents.session as unknown as {
+            spellCheckerDictionary?: { addWord(word: string): void };
+          };
+          wcSession.spellCheckerDictionary?.addWord(params.misspelledWord);
+        }
+      });
+
+      template.push({ type: 'separator' });
+    }
+
+    // Look Up and Translate (macOS)
+    if (process.platform === 'darwin' && params.selectionText) {
+      template.push({
+        label: `Look Up "${params.selectionText}"`,
+        click: () => {
+          mainWindow.webContents.showDefinitionForSelection();
+        }
+      });
+
+      template.push({
+        label: `Translate "${params.selectionText}"`,
+        click: () => {
+          mainWindow.webContents.send('translate:word', params.selectionText);
+        }
+      });
+
+      template.push({ type: 'separator' });
+    }
+
     // Undo/Redo
     if (params.editFlags?.canUndo) {
       template.push({
@@ -162,7 +223,7 @@ function createWindow(settings?: UserSettings): BrowserWindow {
       });
     }
 
-    if (template.length > 0) {
+    if ((params.editFlags?.canUndo || params.editFlags?.canRedo) && !params.misspelledWord) {
       template.push({ type: 'separator' });
     }
 
@@ -187,23 +248,6 @@ function createWindow(settings?: UserSettings): BrowserWindow {
       label: 'Select All',
       role: 'selectAll'
     });
-
-    // Spell check options (macOS)
-    if (
-      params.misspelledWord &&
-      params.dictionarySuggestions &&
-      params.dictionarySuggestions.length > 0
-    ) {
-      template.push({ type: 'separator' });
-      params.dictionarySuggestions.forEach((suggestion) => {
-        template.push({
-          label: suggestion,
-          click: () => {
-            mainWindow.webContents.replaceMisspelling(suggestion);
-          }
-        });
-      });
-    }
 
     // Speech submenu (macOS)
     if (process.platform === 'darwin') {

@@ -222,6 +222,12 @@ export const Editor: React.FC<EditorProps> = ({
 
     viewRef.current = view;
 
+    // Enable spell checking on CodeMirror's content element
+    const contentEl = view.contentDOM;
+    if (contentEl) {
+      contentEl.spellcheck = true;
+    }
+
     // Cleanup on unmount
     return () => {
       view.destroy();
@@ -246,6 +252,7 @@ export const Editor: React.FC<EditorProps> = ({
       ref={editorRef}
       style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}
       className="editor-container"
+      spellCheck="true"
     />
   );
 };
