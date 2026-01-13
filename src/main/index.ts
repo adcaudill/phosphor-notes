@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, protocol, ipcMain, screen } from 'electron';
+import { app, shell, BrowserWindow, protocol, ipcMain, screen, Menu } from 'electron';
 import { join } from 'path';
 import { readFile } from 'fs/promises';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
@@ -130,7 +130,8 @@ function createWindow(settings?: UserSettings): BrowserWindow {
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: false,
+      spellcheck: true
     }
   });
 
@@ -141,6 +142,93 @@ function createWindow(settings?: UserSettings): BrowserWindow {
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url);
     return { action: 'deny' };
+  });
+
+  // Setup context menu with standard editing options
+  mainWindow.webContents.on('context-menu', (_event, params: Electron.ContextMenuParams) => {
+    const template: Electron.MenuItemConstructorOptions[] = [];
+
+    // Undo/Redo
+    if (params.editFlags?.canUndo) {
+      template.push({
+        label: 'Undo',
+        role: 'undo'
+      });
+    }
+    if (params.editFlags?.canRedo) {
+      template.push({
+        label: 'Redo',
+        role: 'redo'
+      });
+    }
+
+    if (template.length > 0) {
+      template.push({ type: 'separator' });
+    }
+
+    // Cut/Copy/Paste
+    template.push({
+      label: 'Cut',
+      role: 'cut'
+    });
+    template.push({
+      label: 'Copy',
+      role: 'copy'
+    });
+    template.push({
+      label: 'Paste',
+      role: 'paste'
+    });
+
+    template.push({ type: 'separator' });
+
+    // Select All
+    template.push({
+      label: 'Select All',
+      role: 'selectAll'
+    });
+
+    // Spell check options (macOS)
+    if (
+      params.misspelledWord &&
+      params.dictionarySuggestions &&
+      params.dictionarySuggestions.length > 0
+    ) {
+      template.push({ type: 'separator' });
+      params.dictionarySuggestions.forEach((suggestion) => {
+        template.push({
+          label: suggestion,
+          click: () => {
+            mainWindow.webContents.replaceMisspelling(suggestion);
+          }
+        });
+      });
+    }
+
+    // Speech submenu (macOS)
+    if (process.platform === 'darwin') {
+      template.push({ type: 'separator' });
+      template.push({
+        label: 'Speech',
+        submenu: [
+          {
+            label: 'Speak',
+            click: () => {
+              mainWindow.webContents.send('speech:speak', params.selectionText);
+            }
+          },
+          {
+            label: 'Stop Speaking',
+            click: () => {
+              mainWindow.webContents.send('speech:stop');
+            }
+          }
+        ]
+      });
+    }
+
+    const menu = Menu.buildFromTemplate(template);
+    menu.popup({ window: mainWindow });
   });
 
   // HMR for renderer base on electron-vite cli.

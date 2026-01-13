@@ -56,6 +56,11 @@ export interface PhosphorAPI {
 
   // App Info
   getVersions: () => Promise<{ electron?: string; chrome?: string; node?: string; app?: string }>;
+
+  // Speech
+  speak: (text: string) => void;
+  stopSpeaking: () => void;
+  isSpeaking: () => boolean;
 }
 
 export interface UserSettings {

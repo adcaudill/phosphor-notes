@@ -114,8 +114,27 @@ const api = {
   deleteNote: (filename: string) => ipcRenderer.invoke('note:delete', filename),
 
   // Get app versions
-  getVersions: () => ipcRenderer.invoke('app:get-versions')
+  getVersions: () => ipcRenderer.invoke('app:get-versions'),
+
+  // Speech API
+  speak: (text: string) => {
+    const utterance = new SpeechSynthesisUtterance(text);
+    window.speechSynthesis.speak(utterance);
+  },
+  stopSpeaking: () => {
+    window.speechSynthesis.cancel();
+  },
+  isSpeaking: () => window.speechSynthesis.speaking
 };
+
+// Setup IPC listeners for speech commands from context menu
+ipcRenderer.on('speech:speak', (_event, text: string) => {
+  api.speak(text);
+});
+
+ipcRenderer.on('speech:stop', () => {
+  api.stopSpeaking();
+});
 
 // Expose it to the main world (Renderer)
 // We cast 'api' to ensure it matches the interface defined in d.ts implies,
