@@ -8,6 +8,7 @@ import retextReadability from 'retext-readability';
 import retextProfanities from 'retext-profanities';
 import retextRedundantAcronyms from 'retext-redundant-acronyms';
 import retextRepeatedWords from 'retext-repeated-words';
+import { Diagnostic, runCustomChecks } from './customChecks';
 
 interface GrammarSettings {
   checkPassiveVoice: boolean;
@@ -78,7 +79,7 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
     const file = await processor.process(text);
 
     // Convert VFile messages to CodeMirror Diagnostics
-    const diagnostics = (file.messages || []).map((msg: DiagnosticMessage) => {
+    const diagnostics: Diagnostic[] = (file.messages || []).map((msg: DiagnosticMessage) => {
       let from = 0;
       let to = 0;
 
@@ -124,7 +125,10 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
       };
     });
 
-    self.postMessage(diagnostics);
+    const customDiagnostics = runCustomChecks(text);
+    const allDiagnostics = [...diagnostics, ...customDiagnostics];
+
+    self.postMessage(allDiagnostics);
   } catch (err) {
     console.error('Grammar worker error:', err);
     self.postMessage([]);
