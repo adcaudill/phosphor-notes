@@ -30,7 +30,7 @@ Whether you are managing complex projects, journaling your daily life, or writin
 - **Logseq-Style Tasks:** Manage tasks directly in your text using standard syntax (`- [ ]`, `- [/]`, `- [x]`).
 - **Recurring & Scheduled:** Support for due dates and recurrence logic (e.g., `📅 2026-01-15 🔁 +1w`).
 - **Task Dashboard:** A dynamic view to aggregate and manage open tasks across your entire vault.
-- **Daily Journals:** Automatic creation of daily notes (`YYYY-MM-DD.md`) to capture fleeting thoughts and logs.
+- **Daily Journals:** Automatic creation of daily notes (`YYYY-MM-DD.md`) to capture fleeting thoughts and logs - in freeform or outliner mode.
 
 ### Security & Architecture
 

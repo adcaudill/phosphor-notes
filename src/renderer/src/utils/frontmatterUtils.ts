@@ -30,7 +30,10 @@ export function extractDateFromFilename(filename: string): Date | null {
 /**
  * Generate default frontmatter for a new file
  */
-export function generateDefaultFrontmatter(filename: string): string {
+export function generateDefaultFrontmatter(
+  filename: string,
+  mode?: 'freeform' | 'outliner'
+): string {
   if (isDailyNote(filename)) {
     const date = extractDateFromFilename(filename);
     if (date) {
@@ -39,7 +42,8 @@ export function generateDefaultFrontmatter(filename: string): string {
         month: 'long',
         day: 'numeric'
       });
-      return `---\ntitle: ${formatted}\ntype: daily\n---`;
+      const modeStr = mode ? `\nmode: ${mode}` : '';
+      return `---\ntitle: ${formatted}\ntype: daily${modeStr}\n---`;
     }
   }
 

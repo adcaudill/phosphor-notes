@@ -12,6 +12,7 @@ import { dateIndicatorPlugin } from '../editor/extensions/dateIndicator';
 import { typewriterScrollPlugin } from '../editor/extensions/typewriter';
 import { dimmingPlugin } from '../editor/extensions/dimming';
 import { createGrammarLint } from '../editor/extensions/grammar';
+import { createOutlinerKeymap } from '../editor/extensions/outlinerKeymap';
 import { useSettings } from '../hooks/useSettings';
 import {
   extractFrontmatter,
@@ -64,6 +65,12 @@ export const Editor: React.FC<EditorProps> = ({
   // Extract frontmatter and content, memoized to avoid re-extraction on every render
   const { frontmatter, content } = useMemo(() => extractFrontmatter(initialDoc), [initialDoc]);
 
+  // Determine if this is an outliner mode document
+  const isOutlinerMode = useMemo(() => {
+    if (!frontmatter || !frontmatter.content) return false;
+    return frontmatter.content.mode === 'outliner';
+  }, [frontmatter]);
+
   // Update the frontmatter ref whenever extraction changes
   useEffect(() => {
     frontmatterRef.current = frontmatter;
@@ -80,18 +87,23 @@ export const Editor: React.FC<EditorProps> = ({
   useEffect(() => {
     if (!editorRef.current) return;
 
+    // Build the keymap based on journal mode
+    const baseKeymap = [
+      ...defaultKeymap,
+      ...historyKeymap,
+      {
+        key: 'Mod-Enter',
+        run: cycleTaskStatus
+      } as KeyBinding
+    ];
+
+    const finalKeymap = isOutlinerMode ? [...createOutlinerKeymap(), ...baseKeymap] : baseKeymap;
+
     // 1. Define the Initial State (use only the content, without frontmatter)
     const startState = EditorState.create({
       doc: content,
       extensions: [
-        keymap.of([
-          ...defaultKeymap,
-          ...historyKeymap,
-          {
-            key: 'Mod-Enter',
-            run: cycleTaskStatus
-          } as KeyBinding
-        ]), // Cmd+Z, Enter, etc.
+        keymap.of(finalKeymap), // Cmd+Z, Enter, etc. + outliner keybindings if applicable
         EditorView.lineWrapping, // Soft wrap long lines
         markdown(), // Markdown syntax support
         history(), // Undo/Redo stack
@@ -245,12 +257,13 @@ export const Editor: React.FC<EditorProps> = ({
   }, [
     content,
     enableDimming,
+    isOutlinerMode,
     settings.checkPassiveVoice,
     settings.checkSimplification,
     settings.checkInclusiveLanguage,
     settings.checkReadability,
     settings.checkProfanities
-  ]); // Re-create editor when content or grammar settings change
+  ]); // Re-create editor when content, mode, or grammar settings change
 
   // Handle external updates (e.g. clicking a different file in sidebar)
   useEffect(() => {

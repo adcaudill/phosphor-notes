@@ -11,6 +11,7 @@ const defaults: UserSettings = {
   vimMode: false,
   showLineNumbers: false,
   lineHeight: 1.5,
+  defaultJournalMode: 'freeform',
   enableTypewriterScrolling: true,
   enableParagraphDimming: false,
   checkPassiveVoice: false,

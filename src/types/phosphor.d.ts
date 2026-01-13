@@ -70,6 +70,7 @@ export interface UserSettings {
   vimMode: boolean;
   showLineNumbers: boolean;
   lineHeight: number;
+  defaultJournalMode: 'freeform' | 'outliner';
   enableTypewriterScrolling: boolean;
   enableParagraphDimming: boolean;
   // Grammar & Style settings

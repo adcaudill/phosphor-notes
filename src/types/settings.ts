@@ -5,4 +5,5 @@ export interface UserSettings {
   vimMode: boolean;
   showLineNumbers: boolean;
   lineHeight: number;
+  defaultJournalMode: 'freeform' | 'outliner';
 }

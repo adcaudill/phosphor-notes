@@ -139,6 +139,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   </label>
                   <p className="setting-hint">Dims inactive paragraphs for focus.</p>
                 </div>
+
+                <div className="setting-item">
+                  <label htmlFor="default-journal-mode">Default Journal Mode</label>
+                  <select
+                    id="default-journal-mode"
+                    value={settings.defaultJournalMode}
+                    onChange={(e) =>
+                      updateSetting('defaultJournalMode', e.target.value as 'freeform' | 'outliner')
+                    }
+                  >
+                    <option value="freeform">Freeform</option>
+                    <option value="outliner">Outliner (Bulleted)</option>
+                  </select>
+                  <p className="setting-hint">Controls the default format for new daily notes.</p>
+                </div>
               </>
             )}
 

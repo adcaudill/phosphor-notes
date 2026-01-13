@@ -362,7 +362,10 @@ function AppContent(): React.JSX.Element {
       const { frontmatter } = extractFrontmatter(noteContent);
       if (!frontmatter) {
         console.debug('File missing frontmatter, adding default:', filename);
-        const defaultFrontmatter = generateDefaultFrontmatter(filename);
+        const defaultFrontmatter = generateDefaultFrontmatter(
+          filename,
+          settings.defaultJournalMode
+        );
         noteContent = defaultFrontmatter + '\n' + noteContent;
         // Save the updated content with frontmatter
         await window.phosphor.saveNote(filename, noteContent);
@@ -390,7 +393,23 @@ function AppContent(): React.JSX.Element {
     try {
       const dailyNoteFilename = await window.phosphor.getDailyNoteFilename();
       setCurrentFile(dailyNoteFilename);
-      const noteContent = await window.phosphor.readNote(dailyNoteFilename);
+      let noteContent = await window.phosphor.readNote(dailyNoteFilename);
+
+      // If it's a new file (empty) and in outliner mode, add initial bullet point
+      if (!noteContent) {
+        const defaultFrontmatter = generateDefaultFrontmatter(
+          dailyNoteFilename,
+          settings.defaultJournalMode
+        );
+        if (settings.defaultJournalMode === 'outliner') {
+          noteContent = defaultFrontmatter + '\n- ';
+        } else {
+          noteContent = defaultFrontmatter + '\n';
+        }
+        // Save the initialized content
+        await window.phosphor.saveNote(dailyNoteFilename, noteContent);
+      }
+
       setContent(noteContent);
     } catch (err) {
       console.error('Failed to load vault content:', err);

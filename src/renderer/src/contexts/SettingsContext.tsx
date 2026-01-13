@@ -22,6 +22,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
           vimMode: false,
           showLineNumbers: false,
           lineHeight: 1.5,
+          defaultJournalMode: 'freeform',
           enableTypewriterScrolling: true,
           enableParagraphDimming: false,
           checkPassiveVoice: true,
