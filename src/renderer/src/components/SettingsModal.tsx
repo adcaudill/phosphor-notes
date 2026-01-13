@@ -290,6 +290,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   </label>
                   <p className="setting-hint">Highlights cliched phrases so you can rephrase.</p>
                 </div>
+
+                <div className="setting-item setting-checkbox">
+                  <label htmlFor="check-intensify">
+                    <input
+                      id="check-intensify"
+                      type="checkbox"
+                      checked={settings.checkIntensify}
+                      onChange={(e) => updateSetting('checkIntensify', e.target.checked)}
+                    />
+                    Detect Weak & Weasel Words
+                  </label>
+                  <p className="setting-hint">
+                    Identifies vague, hedging, or weak language that weakens writing.
+                  </p>
+                </div>
               </>
             )}
 

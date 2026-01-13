@@ -8,6 +8,8 @@ import retextReadability from 'retext-readability';
 import retextProfanities from 'retext-profanities';
 import retextRedundantAcronyms from 'retext-redundant-acronyms';
 import retextRepeatedWords from 'retext-repeated-words';
+import retextContractions from 'retext-contractions';
+import retextIntensify from 'retext-intensify';
 import { Diagnostic, runCustomChecks } from './customChecks';
 
 interface GrammarSettings {
@@ -17,6 +19,7 @@ interface GrammarSettings {
   checkReadability: boolean;
   checkProfanities: boolean;
   checkCliches: boolean;
+  checkIntensify: boolean;
 }
 
 interface WorkerMessage {
@@ -44,7 +47,10 @@ function createProcessor(settings: GrammarSettings) {
   }
 
   // Always include these plugins
-  processor = processor.use(retextRedundantAcronyms).use(retextRepeatedWords);
+  processor = processor
+    .use(retextRedundantAcronyms)
+    .use(retextRepeatedWords)
+    .use(retextContractions);
 
   if (settings.checkPassiveVoice) {
     processor = processor.use(retextPassive);
@@ -54,6 +60,9 @@ function createProcessor(settings: GrammarSettings) {
   }
   if (settings.checkInclusiveLanguage) {
     processor = processor.use(retextEquality);
+  }
+  if (settings.checkIntensify) {
+    processor = processor.use(retextIntensify);
   }
 
   return processor.use(retextStringify);
@@ -112,7 +121,9 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
           'retext-readability': 'Readability',
           'retext-profanities': 'Profanity',
           'retext-redundant-acronyms': 'Redundant Acronym',
-          'retext-repeated-words': 'Repeated Words'
+          'retext-repeated-words': 'Repeated Words',
+          'retext-contractions': 'Contractions',
+          'retext-intensify': 'Weak & Weasel Words'
         };
         source = sourceMap[msg.source] || msg.source;
       }

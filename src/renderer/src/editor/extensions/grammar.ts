@@ -8,6 +8,7 @@ interface GrammarSettings {
   checkReadability: boolean;
   checkProfanities: boolean;
   checkCliches: boolean;
+  checkIntensify: boolean;
 }
 
 export function createGrammarLint(settings: GrammarSettings): ReturnType<typeof linter> {

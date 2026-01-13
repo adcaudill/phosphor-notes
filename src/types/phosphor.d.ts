@@ -80,6 +80,7 @@ export interface UserSettings {
   checkReadability: boolean;
   checkProfanities: boolean;
   checkCliches: boolean;
+  checkIntensify: boolean;
   // Optional persisted window bounds from the last session
   windowBounds?: {
     width: number;

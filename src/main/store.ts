@@ -19,7 +19,8 @@ const defaults: UserSettings = {
   checkInclusiveLanguage: false,
   checkReadability: false,
   checkProfanities: false,
-  checkCliches: false
+  checkCliches: false,
+  checkIntensify: false
 };
 
 const CONFIG_DIR = path.join(app.getPath('userData'), '.phosphor');
