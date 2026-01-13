@@ -9,7 +9,7 @@ interface SettingsModalProps {
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   const { settings, updateSetting } = useSettings();
-  const [activeTab, setActiveTab] = useState<'editor' | 'appearance'>('editor');
+  const [activeTab, setActiveTab] = useState<'editor' | 'appearance' | 'grammar'>('editor');
 
   if (!isOpen) return null;
 
@@ -45,6 +45,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               onClick={() => setActiveTab('appearance')}
             >
               Appearance
+            </button>
+            <button
+              className={`settings-tab ${activeTab === 'grammar' ? 'active' : ''}`}
+              onClick={() => setActiveTab('grammar')}
+            >
+              Grammar & Style
             </button>
           </div>
 
@@ -168,6 +174,85 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                     <option value="amber">Amber</option>
                     <option value="green">Green</option>
                   </select>
+                </div>
+              </>
+            )}
+
+            {activeTab === 'grammar' && (
+              <>
+                <h2>Grammar & Style</h2>
+
+                <div className="setting-item setting-checkbox">
+                  <label htmlFor="check-passive-voice">
+                    <input
+                      id="check-passive-voice"
+                      type="checkbox"
+                      checked={settings.checkPassiveVoice}
+                      onChange={(e) => updateSetting('checkPassiveVoice', e.target.checked)}
+                    />
+                    Detect Passive Voice
+                  </label>
+                  <p className="setting-hint">
+                    Suggests converting passive sentences to active voice for clarity.
+                  </p>
+                </div>
+
+                <div className="setting-item setting-checkbox">
+                  <label htmlFor="check-simplification">
+                    <input
+                      id="check-simplification"
+                      type="checkbox"
+                      checked={settings.checkSimplification}
+                      onChange={(e) => updateSetting('checkSimplification', e.target.checked)}
+                    />
+                    Suggest Simplifications
+                  </label>
+                  <p className="setting-hint">
+                    Offers simpler alternatives to complex words and phrases.
+                  </p>
+                </div>
+
+                <div className="setting-item setting-checkbox">
+                  <label htmlFor="check-inclusive-language">
+                    <input
+                      id="check-inclusive-language"
+                      type="checkbox"
+                      checked={settings.checkInclusiveLanguage}
+                      onChange={(e) => updateSetting('checkInclusiveLanguage', e.target.checked)}
+                    />
+                    Check Inclusive Language
+                  </label>
+                  <p className="setting-hint">
+                    Detects potentially exclusionary or gendered language.
+                  </p>
+                </div>
+
+                <div className="setting-item setting-checkbox">
+                  <label htmlFor="check-readability">
+                    <input
+                      id="check-readability"
+                      type="checkbox"
+                      checked={settings.checkReadability}
+                      onChange={(e) => updateSetting('checkReadability', e.target.checked)}
+                    />
+                    Check Readability
+                  </label>
+                  <p className="setting-hint">
+                    Flags overly complex sentences and readability issues.
+                  </p>
+                </div>
+
+                <div className="setting-item setting-checkbox">
+                  <label htmlFor="check-profanities">
+                    <input
+                      id="check-profanities"
+                      type="checkbox"
+                      checked={settings.checkProfanities}
+                      onChange={(e) => updateSetting('checkProfanities', e.target.checked)}
+                    />
+                    Check for Profanities
+                  </label>
+                  <p className="setting-hint">Detects profane, vulgar, or offensive language.</p>
                 </div>
               </>
             )}

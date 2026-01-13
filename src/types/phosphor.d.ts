@@ -72,6 +72,12 @@ export interface UserSettings {
   lineHeight: number;
   enableTypewriterScrolling: boolean;
   enableParagraphDimming: boolean;
+  // Grammar & Style settings
+  checkPassiveVoice: boolean;
+  checkSimplification: boolean;
+  checkInclusiveLanguage: boolean;
+  checkReadability: boolean;
+  checkProfanities: boolean;
   // Optional persisted window bounds from the last session
   windowBounds?: {
     width: number;

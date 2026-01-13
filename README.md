@@ -23,6 +23,7 @@ Whether you are managing complex projects, journaling your daily life, or writin
 - **Typewriter Scrolling:** Keeps your active line vertically centered on the screen so you never have to crane your neck to look at the bottom of the monitor.
 - **Active Paragraph Dimming:** Automatically dims inactive paragraphs, helping you focus strictly on the sentence you are writing right now.
 - **Live Stats:** Unobtrusive word count and reading time metrics.
+- **Grammar & Style Checking:** Real-time feedback on passive voice, sentence simplification, inclusive language, readability, and profanities - all customizable in preferences.
 
 ### Productivity Engine
 

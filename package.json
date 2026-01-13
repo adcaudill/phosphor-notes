@@ -27,6 +27,7 @@
     "@codemirror/commands": "^6.10.1",
     "@codemirror/lang-markdown": "^6.5.0",
     "@codemirror/language": "^6.12.1",
+    "@codemirror/lint": "^6.9.2",
     "@codemirror/state": "^6.5.3",
     "@codemirror/view": "^6.39.9",
     "@electron-toolkit/preload": "^3.0.2",
@@ -36,7 +37,19 @@
     "electron-updater": "^6.3.9",
     "fs-extra": "^11.3.3",
     "minisearch": "^7.2.0",
-    "sodium-native": "^5.0.10"
+    "retext": "^9.0.0",
+    "retext-english": "^5.0.0",
+    "retext-equality": "^7.1.0",
+    "retext-passive": "^5.0.0",
+    "retext-profanities": "^8.0.0",
+    "retext-readability": "^8.0.0",
+    "retext-redundant-acronyms": "^5.0.0",
+    "retext-repeated-words": "^5.0.0",
+    "retext-simplify": "^8.0.0",
+    "retext-stringify": "^4.0.0",
+    "sodium-native": "^5.0.10",
+    "unified": "^11.0.5",
+    "vfile-reporter": "^8.1.1"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",

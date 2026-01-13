@@ -11,6 +11,8 @@ import { taskCheckboxPlugin, cycleTaskStatus } from '../editor/extensions/taskCh
 import { dateIndicatorPlugin } from '../editor/extensions/dateIndicator';
 import { typewriterScrollPlugin } from '../editor/extensions/typewriter';
 import { dimmingPlugin } from '../editor/extensions/dimming';
+import { createGrammarLint } from '../editor/extensions/grammar';
+import { useSettings } from '../hooks/useSettings';
 import {
   extractFrontmatter,
   reconstructDocument,
@@ -52,6 +54,7 @@ export const Editor: React.FC<EditorProps> = ({
   onLinkClick,
   enableDimming = false
 }) => {
+  const { settings } = useSettings();
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView>(null);
   const onChangeRef = useRef(onChange);
@@ -96,6 +99,13 @@ export const Editor: React.FC<EditorProps> = ({
         taskCheckboxPlugin, // Task checkboxes
         dateIndicatorPlugin, // Date pill indicators
         typewriterScrollPlugin, // Typewriter scrolling (cursor centered)
+        createGrammarLint({
+          checkPassiveVoice: settings.checkPassiveVoice,
+          checkSimplification: settings.checkSimplification,
+          checkInclusiveLanguage: settings.checkInclusiveLanguage,
+          checkReadability: settings.checkReadability,
+          checkProfanities: settings.checkProfanities
+        }), // Grammar and style checking
         ...(enableDimming ? [dimmingPlugin] : []), // Paragraph dimming (optional)
 
         // 2. Listener for changes (call latest handler via ref, reconstruct with frontmatter)
@@ -232,7 +242,15 @@ export const Editor: React.FC<EditorProps> = ({
     return () => {
       view.destroy();
     };
-  }, [content]); // Re-create editor when content changes
+  }, [
+    content,
+    enableDimming,
+    settings.checkPassiveVoice,
+    settings.checkSimplification,
+    settings.checkInclusiveLanguage,
+    settings.checkReadability,
+    settings.checkProfanities
+  ]); // Re-create editor when content or grammar settings change
 
   // Handle external updates (e.g. clicking a different file in sidebar)
   useEffect(() => {

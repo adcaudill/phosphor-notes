@@ -23,7 +23,12 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
           showLineNumbers: false,
           lineHeight: 1.5,
           enableTypewriterScrolling: true,
-          enableParagraphDimming: false
+          enableParagraphDimming: false,
+          checkPassiveVoice: true,
+          checkSimplification: true,
+          checkInclusiveLanguage: true,
+          checkReadability: true,
+          checkProfanities: true
         });
       } finally {
         setIsLoading(false);
