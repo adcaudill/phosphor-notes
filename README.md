@@ -115,3 +115,7 @@ npm run dev
 ```
 
 The app should launch immediately. You can now edit files in `src/renderer` (UI) or `src/main` (Backend) and see changes live.
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
