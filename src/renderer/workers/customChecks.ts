@@ -1,4 +1,5 @@
 import { CLICHES } from './cliches';
+import { commonIssues } from './commonIssues';
 
 export interface Diagnostic {
   from: number;
@@ -246,7 +247,47 @@ const checkCliches: CustomCheck = (text: string, settings?: CustomCheckSettings)
   return diagnostics;
 };
 
-const customChecks: CustomCheck[] = [checkIndefiniteArticles, checkCliches];
+const checkCommonIssues: CustomCheck = (text: string) => {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const [phrase, details] of Object.entries(commonIssues)) {
+    const pattern = new RegExp(`\\b${escapeRegex(phrase)}\\b`, 'gi');
+    let m: RegExpExecArray | null;
+
+    // eslint-disable-next-line no-cond-assign
+    while ((m = pattern.exec(text)) !== null) {
+      const replacement =
+        'replace' in details && details.replace !== undefined
+          ? Array.isArray(details.replace)
+            ? details.replace.join(' or ')
+            : details.replace
+          : undefined;
+
+      const suggestionParts = [] as string[];
+      if ('omit' in details && details.omit) {
+        suggestionParts.push('Consider omitting this phrase');
+      }
+      if (replacement) {
+        suggestionParts.push(`Try ${replacement}`);
+      }
+
+      const message =
+        suggestionParts.length > 0 ? suggestionParts.join('; ') : 'Potential usage issue';
+
+      diagnostics.push({
+        from: m.index,
+        to: m.index + m[0].length,
+        severity: 'warning',
+        message,
+        source: 'Common Issues'
+      });
+    }
+  }
+
+  return diagnostics;
+};
+
+const customChecks: CustomCheck[] = [checkIndefiniteArticles, checkCliches, checkCommonIssues];
 
 export const runCustomChecks = (text: string, settings?: CustomCheckSettings): Diagnostic[] =>
   customChecks.flatMap((check) => check(text, settings));
