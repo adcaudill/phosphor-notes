@@ -22,13 +22,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [files, setFiles] = useState<string[]>([]);
 
   useEffect(() => {
-    const fetchFiles = async () => {
+    const fetchFiles = async (): Promise<void> => {
       const fileList = await window.phosphor.listFiles();
       setFiles(fileList);
     };
 
     fetchFiles();
   }, [refreshSignal]);
+
+  const openDaily = async (): Promise<void> => {
+    try {
+      const dailyFilename = await window.phosphor.getDailyNoteFilename();
+      onFileSelect(dailyFilename);
+    } catch (err) {
+      console.debug('Failed to open daily note:', err);
+    }
+  };
 
   return (
     <div className="sidebar">
@@ -49,6 +58,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ✓
         </button>
       </div>
+      <h2
+        className="daily-heading"
+        role="button"
+        tabIndex={0}
+        onClick={openDaily}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openDaily();
+          }
+        }}
+        title="Open today's daily note"
+      >
+        Daily
+      </h2>
       <h2>Notes</h2>
       <ul>
         {files.map((file) => (
@@ -58,7 +82,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => {
               try {
                 console.debug('Sidebar click:', file);
-              } catch {}
+              } catch (err) {
+                console.debug('Sidebar click error:', err);
+              }
               onFileSelect(file);
             }}
           >

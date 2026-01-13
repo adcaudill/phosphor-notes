@@ -226,6 +226,14 @@ body {
   color: var(--color-sidebar-text);
 }
 
+.sidebar h2.daily-heading {
+  cursor: pointer;
+}
+
+.sidebar h2.daily-heading:hover {
+  color: var(--color-primary);
+}
+
 .sidebar-nav {
   display: flex;
   gap: var(--spacing-sm);
