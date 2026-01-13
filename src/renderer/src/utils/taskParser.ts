@@ -85,8 +85,10 @@ export function formatDate(date: Date): string {
  */
 export function isPast(date: Date): boolean {
   const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
-  return date < today;
+  today.setHours(0, 0, 0, 0);
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime() < today.getTime();
 }
 
 /**
@@ -94,9 +96,9 @@ export function isPast(date: Date): boolean {
  */
 export function isToday(date: Date): boolean {
   const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
   const dateNorm = new Date(date);
-  dateNorm.setUTCHours(0, 0, 0, 0);
+  dateNorm.setHours(0, 0, 0, 0);
   return dateNorm.getTime() === today.getTime();
 }
 
@@ -104,7 +106,11 @@ export function isToday(date: Date): boolean {
  * Check if a date is in the future
  */
 export function isFuture(date: Date): boolean {
-  return !isPast(date) && !isToday(date);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime() > today.getTime();
 }
 
 /**

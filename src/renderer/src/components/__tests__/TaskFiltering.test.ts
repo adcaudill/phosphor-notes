@@ -14,18 +14,11 @@ interface Task {
 }
 
 function getTodayString(): string {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return new Date().toISOString().split('T')[0];
 }
 
 function getDateString(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return date.toISOString().split('T')[0];
 }
 
 function getDateMinusDay(daysAgo: number): string {
@@ -72,8 +65,8 @@ function filterThisWeek(tasks: Task[]): Task[] {
 
 function filterThisMonth(tasks: Task[]): Task[] {
   const today = new Date();
-  const todayYear = today.getFullYear();
-  const todayMonth = today.getMonth();
+  const todayYear = today.getUTCFullYear();
+  const todayMonth = today.getUTCMonth();
 
   return tasks.filter((t) => {
     if (!t.dueDate) return false;
@@ -94,7 +87,8 @@ describe('Task Date Filtering', () => {
     const today = getTodayString();
     const yesterday = getDateMinusDay(1);
     const twoDaysAgo = getDateMinusDay(2);
-    const tomorrow = getDatePlusDay(1);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
     const inThreeDays = getDatePlusDay(3);
     const inTenDays = getDatePlusDay(10);
     const nextMonth = new Date();
@@ -128,7 +122,7 @@ describe('Task Date Filtering', () => {
         line: 4,
         status: 'doing',
         text: 'Tomorrow task',
-        dueDate: tomorrow
+        dueDate: tomorrow.toISOString().split('T')[0]
       },
       {
         file: 'test.md',
