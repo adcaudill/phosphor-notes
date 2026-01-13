@@ -9,7 +9,9 @@ interface SettingsModalProps {
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   const { settings, updateSetting } = useSettings();
-  const [activeTab, setActiveTab] = useState<'editor' | 'appearance' | 'grammar'>('editor');
+  const [activeTab, setActiveTab] = useState<'editor' | 'appearance' | 'grammar' | 'keybindings'>(
+    'editor'
+  );
 
   if (!isOpen) return null;
 
@@ -51,6 +53,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               onClick={() => setActiveTab('grammar')}
             >
               Grammar & Style
+            </button>
+            <button
+              className={`settings-tab ${activeTab === 'keybindings' ? 'active' : ''}`}
+              onClick={() => setActiveTab('keybindings')}
+            >
+              Key Bindings
             </button>
           </div>
 
@@ -268,6 +276,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                     Check for Profanities
                   </label>
                   <p className="setting-hint">Detects profane, vulgar, or offensive language.</p>
+                </div>
+              </>
+            )}
+
+            {activeTab === 'keybindings' && (
+              <>
+                <h2>Key Bindings</h2>
+
+                <p className="setting-hint">Read-only list of the app&apos;s primary shortcuts.</p>
+
+                <div className="setting-item keybindings-list">
+                  {[
+                    { action: 'Open Settings / Preferences', keys: 'Cmd+, (mac) / Ctrl+,' },
+                    { action: 'New Note', keys: 'Cmd+N / Ctrl+N' },
+                    { action: 'Save', keys: 'Cmd+S / Ctrl+S' },
+                    { action: 'Open Vault…', keys: 'Cmd+O / Ctrl+O' },
+                    { action: 'Lock Vault', keys: 'Cmd+L / Ctrl+L' },
+                    { action: 'Search / Command Palette', keys: 'Cmd+K / Ctrl+K' },
+                    { action: 'Toggle Sidebar', keys: 'Cmd+\\ / Ctrl+\\' },
+                    { action: 'Focus Mode', keys: 'Cmd+D / Ctrl+D' },
+                    { action: 'Paragraph Dimming', keys: 'Cmd+Option+F / Ctrl+Alt+F' },
+                    { action: 'Toggle Developer Tools', keys: 'Cmd+Option+I / Ctrl+Shift+I' },
+                    { action: 'Close Window', keys: 'Cmd+W / Ctrl+W' },
+                    { action: 'Quit (mac)', keys: 'Cmd+Q' },
+                    { action: 'Editor — Cycle Task Status', keys: 'Mod+Enter' },
+                    { action: 'Editor — Undo', keys: 'Mod+Z' },
+                    { action: 'Editor — Redo', keys: 'Mod+Shift+Z or Mod+Y' }
+                  ].map((kb) => (
+                    <div key={kb.action} className="keybinding-item">
+                      <div className="keybinding-action">{kb.action}</div>
+                      <div className="keybinding-keys">{kb.keys}</div>
+                    </div>
+                  ))}
                 </div>
               </>
             )}

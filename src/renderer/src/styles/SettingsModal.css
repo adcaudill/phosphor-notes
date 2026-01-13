@@ -309,3 +309,40 @@
   background: var(--bg-primary, white);
   color: var(--text-primary, #000);
 }
+
+/* Keybindings list: single-column layout to prefer vertical scrolling */
+.keybindings-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px 16px;
+  align-items: start;
+}
+
+.keybinding-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.keybinding-item {
+  background: var(--bg-tertiary, transparent);
+  border-color: var(--border-color, transparent);
+}
+
+.keybinding-action {
+  font-size: 13px;
+  color: var(--text-primary, #e0e0e0);
+  font-weight: 500;
+}
+
+.keybinding-keys {
+  font-size: 13px;
+  color: var(--text-secondary, #b0b0b0);
+  font-family: Menlo, Monaco, 'Courier New', monospace;
+  white-space: nowrap;
+  opacity: 1;
+}
