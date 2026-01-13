@@ -12,50 +12,50 @@ Whether you are managing complex projects, journaling your daily life, or writin
 
 ### Personal Knowledge Management (PKM)
 
-* **Local First:** All data is stored as plain Markdown (`.md`) files on your hard drive. You own your data forever.
-* **Wiki-Links:** Connect thoughts instantly using `[[WikiLinks]]`. Supports nested namespaces (e.g., `[[Projects/Phosphor/Roadmap]]`).
-* **The Graph:** An integrated graph engine maps your knowledge, automatically generating **Backlinks** so you can see every page that references your current note.
-* **Omni-Search:** A lightning-fast Command Palette (`Cmd+K`) lets you fuzzy-search thousands of notes and jump to content instantly.
+- **Local First:** All data is stored as plain Markdown (`.md`) files on your hard drive. You own your data forever.
+- **Wiki-Links:** Connect thoughts instantly using `[[WikiLinks]]`. Supports nested namespaces (e.g., `[[Projects/Phosphor/Roadmap]]`).
+- **The Graph:** An integrated graph engine maps your knowledge, automatically generating **Backlinks** so you can see every page that references your current note.
+- **Omni-Search:** A lightning-fast Command Palette (`Cmd+K`) lets you fuzzy-search thousands of notes and jump to content instantly.
 
 ### The Writer's Studio
 
-* **Focus Mode:** Toggle `Cmd+D` to fade away the UI, sidebar, and window chrome, leaving only your text.
-* **Typewriter Scrolling:** Keeps your active line vertically centered on the screen so you never have to crane your neck to look at the bottom of the monitor.
-* **Active Paragraph Dimming:** Automatically dims inactive paragraphs, helping you focus strictly on the sentence you are writing right now.
-* **Live Stats:** Unobtrusive word count and reading time metrics.
+- **Focus Mode:** Toggle `Cmd+D` to fade away the UI, sidebar, and window chrome, leaving only your text.
+- **Typewriter Scrolling:** Keeps your active line vertically centered on the screen so you never have to crane your neck to look at the bottom of the monitor.
+- **Active Paragraph Dimming:** Automatically dims inactive paragraphs, helping you focus strictly on the sentence you are writing right now.
+- **Live Stats:** Unobtrusive word count and reading time metrics.
 
 ### Productivity Engine
 
-* **Logseq-Style Tasks:** Manage tasks directly in your text using standard syntax (`- [ ]`, `- [/]`, `- [x]`).
-* **Recurring & Scheduled:** Support for due dates and recurrence logic (e.g., `📅 2026-01-15 🔁 +1w`).
-* **Task Dashboard:** A dynamic view to aggregate and manage open tasks across your entire vault.
-* **Daily Journals:** Automatic creation of daily notes (`YYYY-MM-DD.md`) to capture fleeting thoughts and logs.
+- **Logseq-Style Tasks:** Manage tasks directly in your text using standard syntax (`- [ ]`, `- [/]`, `- [x]`).
+- **Recurring & Scheduled:** Support for due dates and recurrence logic (e.g., `📅 2026-01-15 🔁 +1w`).
+- **Task Dashboard:** A dynamic view to aggregate and manage open tasks across your entire vault.
+- **Daily Journals:** Automatic creation of daily notes (`YYYY-MM-DD.md`) to capture fleeting thoughts and logs.
 
 ### Security & Architecture
 
-* **Zero-Knowledge Encryption:** Optional, robust vault encryption using **Argon2id** (Key Derivation) and **XChaCha20-Poly1305** (Authenticated Encryption). Your password is never stored; your data is unreadable without it.
-* **Rich Media:** Drag-and-drop images (`.png`, `.jpg`) directly into the editor. Assets are stored locally (and encrypted if the vault is locked).
-* **Native Performance:** Built on Electron and React with a custom **Node worker** architecture to handle indexing thousands of files without UI lag.
+- **Zero-Knowledge Encryption:** Optional, robust vault encryption using **Argon2id** (Key Derivation) and **XChaCha20-Poly1305** (Authenticated Encryption). Your password is never stored; your data is unreadable without it.
+- **Rich Media:** Drag-and-drop images (`.png`, `.jpg`) directly into the editor. Assets are stored locally (and encrypted if the vault is locked).
+- **Native Performance:** Built on Electron and React with a custom **Node worker** architecture to handle indexing thousands of files without UI lag.
 
 ### Inspiration & Acknowledgements
 
 This application stands on the shoulders of giants. It draws inspiration from:
 
-* [Logseq](https://logseq.com/) - for pioneering local-first PKM with plain text files.
-* [Obsidian](https://obsidian.md/) - for popularizing the Markdown-based knowledge graph.
-* [iA Writer](https://ia.net/writer) - for setting the gold standard in distraction-free writing.
-* [Roam Research](https://roamresearch.com/) - for introducing bi-directional linking to the masses.
-* [Drafts](https://getdrafts.com/) - for empowering quick capture and processing of text.
+- [Logseq](https://logseq.com/) - for pioneering local-first PKM with plain text files.
+- [Obsidian](https://obsidian.md/) - for popularizing the Markdown-based knowledge graph.
+- [iA Writer](https://ia.net/writer) - for setting the gold standard in distraction-free writing.
+- [Roam Research](https://roamresearch.com/) - for introducing bi-directional linking to the masses.
+- [Drafts](https://getdrafts.com/) - for empowering quick capture and processing of text.
 
 While Phosphor Notes is a unique project, it owes a debt of gratitude to these trailblazers for shaping the landscape of personal knowledge management and writing tools. Phosphor aims to combine the best elements of these applications into a cohesive, secure, and user-friendly experience.
 
 This project would not be possible without the incredible open-source libraries and tools that power it, including:
 
-* [Electron](https://www.electronjs.org/)
-* [React](https://reactjs.org/)
-* [Vite](https://vitejs.dev/)
-* [CodeMirror](https://codemirror.net/)
-* [sodium](https://github.com/jedisct1/libsodium)
+- [Electron](https://www.electronjs.org/)
+- [React](https://reactjs.org/)
+- [Vite](https://vitejs.dev/)
+- [CodeMirror](https://codemirror.net/)
+- [sodium](https://github.com/jedisct1/libsodium)
 
 ## Development Setup
 
