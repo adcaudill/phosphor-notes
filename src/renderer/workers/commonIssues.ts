@@ -73,9 +73,6 @@ export const commonIssues = {
   'any other number of': {
     replace: 'any number of other'
   },
-  anytime: {
-    replace: 'any time'
-  },
   anyways: {
     replace: 'anyway'
   },
