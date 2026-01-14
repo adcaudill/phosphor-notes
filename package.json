@@ -52,6 +52,7 @@
     "retext-repeated-words": "^5.0.0",
     "retext-simplify": "^8.0.0",
     "retext-stringify": "^4.0.0",
+    "retext-syntax-urls": "^4.0.0",
     "sodium-native": "^5.0.10",
     "unified": "^11.0.5",
     "vfile-reporter": "^8.1.1"

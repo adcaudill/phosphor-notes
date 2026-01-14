@@ -10,6 +10,7 @@ import retextRedundantAcronyms from 'retext-redundant-acronyms';
 import retextRepeatedWords from 'retext-repeated-words';
 import retextContractions from 'retext-contractions';
 import retextIntensify from 'retext-intensify';
+import retextSyntaxUrls from 'retext-syntax-urls';
 import { Diagnostic, runCustomChecks } from './customChecks';
 
 interface GrammarSettings {
@@ -36,7 +37,7 @@ interface DiagnosticMessage {
 function createProcessor(settings: GrammarSettings) {
   // Start with base processor
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let processor: any = unified().use(retextEnglish);
+  let processor: any = unified().use(retextEnglish).use(retextSyntaxUrls);
 
   // Conditionally add all plugins based on settings
   if (settings.checkReadability) {
