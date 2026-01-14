@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, KeyBinding } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
@@ -11,11 +11,13 @@ import { imagePreviewPlugin } from '../editor/extensions/imagePreview';
 import { taskCheckboxPlugin, cycleTaskStatus } from '../editor/extensions/taskCheckbox';
 import { dateIndicatorPlugin } from '../editor/extensions/dateIndicator';
 import { typewriterScrollPlugin } from '../editor/extensions/typewriter';
-import { dimmingPlugin } from '../editor/extensions/dimming';
+import { dimmingPlugin, suppressDimmingEffect } from '../editor/extensions/dimming';
 import { createGrammarLint } from '../editor/extensions/grammar';
 import { createOutlinerKeymap } from '../editor/extensions/outlinerKeymap';
+import { createSearchExtension, createSearchAPI } from '../editor/extensions/search';
 import { useSettings } from '../hooks/useSettings';
 import { pdfWidgetPlugin } from '../editor/extensions/pdfWidget';
+import { SearchPanel } from './SearchPanel';
 import {
   extractFrontmatter,
   reconstructDocument,
@@ -49,13 +51,15 @@ interface EditorProps {
   onChange: (doc: string) => void;
   onLinkClick?: (link: string) => void;
   enableDimming?: boolean;
+  onSearchOpen?: (isOpen: boolean) => void;
 }
 
 export const Editor: React.FC<EditorProps> = ({
   initialDoc,
   onChange,
   onLinkClick,
-  enableDimming = false
+  enableDimming = false,
+  onSearchOpen
 }) => {
   const { settings } = useSettings();
   const editorRef = useRef<HTMLDivElement>(null);
@@ -63,6 +67,8 @@ export const Editor: React.FC<EditorProps> = ({
   const onChangeRef = useRef(onChange);
   const onLinkClickRef = useRef(onLinkClick);
   const frontmatterRef = useRef<Frontmatter | null>(null);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchAPI, setSearchAPI] = useState<ReturnType<typeof createSearchAPI> | null>(null);
 
   // Extract frontmatter and content, memoized to avoid re-extraction on every render
   const { frontmatter, content } = useMemo(() => extractFrontmatter(initialDoc), [initialDoc]);
@@ -96,6 +102,13 @@ export const Editor: React.FC<EditorProps> = ({
       {
         key: 'Mod-Enter',
         run: cycleTaskStatus
+      } as KeyBinding,
+      {
+        key: 'Mod-f',
+        run: () => {
+          setShowSearch((prev) => !prev);
+          return true;
+        }
       } as KeyBinding
     ];
 
@@ -124,6 +137,7 @@ export const Editor: React.FC<EditorProps> = ({
           checkIntensify: settings.checkIntensify
         }), // Grammar and style checking
         ...(enableDimming ? [dimmingPlugin] : []), // Paragraph dimming (optional)
+        createSearchExtension(), // Search functionality
 
         // 2. Listener for changes (call latest handler via ref, reconstruct with frontmatter)
         EditorView.updateListener.of((update) => {
@@ -250,6 +264,9 @@ export const Editor: React.FC<EditorProps> = ({
 
     viewRef.current = view;
 
+    // Initialize search API after view is created
+    setSearchAPI(() => createSearchAPI(view));
+
     // Enable spell checking on CodeMirror's content element
     const contentEl = view.contentDOM;
     if (contentEl) {
@@ -286,12 +303,40 @@ export const Editor: React.FC<EditorProps> = ({
     }
   }, [content]);
 
+  // Notify parent about search panel visibility
+  useEffect(() => {
+    if (onSearchOpen) {
+      onSearchOpen(showSearch);
+    }
+  }, [showSearch, onSearchOpen]);
+
+  // Disable dimming when search is open
+  useEffect(() => {
+    if (viewRef.current && enableDimming) {
+      // Suppress dimming when search is open, unsuppress when closed
+      viewRef.current.dispatch({
+        effects: suppressDimmingEffect.of(showSearch)
+      });
+    }
+  }, [showSearch, enableDimming]);
+
   return (
     <div
-      ref={editorRef}
-      style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}
-      className="editor-container"
-      spellCheck="true"
-    />
+      style={{
+        flex: 1,
+        minHeight: 0,
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column'
+      }}
+    >
+      <div
+        ref={editorRef}
+        style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}
+        className="editor-container"
+        spellCheck="true"
+      />
+      {showSearch && <SearchPanel searchAPI={searchAPI} onClose={() => setShowSearch(false)} />}
+    </div>
   );
 };

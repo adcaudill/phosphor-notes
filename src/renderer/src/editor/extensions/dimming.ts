@@ -14,12 +14,14 @@ import { RangeSetBuilder, RangeSet, StateEffect } from '@codemirror/state';
 
 // Define the dimmed decoration
 const dimmedDeco = Decoration.line({ class: 'cm-dimmed-line' });
-const toggleDimmingEffect = StateEffect.define<boolean>();
+export const toggleDimmingEffect = StateEffect.define<boolean>();
+export const suppressDimmingEffect = StateEffect.define<boolean>();
 
 export const dimmingPlugin = ViewPlugin.fromClass(
   class {
     decorations;
     dimmingEnabled: boolean;
+    dimmingSuppressed: boolean;
     view: EditorView;
     scrollHandler: (event: Event) => void;
     lastInputTs: number;
@@ -27,6 +29,7 @@ export const dimmingPlugin = ViewPlugin.fromClass(
     constructor(view: EditorView) {
       this.view = view;
       this.dimmingEnabled = true;
+      this.dimmingSuppressed = false;
       this.decorations = this.getDeco(view);
       this.lastInputTs = Date.now();
 
@@ -43,14 +46,36 @@ export const dimmingPlugin = ViewPlugin.fromClass(
     update(update: ViewUpdate): void {
       const { docChanged, selectionSet } = update;
 
-      // Apply explicit toggle requests (e.g., from scroll handler)
+      // Apply explicit toggle requests and suppression requests
       let toggle: boolean | null = null;
+      let suppress: boolean | null = null;
       for (const tr of update.transactions) {
         for (const ef of tr.effects) {
           if (ef.is(toggleDimmingEffect)) {
             toggle = ef.value;
           }
+          if (ef.is(suppressDimmingEffect)) {
+            suppress = ef.value;
+          }
         }
+      }
+
+      // Handle suppression state changes
+      if (suppress !== null) {
+        this.dimmingSuppressed = suppress;
+        if (suppress) {
+          this.dimmingEnabled = false;
+          this.view.dom.classList.add('cm-dimming-off');
+          this.decorations = this.getDeco(update.view);
+        } else if (!this.dimmingEnabled) {
+          // When un-suppressing, only re-enable if toggle didn't explicitly disable it
+          this.dimmingEnabled = toggle !== false;
+          if (this.dimmingEnabled) {
+            this.view.dom.classList.remove('cm-dimming-off');
+          }
+          this.decorations = this.getDeco(update.view);
+        }
+        return;
       }
 
       if (toggle === false) {
@@ -60,7 +85,8 @@ export const dimmingPlugin = ViewPlugin.fromClass(
       }
 
       // Resume dimming when the user types or moves the cursor
-      if (docChanged || selectionSet) {
+      // BUT: only if dimming is not currently suppressed (e.g., by search panel)
+      if ((docChanged || selectionSet) && !this.dimmingSuppressed) {
         this.lastInputTs = Date.now();
         if (!this.dimmingEnabled) {
           this.dimmingEnabled = true;
@@ -81,6 +107,12 @@ export const dimmingPlugin = ViewPlugin.fromClass(
 
     getDeco(view: EditorView): RangeSet<Decoration> {
       const builder = new RangeSetBuilder<Decoration>();
+
+      // If dimming is not enabled, return empty decorations
+      if (!this.dimmingEnabled) {
+        return builder.finish();
+      }
+
       const { from: selFrom, to: selTo } = view.state.selection.main;
 
       // Don't apply any dimming until the user moves the cursor from the initial position
