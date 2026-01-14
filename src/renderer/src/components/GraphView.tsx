@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import type { SimulationLinkDatum, SimulationNodeDatum } from 'd3-force';
-import { forceCenter, forceLink, forceManyBody, forceSimulation } from 'd3-force';
+import { forceCenter, forceCollide, forceLink, forceManyBody, forceSimulation } from 'd3-force';
 import { select } from 'd3-selection';
 import type { Selection } from 'd3-selection';
 import { zoom, zoomIdentity, type ZoomTransform } from 'd3-zoom';
@@ -160,6 +160,16 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
           .distance(110)
       )
       .force('charge', forceManyBody().strength(-160))
+      .force(
+        'collide',
+        forceCollide<GraphNode>()
+          .radius((d) => {
+            const baseRadius = 6;
+            const maxRadiusIncrease = 10;
+            return baseRadius + ((d.degree || 0) / Math.max(maxDegree, 1)) * maxRadiusIncrease + 8;
+          })
+          .strength(0.8)
+      )
       .force('center', forceCenter(width / 2, height / 2))
       .alphaDecay(0.03);
 
