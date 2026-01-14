@@ -710,7 +710,19 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
     const filePath = validateAndResolvePath(activeVaultPath, filename);
 
     try {
-      await fs.unlink(filePath);
+      // Try to move to system Trash first (returns void Promise)
+      try {
+        // Use shell.trashItem (async) which is present in Electron typings; it returns Promise<void>,
+        // so if it resolves without throwing we consider it a success.
+        await shell.trashItem(filePath);
+        return true;
+      } catch (e) {
+        // Non-fatal: fall back to unlink if trashing throws
+        safeWarn('trashItem failed, falling back to unlink:', e);
+      }
+
+      // Permanent delete as a fallback
+      await fsp.unlink(filePath);
       return true;
     } catch (err) {
       safeError('Failed to delete note:', err);
