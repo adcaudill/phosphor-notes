@@ -424,13 +424,95 @@ const checkCapitalization: CustomCheck = (text: string) => {
   return diagnostics;
 };
 
+const checkSenseVsSince: CustomCheck = (text: string) => {
+  const diagnostics: Diagnostic[] = [];
+
+  // 1. Target: "Make/Makes since" instead of "Make/Makes sense"
+  // Logic: It is only an error if it ends the sentence OR is followed by "to" (e.g., "makes since to me").
+  // This avoids false positives like: "The money he makes since 2020 has increased."
+  const makeSincePattern = /\b(make|makes)\s+since(?=[.!?;:,]|\s+to\b)/gim;
+
+  // 2. Target: "Sense of" errors (e.g., "A deep since of purpose")
+  // Logic: "Since" is almost never preceded by a determiner (a/the/my) and followed immediately by "of".
+  const sinceOfPattern = /\b(a|the|my|your|his|her|our|their|no)\s+since\s+of\b/gim;
+
+  // 3. Target: "In a sense" errors
+  // Logic: "In a since" is mechanically very unlikely in valid English.
+  const inASincePattern = /\bin\s+a\s+since\b/gim;
+
+  // Helper to run a regex and push diagnostics
+  const runCheck = (pattern: RegExp, suggestion: string): void => {
+    let m: RegExpExecArray | null;
+    while ((m = pattern.exec(text)) !== null) {
+      diagnostics.push({
+        from: m.index,
+        to: m.index + m[0].length,
+        severity: 'warning',
+        message: suggestion,
+        source: 'Grammar'
+      });
+    }
+  };
+
+  runCheck(makeSincePattern, 'Did you mean "make sense"?');
+  runCheck(sinceOfPattern, 'Did you mean "sense of"?');
+  runCheck(inASincePattern, 'Did you mean "in a sense"?');
+
+  return diagnostics;
+};
+
+const checkTheyreThereTheir: CustomCheck = (text: string) => {
+  const diagnostics: Diagnostic[] = [];
+
+  // 1. Target: Existential Errors ("Their is", "They're are")
+  // Logic: "Their" (possessive) and "They're" (they are) cannot be followed by state-of-being verbs.
+  // Catches: "Their is a cat", "They're was a storm", "Their are two ways"
+  // Suggestion: "There"
+  const existentialPattern = /\b(their|they're)\s+(is|are|was|were)\b/gim;
+
+  // 2. Target: Ownership Errors with "Own"
+  // Logic: "Own" creates a strong possessive context. "There" and "They're" cannot modify "own".
+  // Catches: "They're own house", "There own car"
+  // Suggestion: "Their"
+  const ownershipPattern = /\b(there|they're)\s+own\b/gim;
+
+  // 3. Target: Prepositional Endings
+  // Logic: "Their" is an adjective; it cannot end a sentence after a location preposition.
+  // Catches: "Look over their.", "I went in their.", "It comes from their."
+  // Ignored: "Look over their fence." (Noun follows)
+  // Suggestion: "there"
+  const prepositionEndPattern = /\b(in|over|under|from)\s+their(?=[.!?;:])/gim;
+
+  // Helper function
+  const runCheck = (pattern: RegExp, suggestion: string): void => {
+    let m: RegExpExecArray | null;
+    while ((m = pattern.exec(text)) !== null) {
+      diagnostics.push({
+        from: m.index,
+        to: m.index + m[0].length,
+        severity: 'warning',
+        message: suggestion,
+        source: 'Grammar'
+      });
+    }
+  };
+
+  runCheck(existentialPattern, 'Did you mean "There"?');
+  runCheck(ownershipPattern, 'Did you mean "their"?');
+  runCheck(prepositionEndPattern, 'Did you mean "there"?');
+
+  return diagnostics;
+};
+
 const customChecks: CustomCheck[] = [
   checkIndefiniteArticles,
   checkCliches,
   checkCommonIssues,
   checkTimeIssues,
   checkParagraphStartWithBut,
-  checkCapitalization
+  checkCapitalization,
+  checkSenseVsSince,
+  checkTheyreThereTheir
 ];
 
 export const runCustomChecks = (text: string, settings?: CustomCheckSettings): Diagnostic[] =>
