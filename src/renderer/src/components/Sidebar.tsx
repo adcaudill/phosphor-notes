@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 interface SidebarProps {
   onFileSelect: (filename: string) => void;
@@ -22,6 +22,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   viewMode = 'editor'
 }) => {
   const [files, setFiles] = useState<string[]>([]);
+  const [isFading, setIsFading] = useState(false);
+  const [isClickDisabled, setIsClickDisabled] = useState(false);
+  const fadeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const fetchMRUFiles = async (): Promise<void> => {
@@ -31,6 +34,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     fetchMRUFiles();
   }, [refreshSignal]);
+
+  useEffect(() => {
+    return () => {
+      if (fadeTimeoutRef.current) {
+        clearTimeout(fadeTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const openDaily = async (): Promise<void> => {
     try {
@@ -50,6 +61,42 @@ export const Sidebar: React.FC<SidebarProps> = ({
     } catch (err) {
       console.debug('Failed to open daily note:', err);
     }
+  };
+
+  const performFadeTransition = async (file: string): Promise<void> => {
+    // Disable clicks and start fade out
+    setIsClickDisabled(true);
+    setIsFading(true);
+
+    // Wait for fade out to complete
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Switch view if needed
+    if (viewMode !== 'editor' && onEditorClick) {
+      onEditorClick();
+    }
+
+    // Update MRU
+    try {
+      const updatedMRU = await window.phosphor.updateMRU(file);
+      setFiles(updatedMRU);
+    } catch (err) {
+      console.debug('Failed to update MRU:', err);
+    }
+
+    // Trigger the file selection
+    onFileSelect(file);
+
+    // Fade back in
+    setIsFading(false);
+
+    // Re-enable clicks after fade completes
+    if (fadeTimeoutRef.current) {
+      clearTimeout(fadeTimeoutRef.current);
+    }
+    fadeTimeoutRef.current = setTimeout(() => {
+      setIsClickDisabled(false);
+    }, 100);
   };
 
   return (
@@ -94,29 +141,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
         Daily
       </h2>
       <h2>Recent</h2>
-      <ul>
+      <ul className={isFading ? 'fade-out' : ''}>
         {files.map((file) => (
           <li
             key={file}
             className={file === activeFile ? 'active' : ''}
-            onClick={async () => {
-              try {
-                console.debug('Sidebar click:', file);
-              } catch (err) {
-                console.debug('Sidebar click error:', err);
+            onClick={() => {
+              if (!isClickDisabled) {
+                performFadeTransition(file);
               }
-              // If we're currently in tasks or graph view, switch to editor first
-              if (viewMode !== 'editor' && onEditorClick) {
-                onEditorClick();
-              }
-              // Update MRU when file is selected
-              try {
-                const updatedMRU = await window.phosphor.updateMRU(file);
-                setFiles(updatedMRU);
-              } catch (err) {
-                console.debug('Failed to update MRU:', err);
-              }
-              onFileSelect(file);
+            }}
+            style={{
+              pointerEvents: isClickDisabled ? 'none' : 'auto',
+              opacity: isFading ? 0.5 : 1,
+              transition: 'opacity 300ms ease-in-out'
             }}
           >
             {file}
