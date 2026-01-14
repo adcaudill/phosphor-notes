@@ -35,6 +35,7 @@ export interface PhosphorAPI {
   onCheckUnsavedChanges: (cb: (hasUnsaved: boolean) => boolean) => () => void;
   getLatestGraph: () => Promise<Record<string, string[]> | null>;
   search: (query: string) => Promise<Array<{ id: string; title: string; filename: string }>>;
+  notifyWikilinkClicked: (sourceFile: string, targetFile: string) => Promise<void>;
   deleteNote: (filename: string) => Promise<boolean>;
 
   // Encryption

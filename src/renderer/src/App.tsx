@@ -688,6 +688,7 @@ function AppContent(): React.JSX.Element {
                       onChange={handleContentChange}
                       onLinkClick={handleLinkClick}
                       enableDimming={paragraphDimming}
+                      currentFile={currentFile}
                     />
                   </>
                 ) : (

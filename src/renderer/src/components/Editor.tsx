@@ -53,6 +53,7 @@ interface EditorProps {
   onLinkClick?: (link: string) => void;
   enableDimming?: boolean;
   onSearchOpen?: (isOpen: boolean) => void;
+  currentFile?: string | null;
 }
 
 export const Editor: React.FC<EditorProps> = ({
@@ -60,7 +61,8 @@ export const Editor: React.FC<EditorProps> = ({
   onChange,
   onLinkClick,
   enableDimming = false,
-  onSearchOpen
+  onSearchOpen,
+  currentFile
 }) => {
   const { settings } = useSettings();
   const editorRef = useRef<HTMLDivElement>(null);
@@ -248,6 +250,12 @@ export const Editor: React.FC<EditorProps> = ({
                 console.debug('Wiki link clicked:', linkTarget);
                 if (linkTarget && typeof onLinkClickRef.current === 'function') {
                   event.preventDefault();
+                  // Notify main process to update graph for both the current file and the target file
+                  if (currentFile) {
+                    window.phosphor
+                      .notifyWikilinkClicked(currentFile, linkTarget)
+                      .catch((err) => console.error('Failed to notify wikilink click:', err));
+                  }
                   onLinkClickRef.current(linkTarget);
                   return true;
                 }

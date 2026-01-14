@@ -9,8 +9,7 @@ import {
   getLastTasks,
   performSearch,
   updateTasksForFile,
-  updateGraphForFile,
-  updateGraphForChangedFile
+  updateGraphForFile
 } from './indexer';
 import { setupWatcher, stopWatcher, markInternalSave } from './watcher';
 import { deriveMasterKey, encryptBuffer, decryptBuffer, isEncrypted, generateSalt } from './crypto';
@@ -464,6 +463,21 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
     return getLastGraph();
   });
 
+  // Handle wikilink click - update graph for both source and target files
+  ipcMain.handle('graph:wikilink-clicked', async (_, sourceFile: string, targetFile: string) => {
+    if (!activeVaultPath || !mainWindow) {
+      return;
+    }
+    try {
+      // First update the source file (where the wikilink was clicked) to capture the relationship
+      await updateGraphForFile(activeVaultPath, sourceFile, mainWindow);
+      // Then update the target file to capture any relationships it might have
+      await updateGraphForFile(activeVaultPath, targetFile, mainWindow);
+    } catch (err) {
+      safeError('Failed to update graph for wikilink:', err);
+    }
+  });
+
   // Return last in-memory tasks if available (sent recently by indexer)
   ipcMain.handle('tasks:get', async () => {
     return getLastTasks();
@@ -837,8 +851,6 @@ export async function openVaultPath(vaultPath: string, mainWindow: BrowserWindow
       (filename) => {
         // Update tasks for only the changed file (efficient incremental update)
         updateTasksForFile(vaultPath, filename, mainWindow);
-        // Also update graph for the changed file to catch new wikilinks
-        updateGraphForChangedFile(vaultPath, filename, mainWindow);
       },
       (filename) => {
         // Update graph for newly added files (efficient incremental update)
