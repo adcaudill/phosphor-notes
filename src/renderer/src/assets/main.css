@@ -667,6 +667,106 @@ body {
 }
 
 /* ============================================
+   PDF WIDGET
+   ============================================ */
+
+.cm-pdf-widget-wrapper {
+  width: 100%;
+  margin: var(--spacing-md) 0;
+}
+
+.cm-pdf-card {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.cm-pdf-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+}
+
+.cm-pdf-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.5px;
+  font-size: 13px;
+}
+
+.cm-pdf-title {
+  border: none;
+  background: none;
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  text-align: left;
+  flex: 1;
+  padding: 0;
+  transition: color 0.15s ease;
+}
+
+.cm-pdf-title:hover {
+  color: var(--color-primary);
+}
+
+.cm-pdf-actions {
+  display: inline-flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+}
+
+.cm-pdf-btn {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-stronger);
+  color: var(--color-text-primary);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 13px;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.cm-pdf-btn:hover {
+  background: var(--color-surface-strongest);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  transform: translateY(-1px);
+}
+
+.cm-pdf-btn-primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+}
+
+.cm-pdf-btn-primary:hover {
+  background: var(--color-primary-dark);
+  border-color: var(--color-primary-dark);
+  color: white;
+}
+
+.cm-pdf-embed {
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-stronger);
+  padding: var(--spacing-sm) var(--spacing-md) var(--spacing-md);
+}
+
+/* ============================================
    FRONTMATTER WIDGET
    ============================================ */
 

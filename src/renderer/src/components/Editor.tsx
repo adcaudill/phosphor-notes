@@ -14,6 +14,7 @@ import { dimmingPlugin } from '../editor/extensions/dimming';
 import { createGrammarLint } from '../editor/extensions/grammar';
 import { createOutlinerKeymap } from '../editor/extensions/outlinerKeymap';
 import { useSettings } from '../hooks/useSettings';
+import { pdfWidgetPlugin } from '../editor/extensions/pdfWidget';
 import {
   extractFrontmatter,
   reconstructDocument,
@@ -153,31 +154,30 @@ export const Editor: React.FC<EditorProps> = ({
         // Wiki link plugin and click handler
         wikiLinkPlugin,
         imagePreviewPlugin,
+        pdfWidgetPlugin,
         EditorView.domEventHandlers({
           paste: (event, view) => {
             const items = event.clipboardData?.items;
             if (!items) return false;
 
+            const insertAsset = async (file: File): Promise<void> => {
+              const buffer = await file.arrayBuffer();
+              const filename = await window.phosphor.saveAsset(buffer, file.name);
+              const text = `![[${filename}]]`;
+              view.dispatch(view.state.replaceSelection(text));
+            };
+
             for (const item of items) {
-              if (item.type.startsWith('image/')) {
-                event.preventDefault();
+              const file = item.getAsFile();
+              if (!file) continue;
 
-                const file = item.getAsFile();
-                if (!file) return true;
+              const isImage = file.type.startsWith('image/');
+              const isPdf = file.type === 'application/pdf';
+              if (!isImage && !isPdf) continue;
 
-                // Read file as ArrayBuffer and save via IPC
-                file.arrayBuffer().then(async (buffer) => {
-                  try {
-                    const filename = await window.phosphor.saveAsset(buffer, file.name);
-                    const text = `![[${filename}]]`;
-                    view.dispatch(view.state.replaceSelection(text));
-                  } catch (err) {
-                    console.error('Failed to save asset:', err);
-                  }
-                });
-
-                return true;
-              }
+              event.preventDefault();
+              insertAsset(file).catch((err) => console.error('Failed to save asset:', err));
+              return true;
             }
             return false;
           },
@@ -185,31 +185,33 @@ export const Editor: React.FC<EditorProps> = ({
             const files = event.dataTransfer?.files;
             if (!files) return false;
 
+            const insertAssetAtPosition = async (file: File, pos: number): Promise<void> => {
+              const buffer = await file.arrayBuffer();
+              const filename = await window.phosphor.saveAsset(buffer, file.name);
+              const text = `![[${filename}]]`;
+              view.dispatch({
+                changes: {
+                  from: pos,
+                  insert: text
+                }
+              });
+            };
+
             for (const file of files) {
-              if (file.type.startsWith('image/')) {
-                event.preventDefault();
+              const isImage = file.type.startsWith('image/');
+              const isPdf = file.type === 'application/pdf';
+              if (!isImage && !isPdf) continue;
 
-                // Get drop position
-                const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
-                if (pos === null) return true;
+              event.preventDefault();
 
-                file.arrayBuffer().then(async (buffer) => {
-                  try {
-                    const filename = await window.phosphor.saveAsset(buffer, file.name);
-                    const text = `![[${filename}]]`;
-                    view.dispatch({
-                      changes: {
-                        from: pos,
-                        insert: text
-                      }
-                    });
-                  } catch (err) {
-                    console.error('Failed to save asset:', err);
-                  }
-                });
+              const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+              if (pos === null) return true;
 
-                return true;
-              }
+              insertAssetAtPosition(file, pos).catch((err) =>
+                console.error('Failed to save asset:', err)
+              );
+
+              return true;
             }
             return false;
           },

@@ -63,6 +63,9 @@ export const imagePreviewPlugin = ViewPlugin.fromClass(
           const end = start + match[0].length;
           const filename = match[1];
 
+          // Skip PDFs so they can be handled by the PDF widget
+          if (filename.toLowerCase().endsWith('.pdf')) continue;
+
           builder.add(
             start,
             end,

@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow, app } from 'electron';
+import { ipcMain, dialog, BrowserWindow, app, shell } from 'electron';
 import * as fsp from 'fs/promises';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -601,6 +601,56 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
     } catch (err) {
       safeError('Failed to save asset:', err);
       throw err;
+    }
+  });
+
+  // Open asset in the system default application
+  ipcMain.handle('asset:open', async (_event, filename: string) => {
+    if (!activeVaultPath) throw new Error('No vault selected');
+
+    const assetsPath = path.join(activeVaultPath, '_assets');
+    const normalizedAssetsPath = path.resolve(assetsPath);
+    const targetPath = path.resolve(assetsPath, filename);
+
+    // Prevent path traversal outside _assets
+    if (!targetPath.startsWith(normalizedAssetsPath + path.sep)) {
+      safeWarn('[Asset] Attempted access outside _assets:', filename);
+      return false;
+    }
+
+    try {
+      const buffer = await fsp.readFile(targetPath);
+
+      // If encrypted, decrypt to a temporary file before opening
+      if (activeMasterKey && isEncrypted(buffer)) {
+        try {
+          const decrypted = decryptBuffer(buffer, activeMasterKey);
+          const tempDir = path.join(app.getPath('temp'), 'phosphor-assets');
+          await fsp.mkdir(tempDir, { recursive: true });
+          const tempPath = path.join(tempDir, path.basename(filename));
+          await fsp.writeFile(tempPath, decrypted);
+          const result = await shell.openPath(tempPath);
+          if (result) {
+            safeError('[Asset] Failed to open decrypted asset:', result);
+            return false;
+          }
+          return true;
+        } catch (err) {
+          safeError('[Asset] Failed to decrypt asset for opening:', err);
+          return false;
+        }
+      }
+
+      // Not encrypted — open directly
+      const result = await shell.openPath(targetPath);
+      if (result) {
+        safeError('[Asset] Failed to open asset:', result);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      safeError('[Asset] Failed to open asset:', err);
+      return false;
     }
   });
 

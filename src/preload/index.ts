@@ -14,6 +14,8 @@ const api = {
   saveAsset: (buffer: ArrayBuffer, originalName: string) =>
     ipcRenderer.invoke('asset:save', buffer, originalName),
 
+  openAsset: (filename: string) => ipcRenderer.invoke('asset:open', filename),
+
   listFiles: () => ipcRenderer.invoke('vault:list'),
 
   getMRUFiles: () => ipcRenderer.invoke('vault:mru'),

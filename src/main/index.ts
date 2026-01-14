@@ -1,5 +1,5 @@
 import { app, shell, BrowserWindow, protocol, ipcMain, screen, Menu } from 'electron';
-import { join } from 'path';
+import { join, extname } from 'path';
 import { readFile } from 'fs/promises';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import icon from '../../resources/icon.png?asset';
@@ -28,6 +28,29 @@ process.stderr.on('error', (err: NodeJS.ErrnoException) => {
   }
 });
 
+function getMimeType(filePath: string): string {
+  const ext = extname(filePath).toLowerCase();
+
+  switch (ext) {
+    case '.pdf':
+      return 'application/pdf';
+    case '.png':
+      return 'image/png';
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.gif':
+      return 'image/gif';
+    case '.webp':
+      return 'image/webp';
+    case '.svg':
+    case '.svgz':
+      return 'image/svg+xml';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
 // Custom protocol for secure asset serving
 function setupProtocol(): void {
   protocol.handle('phosphor', async (request) => {
@@ -38,9 +61,11 @@ function setupProtocol(): void {
 
     // Strip the protocol and get the file path relative to vault
     const filePath = request.url.slice('phosphor://'.length);
+    // Remove any query/hash fragments (used for PDF viewer params)
+    const sanitizedPath = filePath.split(/[?#]/)[0];
 
     // Security: Ensure the path is within the vault and _assets folder
-    const fullPath = join(vaultPath, '_assets', filePath);
+    const fullPath = join(vaultPath, '_assets', sanitizedPath);
     const normalized = join(fullPath);
     const vaultAssetsPath = join(vaultPath, '_assets');
 
@@ -53,12 +78,16 @@ function setupProtocol(): void {
       // Read the file as a buffer
       const buffer = await readFile(normalized);
 
+      // Detect mime type up-front so both encrypted and plain responses share it
+      const mimeType = getMimeType(sanitizedPath);
+      const headers = { 'content-type': mimeType };
+
       // Check if file is encrypted and decrypt if needed
       const masterKey = getActiveMasterKey();
       if (masterKey && isEncrypted(buffer)) {
         try {
           const decrypted = decryptBuffer(buffer, masterKey);
-          return new Response(new Uint8Array(decrypted));
+          return new Response(new Uint8Array(decrypted), { headers });
         } catch (err) {
           console.error('Failed to decrypt asset:', filePath, err);
           return new Response('Decryption failed', { status: 500 });
@@ -66,7 +95,7 @@ function setupProtocol(): void {
       }
 
       // File is not encrypted, return as-is
-      return new Response(new Uint8Array(buffer));
+      return new Response(new Uint8Array(buffer), { headers });
     } catch (err) {
       console.error('Failed to serve asset:', filePath, err);
       return new Response('Not found', { status: 404 });
