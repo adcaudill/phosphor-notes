@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, KeyBinding } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
-import { markdown } from '@codemirror/lang-markdown';
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { syntaxHighlighting, HighlightStyle } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
@@ -13,6 +13,7 @@ import { dateIndicatorPlugin } from '../editor/extensions/dateIndicator';
 import { typewriterScrollPlugin } from '../editor/extensions/typewriter';
 import { dimmingPlugin, suppressDimmingEffect } from '../editor/extensions/dimming';
 import { createGrammarLint } from '../editor/extensions/grammar';
+import { smartTypographyExtension } from '../editor/extensions/smartTypography';
 import { createOutlinerKeymap } from '../editor/extensions/outlinerKeymap';
 import { createSearchExtension, createSearchAPI } from '../editor/extensions/search';
 import { useSettings } from '../hooks/useSettings';
@@ -121,7 +122,11 @@ export const Editor: React.FC<EditorProps> = ({
         keymap.of([...closeBracketsKeymap, ...finalKeymap]), // include close-brackets keymap first
         EditorView.lineWrapping, // Soft wrap long lines
         markdown(), // Markdown syntax support
-        closeBrackets(), // Automatic bracket/quote closing
+        markdownLanguage.data.of({
+          closeBrackets: { brackets: ['[', '{', '`', '```', '*', '**', '_', '__'] }
+        }),
+        closeBrackets(), // Automatic bracket closing
+        ...(settings.enableSmartTypography ? [smartTypographyExtension()] : []), // Smart quotes/dashes/symbols
         history(), // Undo/Redo stack
         syntaxHighlighting(darkModeHighlightStyle), // Use custom dark mode colors
         taskCheckboxPlugin, // Task checkboxes
@@ -287,7 +292,8 @@ export const Editor: React.FC<EditorProps> = ({
     settings.checkReadability,
     settings.checkProfanities,
     settings.checkCliches,
-    settings.checkIntensify
+    settings.checkIntensify,
+    settings.enableSmartTypography
   ]); // Re-create editor when content, mode, or grammar settings change
 
   // Handle external updates (e.g. clicking a different file in sidebar)

@@ -25,6 +25,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
           defaultJournalMode: 'freeform',
           enableTypewriterScrolling: true,
           enableParagraphDimming: false,
+          enableSmartTypography: true,
           checkPassiveVoice: true,
           checkSimplification: true,
           checkInclusiveLanguage: true,

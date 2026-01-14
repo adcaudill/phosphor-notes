@@ -148,6 +148,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   <p className="setting-hint">Dims inactive paragraphs for focus.</p>
                 </div>
 
+                <div className="setting-item setting-checkbox">
+                  <label htmlFor="smart-typography">
+                    <input
+                      id="smart-typography"
+                      type="checkbox"
+                      checked={settings.enableSmartTypography}
+                      onChange={(e) => updateSetting('enableSmartTypography', e.target.checked)}
+                    />
+                    Smart Quotes & Symbols
+                  </label>
+                  <p className="setting-hint">
+                    Converts straight quotes, triple dots, dashes, and common marks like (c) or (tm)
+                    into typographic symbols.
+                  </p>
+                </div>
+
                 <div className="setting-item">
                   <label htmlFor="default-journal-mode">Default Journal Mode</label>
                   <select

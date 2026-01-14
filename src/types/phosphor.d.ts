@@ -76,6 +76,7 @@ export interface UserSettings {
   defaultJournalMode: 'freeform' | 'outliner';
   enableTypewriterScrolling: boolean;
   enableParagraphDimming: boolean;
+  enableSmartTypography: boolean;
   // Grammar & Style settings
   checkPassiveVoice: boolean;
   checkSimplification: boolean;

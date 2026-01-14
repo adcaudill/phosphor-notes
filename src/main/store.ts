@@ -14,6 +14,7 @@ const defaults: UserSettings = {
   defaultJournalMode: 'freeform',
   enableTypewriterScrolling: true,
   enableParagraphDimming: false,
+  enableSmartTypography: true,
   checkPassiveVoice: false,
   checkSimplification: false,
   checkInclusiveLanguage: false,
