@@ -60,7 +60,12 @@ export const RelationshipsPanel: React.FC<RelationshipsPanelProps> = ({
                   <button
                     key={file}
                     className="relationship-item incoming"
-                    onClick={() => onFileSelect(file)}
+                    onClick={() => {
+                      window.phosphor.updateMRU(file).catch((err) => {
+                        console.debug('Failed to update MRU:', err);
+                      });
+                      onFileSelect(file);
+                    }}
                     title={file}
                   >
                     <span className="relationship-item-icon">←</span>
@@ -82,7 +87,12 @@ export const RelationshipsPanel: React.FC<RelationshipsPanelProps> = ({
                   <button
                     key={file}
                     className="relationship-item outgoing"
-                    onClick={() => onFileSelect(file)}
+                    onClick={() => {
+                      window.phosphor.updateMRU(file).catch((err) => {
+                        console.debug('Failed to update MRU:', err);
+                      });
+                      onFileSelect(file);
+                    }}
                     title={file}
                   >
                     <span className="relationship-item-name">{file}</span>

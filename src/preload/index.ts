@@ -15,6 +15,10 @@ const api = {
 
   listFiles: () => ipcRenderer.invoke('vault:list'),
 
+  getMRUFiles: () => ipcRenderer.invoke('vault:mru'),
+
+  updateMRU: (filename: string) => ipcRenderer.invoke('vault:update-mru', filename),
+
   // Event subscription for graph updates
   onGraphUpdate: (cb: (graph: Record<string, string[]>) => void) => {
     const handler = (_: any, data: Record<string, string[]>) => cb(data);

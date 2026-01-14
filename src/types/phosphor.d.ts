@@ -23,6 +23,8 @@ export interface PhosphorAPI {
   getCachedGraph: () => Promise<Record<string, string[]> | null>;
 
   listFiles: () => Promise<string[]>;
+  getMRUFiles: () => Promise<string[]>;
+  updateMRU: (filename: string) => Promise<string[]>;
   onGraphUpdate: (cb: (graph: Record<string, string[]>) => void) => () => void;
   onStatusUpdate: (cb: (status: { type: string; message: string }) => void) => () => void;
   onMenuEvent: (eventName: string, cb: () => void) => () => void;

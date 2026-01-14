@@ -299,7 +299,13 @@ export const TasksView: React.FC<TasksViewProps> = ({ onTaskClick }) => {
                   <div
                     key={`${filename}-${idx}`}
                     className={`task-item task-${task.status}`}
-                    onClick={() => onTaskClick(filename, task.line)}
+                    onClick={() => {
+                      // Update MRU when file is selected from tasks
+                      window.phosphor.updateMRU(filename).catch((err) => {
+                        console.debug('Failed to update MRU:', err);
+                      });
+                      onTaskClick(filename, task.line);
+                    }}
                   >
                     <span className="task-status-icon">{getStatusIcon(task.status)}</span>
                     <span className="task-text">{task.text}</span>

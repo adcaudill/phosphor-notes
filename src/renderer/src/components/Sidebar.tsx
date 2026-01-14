@@ -24,12 +24,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [files, setFiles] = useState<string[]>([]);
 
   useEffect(() => {
-    const fetchFiles = async (): Promise<void> => {
-      const fileList = await window.phosphor.listFiles();
-      setFiles(fileList);
+    const fetchMRUFiles = async (): Promise<void> => {
+      const mruList = await window.phosphor.getMRUFiles();
+      setFiles(mruList);
     };
 
-    fetchFiles();
+    fetchMRUFiles();
   }, [refreshSignal]);
 
   const openDaily = async (): Promise<void> => {
@@ -38,6 +38,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       // If we're currently in tasks or graph view, switch to editor first
       if (viewMode !== 'editor' && onEditorClick) {
         onEditorClick();
+      }
+      // Update MRU when daily note is opened
+      try {
+        const updatedMRU = await window.phosphor.updateMRU(dailyFilename);
+        setFiles(updatedMRU);
+      } catch (err) {
+        console.debug('Failed to update MRU:', err);
       }
       onFileSelect(dailyFilename);
     } catch (err) {
@@ -86,13 +93,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       >
         Daily
       </h2>
-      <h2>Notes</h2>
+      <h2>Recent</h2>
       <ul>
         {files.map((file) => (
           <li
             key={file}
             className={file === activeFile ? 'active' : ''}
-            onClick={() => {
+            onClick={async () => {
               try {
                 console.debug('Sidebar click:', file);
               } catch (err) {
@@ -101,6 +108,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               // If we're currently in tasks or graph view, switch to editor first
               if (viewMode !== 'editor' && onEditorClick) {
                 onEditorClick();
+              }
+              // Update MRU when file is selected
+              try {
+                const updatedMRU = await window.phosphor.updateMRU(file);
+                setFiles(updatedMRU);
+              } catch (err) {
+                console.debug('Failed to update MRU:', err);
               }
               onFileSelect(file);
             }}

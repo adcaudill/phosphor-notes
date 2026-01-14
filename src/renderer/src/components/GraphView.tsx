@@ -232,6 +232,10 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
       const { x, y } = toGraphCoords(event.clientX, event.clientY);
       const node = findNodeAt(x, y);
       if (node?.id) {
+        // Update MRU when file is selected from graph
+        window.phosphor.updateMRU(node.id).catch((err) => {
+          console.debug('Failed to update MRU:', err);
+        });
         onFileSelect(node.id);
       }
     };

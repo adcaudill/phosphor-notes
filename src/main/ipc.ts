@@ -12,6 +12,7 @@ import {
 } from './indexer';
 import { setupWatcher, stopWatcher, markInternalSave } from './watcher';
 import { deriveMasterKey, encryptBuffer, decryptBuffer, isEncrypted, generateSalt } from './crypto';
+import { initializeMRU, getMRUFiles, updateMRU } from './store';
 import sodium from 'sodium-native';
 
 // Safe logging that ignores EPIPE errors during shutdown
@@ -639,6 +640,18 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
     }
   });
 
+  // 4b. Get MRU (Most Recently Used) Files
+  ipcMain.handle('vault:mru', async () => {
+    if (!activeVaultPath) return [];
+    return getMRUFiles(activeVaultPath);
+  });
+
+  // 4c. Update MRU list when a file is accessed
+  ipcMain.handle('vault:update-mru', async (_, filename: string) => {
+    if (!activeVaultPath) return [];
+    return updateMRU(activeVaultPath, filename);
+  });
+
   // 5. Delete Note
   ipcMain.handle('note:delete', async (_, filename: string) => {
     if (!activeVaultPath) throw new Error('No vault selected');
@@ -744,6 +757,13 @@ export async function openVaultPath(vaultPath: string, mainWindow: BrowserWindow
   }
 
   activeVaultPath = vaultPath;
+
+  // Initialize MRU for this vault
+  try {
+    await initializeMRU(vaultPath);
+  } catch (err) {
+    safeWarn('Error initializing MRU:', err);
+  }
 
   // Start file watcher for this vault
   try {

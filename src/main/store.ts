@@ -109,3 +109,78 @@ export async function updateSettings(updates: Partial<UserSettings>): Promise<Us
   await saveSettings(cachedSettings);
   return cachedSettings;
 }
+
+// MRU (Most Recently Used) list management
+// Stored in vault's .phosphor/mru.json with up to 10 entries
+interface MRUData {
+  files: string[];
+}
+
+function getMRUPath(vaultPath: string): string {
+  return path.join(vaultPath, '.phosphor', 'mru.json');
+}
+
+async function ensureMRUDir(vaultPath: string): Promise<void> {
+  try {
+    await fsp.mkdir(path.join(vaultPath, '.phosphor'), { recursive: true });
+  } catch (err) {
+    console.error('Failed to create .phosphor directory', err);
+  }
+}
+
+async function loadMRU(vaultPath: string): Promise<MRUData> {
+  try {
+    const mruPath = getMRUPath(vaultPath);
+    const raw = await fsp.readFile(mruPath, 'utf-8');
+    return JSON.parse(raw) as MRUData;
+  } catch {
+    // File doesn't exist or is corrupted, return empty list
+    return { files: [] };
+  }
+}
+
+async function saveMRU(vaultPath: string, mruData: MRUData): Promise<void> {
+  try {
+    await ensureMRUDir(vaultPath);
+    const mruPath = getMRUPath(vaultPath);
+    await fsp.writeFile(mruPath, JSON.stringify(mruData, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Failed to save MRU:', err);
+  }
+}
+
+export async function initializeMRU(vaultPath: string): Promise<void> {
+  // Initialize MRU file structure for the vault if it doesn't exist
+  // (actual loading happens on-demand in getMRUFiles)
+  const mruData = await loadMRU(vaultPath);
+  if (mruData.files.length === 0) {
+    // Create empty MRU file
+    await saveMRU(vaultPath, { files: [] });
+  }
+}
+
+export async function getMRUFiles(vaultPath: string): Promise<string[]> {
+  const mruData = await loadMRU(vaultPath);
+  return mruData.files;
+}
+
+export async function updateMRU(vaultPath: string, filename: string): Promise<string[]> {
+  const mruData = await loadMRU(vaultPath);
+
+  // Remove if already in list
+  const index = mruData.files.indexOf(filename);
+  if (index > -1) {
+    mruData.files.splice(index, 1);
+  }
+
+  // Add to front
+  mruData.files.unshift(filename);
+
+  // Keep only 10 most recent
+  if (mruData.files.length > 10) {
+    mruData.files = mruData.files.slice(0, 10);
+  }
+
+  await saveMRU(vaultPath, mruData);
+  return mruData.files;
+}

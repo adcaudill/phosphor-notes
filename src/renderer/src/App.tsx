@@ -378,6 +378,8 @@ function AppContent(): React.JSX.Element {
       setCurrentFile(filename);
       setConflict(null); // Clear conflict if switching files
       setIsDirty(false); // New file is not dirty
+      // Bump filesVersion so Sidebar re-fetches MRU
+      setFilesVersion((v) => v + 1);
       // Allow saves after the debounce window
       setTimeout(() => {
         skipSaveRef.current = false;
