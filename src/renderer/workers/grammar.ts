@@ -44,7 +44,7 @@ function createProcessor(settings: GrammarSettings) {
     processor = processor.use(retextReadability);
   }
   if (settings.checkProfanities) {
-    processor = processor.use(retextProfanities);
+    processor = processor.use(retextProfanities({ sureness: 1 }));
   }
 
   // Always include these plugins
