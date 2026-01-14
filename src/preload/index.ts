@@ -92,7 +92,8 @@ const api = {
   search: (query: string) => ipcRenderer.invoke('vault:search', query),
 
   // Notify main when a wikilink is clicked (for graph updates)
-  notifyWikilinkClicked: (sourceFile: string, targetFile: string) => ipcRenderer.invoke('graph:wikilink-clicked', sourceFile, targetFile),
+  notifyWikilinkClicked: (sourceFile: string, targetFile: string) =>
+    ipcRenderer.invoke('graph:wikilink-clicked', sourceFile, targetFile),
 
   // Tasks API
   getTaskIndex: () => ipcRenderer.invoke('tasks:get'),
