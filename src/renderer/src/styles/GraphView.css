@@ -1,8 +1,13 @@
 .graph-view {
   position: relative;
   width: 100%;
-  height: calc(100vh - 180px);
-  min-height: 420px;
+  /* Use flex so the graph area fills the available space provided by the parent
+     layout (the app uses flex layout). Allow the parent to constrain height
+     via flexbox; avoid fixed viewport-based calculations here. */
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   background:
     radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.04), transparent 32%),
     radial-gradient(circle at 82% 12%, rgba(255, 255, 255, 0.04), transparent 24%), #0b1224;
@@ -14,7 +19,10 @@
 
 .graph-canvas {
   width: 100%;
-  height: 100%;
+  /* Let the canvas flex to fill the graph-view container. Keep display:block
+     for proper canvas layout but allow flex growth for height. */
+  flex: 1 1 auto;
+  height: auto;
   display: block;
   cursor: grab;
 }

@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import type { SimulationLinkDatum, SimulationNodeDatum } from 'd3-force';
 import { forceCenter, forceLink, forceManyBody, forceSimulation } from 'd3-force';
 import { select } from 'd3-selection';
+import type { Selection } from 'd3-selection';
 import { zoom, zoomIdentity, type ZoomTransform } from 'd3-zoom';
 import '../styles/GraphView.css';
 
@@ -153,6 +154,26 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
 
     const selection = select<HTMLCanvasElement, unknown>(canvas);
     selection.call(zoomBehavior);
+
+    // Apply a sensible initial zoom so node labels are visible by default.
+    // Labels are rendered when transform.k > 1.1, so choose a value above that.
+    const initialScale = 1.2;
+    const initialTransform = zoomIdentity
+      .translate((width / 2) * (1 - initialScale), (height / 2) * (1 - initialScale))
+      .scale(initialScale);
+    transform = initialTransform;
+    transformRef.current = initialTransform;
+    // Programmatically set the zoom behavior's transform on the selection
+    const applyTransform = (
+      zoomBehavior as unknown as {
+        transform: (
+          sel: Selection<HTMLCanvasElement, unknown, null, undefined>,
+          t: ZoomTransform
+        ) => void;
+      }
+    ).transform;
+    applyTransform(selection, initialTransform);
+    scheduleRender();
 
     const toGraphCoords = (clientX: number, clientY: number): { x: number; y: number } => {
       const rect = canvas.getBoundingClientRect();
