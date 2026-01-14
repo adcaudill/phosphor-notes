@@ -88,8 +88,41 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
     const processor = createProcessor(settings);
     const file = await processor.process(text);
 
+    // Filter out specific plugin messages we want to ignore (e.g. contractions straight-apostrophe warnings)
+    const messages: DiagnosticMessage[] = (file.messages || []).filter((m: DiagnosticMessage) => {
+      const s = String(m || '');
+
+      // Ignore retext-contractions straight-apostrophe warnings
+      if (
+        m &&
+        m.source === 'retext-contractions' &&
+        s.includes('Unexpected straight apostrophe in')
+      ) {
+        return false;
+      }
+
+      // Ignore retext-readability warnings for list items (lines that start with "- ")
+      if (
+        m &&
+        m.source === 'retext-readability' &&
+        s.includes('Unexpected hard to read sentence, according to')
+      ) {
+        const posMatch = s.match(/^(\d+):(\d+)-(\d+):(\d+):/);
+        if (posMatch) {
+          const startLine = parseInt(posMatch[1], 10);
+          const lines = text.split('\n');
+          const lineText = (lines[startLine - 1] || '').trimStart();
+          if (lineText.startsWith('- ')) {
+            return false;
+          }
+        }
+      }
+
+      return true;
+    });
+
     // Convert VFile messages to CodeMirror Diagnostics
-    const diagnostics: Diagnostic[] = (file.messages || []).map((msg: DiagnosticMessage) => {
+    const diagnostics: Diagnostic[] = (messages || []).map((msg: DiagnosticMessage) => {
       let from = 0;
       let to = 0;
 
