@@ -139,7 +139,9 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
         if (transform.k > 1.1) {
           ctx.fillStyle = '#cbd5e1';
           ctx.font = '12px "Inter", "SF Pro Text", -apple-system, system-ui, sans-serif';
-          ctx.fillText(node.id, node.x + 10, node.y + 4);
+          // strip file extension for label
+          const label = node.id.replace(/\.[^/.]+$/, '');
+          ctx.fillText(label, node.x + 10, node.y + 4);
         }
       });
 
