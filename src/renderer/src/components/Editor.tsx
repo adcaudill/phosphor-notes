@@ -3,6 +3,7 @@ import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, KeyBinding } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
+import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { syntaxHighlighting, HighlightStyle } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
 import { wikiLinkPlugin } from '../editor/extensions/wikiLinks';
@@ -104,9 +105,10 @@ export const Editor: React.FC<EditorProps> = ({
     const startState = EditorState.create({
       doc: content,
       extensions: [
-        keymap.of(finalKeymap), // Cmd+Z, Enter, etc. + outliner keybindings if applicable
+        keymap.of([...closeBracketsKeymap, ...finalKeymap]), // include close-brackets keymap first
         EditorView.lineWrapping, // Soft wrap long lines
         markdown(), // Markdown syntax support
+        closeBrackets(), // Automatic bracket/quote closing
         history(), // Undo/Redo stack
         syntaxHighlighting(darkModeHighlightStyle), // Use custom dark mode colors
         taskCheckboxPlugin, // Task checkboxes
