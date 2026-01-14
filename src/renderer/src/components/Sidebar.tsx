@@ -35,6 +35,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const openDaily = async (): Promise<void> => {
     try {
       const dailyFilename = await window.phosphor.getDailyNoteFilename();
+      // If we're currently in tasks or graph view, switch to editor first
+      if (viewMode !== 'editor' && onEditorClick) {
+        onEditorClick();
+      }
       onFileSelect(dailyFilename);
     } catch (err) {
       console.debug('Failed to open daily note:', err);
@@ -93,6 +97,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 console.debug('Sidebar click:', file);
               } catch (err) {
                 console.debug('Sidebar click error:', err);
+              }
+              // If we're currently in tasks or graph view, switch to editor first
+              if (viewMode !== 'editor' && onEditorClick) {
+                onEditorClick();
               }
               onFileSelect(file);
             }}
