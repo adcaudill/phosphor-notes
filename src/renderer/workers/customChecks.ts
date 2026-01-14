@@ -287,7 +287,75 @@ const checkCommonIssues: CustomCheck = (text: string) => {
   return diagnostics;
 };
 
-const customChecks: CustomCheck[] = [checkIndefiniteArticles, checkCliches, checkCommonIssues];
+const checkTimeIssues: CustomCheck = (text: string) => {
+  const diagnostics: Diagnostic[] = [];
+
+  // Pattern 1: Check for AM/PM without spaces or periods (e.g., "9:00AM", "9:00am")
+  // Matches: digit(s) : digit(s) optional-space [aA][mM] or [pP][mM]
+  const noSpaceOrPeriods = /\d{1,2}:\d{2}\s?[ap]m/gi;
+  let m: RegExpExecArray | null;
+
+  // eslint-disable-next-line no-cond-assign
+  while ((m = noSpaceOrPeriods.exec(text)) !== null) {
+    const matched = m[0];
+    const isProper = /\d{1,2}:\d{2}\s[ap]\.m\./i.test(matched);
+
+    // If it's not already in proper format (with space and periods)
+    if (!isProper) {
+      diagnostics.push({
+        from: m.index,
+        to: m.index + m[0].length,
+        severity: 'info',
+        message: "Use proper AM/PM format: add space and periods (e.g., '9:00 a.m.')",
+        source: 'Time Issues'
+      });
+    }
+  }
+
+  // Pattern 2: Check for AM/PM with only one period or improper casing
+  // Matches: digit : digit optional-space letter-m with optional periods
+  const improperFormat = /\d{1,2}:\d{2}\s?[ap]\.?m\.?/gi;
+
+  while ((m = improperFormat.exec(text)) !== null) {
+    const matched = m[0];
+    // Check if it's already proper (space + periods + lowercase)
+    const isProper = /\d{1,2}:\d{2}\s[ap]\.m\./i.test(matched);
+    const isUpperNoSpace = /\d{1,2}:\d{2}\s?[AP]M/i.test(matched);
+
+    if (!isProper && isUpperNoSpace) {
+      diagnostics.push({
+        from: m.index,
+        to: m.index + m[0].length,
+        severity: 'info',
+        message: "Use lowercase with periods for time: '9:00 a.m.' or '9:00 p.m.'",
+        source: 'Time Issues'
+      });
+    }
+  }
+
+  // Pattern 3: Warn about 12 a.m. and 12 p.m. ambiguity
+  const midnightNoon = /12\s?[ap]\.?m\.?/gi;
+
+  while ((m = midnightNoon.exec(text)) !== null) {
+    diagnostics.push({
+      from: m.index,
+      to: m.index + m[0].length,
+      severity: 'info',
+      message:
+        "'12 a.m.' (midnight) and '12 p.m.' (noon) can be ambiguous; consider using '12:00 midnight' or '12:00 noon'",
+      source: 'Time Issues'
+    });
+  }
+
+  return diagnostics;
+};
+
+const customChecks: CustomCheck[] = [
+  checkIndefiniteArticles,
+  checkCliches,
+  checkCommonIssues,
+  checkTimeIssues
+];
 
 export const runCustomChecks = (text: string, settings?: CustomCheckSettings): Diagnostic[] =>
   customChecks.flatMap((check) => check(text, settings));
