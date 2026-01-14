@@ -14,6 +14,7 @@ interface GraphNode extends SimulationNodeDatum {
   vy?: number;
   fx?: number | null;
   fy?: number | null;
+  degree?: number;
 }
 
 interface GraphLink extends SimulationLinkDatum<GraphNode> {
@@ -50,6 +51,23 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
           links.push({ source, target });
         }
       });
+    });
+
+    // Calculate node degrees (connection count)
+    const degreeMap = new Map<string, number>();
+    nodes.forEach((node) => {
+      degreeMap.set(node.id, 0);
+    });
+    links.forEach((link) => {
+      const sourceId = typeof link.source === 'string' ? link.source : link.source.id;
+      const targetId = typeof link.target === 'string' ? link.target : link.target.id;
+      degreeMap.set(sourceId, (degreeMap.get(sourceId) || 0) + 1);
+      degreeMap.set(targetId, (degreeMap.get(targetId) || 0) + 1);
+    });
+    let maxDegree = 0;
+    nodes.forEach((node) => {
+      node.degree = degreeMap.get(node.id) || 0;
+      maxDegree = Math.max(maxDegree, node.degree);
     });
 
     // If there is no data, just clear and bail out
@@ -105,11 +123,15 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
       // Nodes
       nodes.forEach((node) => {
         if (node.x === undefined || node.y === undefined) return;
+        const baseRadius = 6;
+        const maxRadiusIncrease = 10;
+        const scaledRadius =
+          baseRadius + ((node.degree || 0) / Math.max(maxDegree, 1)) * maxRadiusIncrease;
         ctx.beginPath();
         ctx.fillStyle = '#60a5fa';
         ctx.strokeStyle = 'rgba(96, 165, 250, 0.35)';
         ctx.lineWidth = 2;
-        ctx.arc(node.x, node.y, 6, 0, Math.PI * 2);
+        ctx.arc(node.x, node.y, scaledRadius, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
@@ -185,11 +207,15 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
 
     const findNodeAt = (x: number, y: number): GraphNode | undefined => {
       const hitRadius = 10;
+      const baseRadius = 6;
+      const maxRadiusIncrease = 10;
       return nodes.find((node) => {
         if (node.x === undefined || node.y === undefined) return false;
+        const scaledRadius =
+          baseRadius + ((node.degree || 0) / Math.max(maxDegree, 1)) * maxRadiusIncrease;
         const dx = x - node.x;
         const dy = y - node.y;
-        return Math.sqrt(dx * dx + dy * dy) <= hitRadius;
+        return Math.sqrt(dx * dx + dy * dy) <= scaledRadius + hitRadius;
       });
     };
 
