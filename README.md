@@ -24,10 +24,12 @@ Whether you are managing complex projects, journaling your daily life, or writin
 - **Active Paragraph Dimming:** Automatically dims inactive paragraphs, helping you focus strictly on the sentence you are writing right now.
 - **Live Stats:** Unobtrusive word count and reading time metrics.
 - **Grammar & Style Checking:** Real-time feedback on passive voice, sentence simplification, inclusive language, readability, profanities, and more - all customizable in preferences.
+- **Markdown Support:** Full support for GitHub-Flavored Markdown (GFM) including tables, task lists, code blocks with syntax highlighting, footnotes, and more.
+- **PDF & Image Embeds:** Drag-and-drop images and PDFs directly into your notes. View images inline and expand PDFs into a full viewer.
 
 ### Productivity Engine
 
-- **Logseq-Style Tasks:** Manage tasks directly in your text using standard syntax (`- [ ]`, `- [/]`, `- [x]`).
+- **Tasks & Todo Lists:** Manage tasks directly in your text using standard syntax (`- [ ]`, `- [/]`, `- [x]`).
 - **Recurring & Scheduled:** Support for due dates and recurrence logic (e.g., `📅 2026-01-15 🔁 +1w`).
 - **Task Dashboard:** A dynamic view to aggregate and manage open tasks across your entire vault.
 - **Daily Journals:** Automatic creation of daily notes (`YYYY-MM-DD.md`) to capture fleeting thoughts and logs - in freeform or outliner mode.
