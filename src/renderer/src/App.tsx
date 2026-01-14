@@ -492,6 +492,12 @@ function AppContent(): React.JSX.Element {
     setContent(content);
     // Trigger a save to ensure it appears in sidebar immediately
     await window.phosphor.saveNote(filename, content);
+    // Update MRU when wikilink is clicked
+    try {
+      await window.phosphor.updateMRU(filename);
+    } catch (err) {
+      console.debug('Failed to update MRU:', err);
+    }
     // Bump filesVersion so Sidebar re-fetches
     setFilesVersion((v) => v + 1);
   };
