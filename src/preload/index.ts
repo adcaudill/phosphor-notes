@@ -1,4 +1,5 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
+import type { Task, UserSettings } from '../types/phosphor';
 
 // Define the API implementation
 const api = {
@@ -21,49 +22,50 @@ const api = {
 
   // Event subscription for graph updates
   onGraphUpdate: (cb: (graph: Record<string, string[]>) => void) => {
-    const handler = (_: any, data: Record<string, string[]>) => cb(data);
+    const handler = (_event: IpcRendererEvent, data: Record<string, string[]>): void => cb(data);
     ipcRenderer.on('phosphor:graph-update', handler);
     return () => ipcRenderer.removeListener('phosphor:graph-update', handler);
   },
 
   // Event subscription for status updates
   onStatusUpdate: (cb: (status: { type: string; message: string }) => void) => {
-    const handler = (_: any, data: { type: string; message: string }) => cb(data);
+    const handler = (_event: IpcRendererEvent, data: { type: string; message: string }): void =>
+      cb(data);
     ipcRenderer.on('phosphor:status', handler);
     return () => ipcRenderer.removeListener('phosphor:status', handler);
   },
 
   // Event subscription for menu events
   onMenuEvent: (eventName: string, cb: () => void) => {
-    const handler = () => cb();
+    const handler = (): void => cb();
     ipcRenderer.on(eventName, handler);
     return () => ipcRenderer.removeListener(eventName, handler);
   },
 
   // Event subscription for vault file changes
   onFileChanged: (cb: (filename: string) => void) => {
-    const handler = (_: any, filename: string) => cb(filename);
+    const handler = (_event: IpcRendererEvent, filename: string): void => cb(filename);
     ipcRenderer.on('vault:file-changed', handler);
     return () => ipcRenderer.removeListener('vault:file-changed', handler);
   },
 
   // Event subscription for vault file deletions
   onFileDeleted: (cb: (filename: string) => void) => {
-    const handler = (_: any, filename: string) => cb(filename);
+    const handler = (_event: IpcRendererEvent, filename: string): void => cb(filename);
     ipcRenderer.on('vault:file-deleted', handler);
     return () => ipcRenderer.removeListener('vault:file-deleted', handler);
   },
 
   // Event subscription for vault file additions
   onFileAdded: (cb: (filename: string) => void) => {
-    const handler = (_: any, filename: string) => cb(filename);
+    const handler = (_event: IpcRendererEvent, filename: string): void => cb(filename);
     ipcRenderer.on('vault:file-added', handler);
     return () => ipcRenderer.removeListener('vault:file-added', handler);
   },
 
   // Listen for app quit check and respond with unsaved status
-  onCheckUnsavedChanges: (cb: (hasUnsaved: boolean) => void) => {
-    const handler = () => {
+  onCheckUnsavedChanges: (cb: (hasUnsaved: boolean) => boolean) => {
+    const handler = (): void => {
       const hasUnsaved = cb(false); // Call the callback to determine if there are unsaved changes
       ipcRenderer.send('app:unsaved-changes-result', hasUnsaved);
     };
@@ -89,22 +91,26 @@ const api = {
 
   // Tasks API
   getTaskIndex: () => ipcRenderer.invoke('tasks:get'),
-  onTasksUpdate: (cb: (tasks: any[]) => void) => {
-    const handler = (_: any, data: any[]) => cb(data);
+  onTasksUpdate: (cb: (tasks: Task[]) => void) => {
+    const handler = (_event: IpcRendererEvent, data: Task[]): void => cb(data);
     ipcRenderer.on('phosphor:tasks-update', handler);
-    return () => ipcRenderer.removeListener('phosphor:tasks-update', handler);
+    return () => {
+      ipcRenderer.removeListener('phosphor:tasks-update', handler);
+    };
   },
 
   // Settings API
   getSettings: () => ipcRenderer.invoke('settings:get'),
-  setSetting: (key: string, value: any) => ipcRenderer.invoke('settings:set', key, value),
-  setMultipleSettings: (updates: Record<string, any>) =>
+  setSetting: (key: string, value: unknown) => ipcRenderer.invoke('settings:set', key, value),
+  setMultipleSettings: (updates: Record<string, unknown>) =>
     ipcRenderer.invoke('settings:set-multiple', updates),
   // Listen for settings changes from other windows
-  onSettingsChange: (cb: (settings: any) => void) => {
-    const handler = (_: any, data: any) => cb(data);
+  onSettingsChange: (cb: (settings: UserSettings) => void) => {
+    const handler = (_event: IpcRendererEvent, data: UserSettings): void => cb(data);
     ipcRenderer.on('settings:changed', handler);
-    return () => ipcRenderer.removeListener('settings:changed', handler);
+    return () => {
+      ipcRenderer.removeListener('settings:changed', handler);
+    };
   },
 
   // Encryption API
@@ -151,6 +157,5 @@ if (process.contextIsolated) {
   }
 } else {
   // Fallback for non-isolated contexts (should not happen in modern Electron)
-  // @ts-ignore
   window.phosphor = api;
 }
