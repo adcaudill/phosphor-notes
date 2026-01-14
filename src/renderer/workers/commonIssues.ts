@@ -729,7 +729,10 @@ export const commonIssues = {
     replace: 'immemorial'
   },
   'in regards to': {
-    replace: ['regarding', 'with regard to']
+    replace: 'in regard to'
+  },
+  'with regards to': {
+    replace: 'with regard to'
   },
   'in route': {
     replace: 'en route'
@@ -865,6 +868,174 @@ export const commonIssues = {
   },
   'maddening crowd': {
     replace: 'madding crowd'
+  },
+  hippopotami: {
+    replace: 'hippopotamuses'
+  },
+  longstanding: {
+    replace: 'long-standing'
+  },
+  manifesti: {
+    replace: 'manifestos'
+  },
+  matrixes: {
+    replace: 'matrices'
+  },
+  mongeese: {
+    replace: 'mongooses'
+  },
+  narcissuses: {
+    replace: 'narcissi'
+  },
+  'non-sequitur': {
+    replace: 'non sequitur'
+  },
+  retinae: {
+    replace: 'retinas'
+  },
+  'sans-serif': {
+    replace: 'sans serif'
+  },
+  sanserif: {
+    replace: 'sans serif'
+  },
+  soprani: {
+    replace: 'sopranos'
+  },
+  titmouses: {
+    replace: 'titmice'
+  },
+  'tort feasor': {
+    replace: 'tortfeasor'
+  },
+  'tort-feasor': {
+    replace: 'tortfeasor'
+  },
+  'trans-ship': {
+    replace: 'transship'
+  },
+  'trans-shipped': {
+    replace: 'transshipped'
+  },
+  'trans-shipping': {
+    replace: 'transshipping'
+  },
+  tranship: {
+    replace: 'transship'
+  },
+  transhipped: {
+    replace: 'transshipped'
+  },
+  transhipping: {
+    replace: 'transshipping'
+  },
+  'combustible engine': {
+    replace: 'combustion engine'
+  },
+  infectuous: {
+    replace: 'infectious'
+  },
+  inferrable: {
+    replace: 'inferable'
+  },
+  inferrible: {
+    replace: 'inferable'
+  },
+  laniard: {
+    replace: 'lanyard'
+  },
+  largesse: {
+    replace: 'largess'
+  },
+  lasagne: {
+    replace: 'lasagna'
+  },
+  leary: {
+    replace: 'leery'
+  },
+  'loan me her': {
+    replace: 'lend me her'
+  },
+  'loan me his': {
+    replace: 'lend me his'
+  },
+  'loan me their': {
+    replace: 'lend me their'
+  },
+  'loan me your': {
+    replace: 'lend me your'
+  },
+  'loaned me her': {
+    replace: 'lent me her'
+  },
+  'loaned me his': {
+    replace: 'lent me his'
+  },
+  'loaned me their': {
+    replace: 'lent me their'
+  },
+  'loaned me your': {
+    replace: 'lent me your'
+  },
+  linguistician: {
+    replace: 'linguist'
+  },
+  'matzoh-ball': {
+    replace: 'matzo-ball'
+  },
+  'matza-ball': {
+    replace: 'matzo-ball'
+  },
+  'matzah-ball': {
+    replace: 'matzo-ball'
+  },
+  'matsah-ball': {
+    replace: 'matzo-ball'
+  },
+  mayorality: {
+    replace: 'mayoralty'
+  },
+  mealymouthed: {
+    replace: 'mealy-mouthed'
+  },
+  meanspirited: {
+    replace: 'mean-spirited'
+  },
+  midwived: {
+    replace: 'midwifed'
+  },
+  monicker: {
+    replace: 'moniker'
+  },
+  'musical review': {
+    replace: 'musical revue'
+  },
+  moustache: {
+    replace: 'mustache'
+  },
+  nonplused: {
+    replace: 'nonplussed'
+  },
+  nonplusing: {
+    replace: 'nonplussing'
+  },
+  nonsequitur: {
+    replace: 'non sequitur'
+  },
+  'shoe-in': {
+    replace: 'shoo-in'
+  },
+  'the highway medium': {
+    replace: 'the highway median'
+  },
+  vapidness: {
+    replace: 'vapidity'
+  },
+  'weather vein': {
+    replace: 'weather vane'
+  },
+  'weather vain': {
+    replace: 'weather vane'
   },
   majorly: {
     replace: 'extremely'
@@ -1048,5 +1219,122 @@ export const commonIssues = {
   },
   'would of': {
     replace: ["would've", 'would have']
+  },
+  'a couple people': {
+    replace: 'a couple of people'
+  },
+  'all of the time': {
+    replace: 'all the time'
+  },
+  'bulk largely': {
+    replace: 'bulk large'
+  },
+  'burying the lead': {
+    replace: 'burying the lede'
+  },
+  'came to nought': {
+    replace: 'came to naught'
+  },
+  'come off of it': {
+    replace: 'come off it'
+  },
+  'corroborative evidence': {
+    replace: 'corroborating evidence'
+  },
+  'default to a loan': {
+    replace: 'default on a loan'
+  },
+  'in the meanwhile': {
+    replace: 'in the meantime'
+  },
+  'magna charta': {
+    replace: 'Magna Carta'
+  },
+  'mariage de convenance': {
+    replace: 'marriage of convenience'
+  },
+  'middle west': {
+    replace: 'Midwest'
+  },
+  'middle western': {
+    replace: 'Midwestern'
+  },
+  'modes of operandi': {
+    replace: 'modi operandi'
+  },
+  'mode of operandi': {
+    replace: 'modus operandi'
+  },
+  'notion seconded': {
+    replace: 'motion seconded'
+  },
+  'mucus membranes': {
+    replace: 'mucous membranes'
+  },
+  'must past muster': {
+    replace: 'must pass muster'
+  },
+  'neck-in-neck': {
+    replace: 'neck-and-neck'
+  },
+  'no-holes-barred': {
+    replace: 'no-holds-barred'
+  },
+  'oil magnet': {
+    replace: 'oil magnate'
+  },
+  'punch up the lead': {
+    replace: 'punch up the lede'
+  },
+  'railroad magnet': {
+    replace: 'railroad magnate'
+  },
+  'seconded the notion': {
+    replace: 'seconded the motion'
+  },
+  'statute of limits': {
+    replace: 'statute of limitations'
+  },
+  'take prescience over': {
+    replace: 'take precedence over'
+  },
+  'both of the last two': {
+    replace: 'the last two'
+  },
+  'both of the last': {
+    replace: 'the last two'
+  },
+  'inorganic food': {
+    replace: 'organic food'
+  },
+  'veil of tears': {
+    replace: 'vale of tears'
+  },
+  "venus's flytrap": {
+    replace: 'Venus flytrap'
+  },
+  "venus' flytrap": {
+    replace: 'Venus flytrap'
+  },
+  'was accused with': {
+    replace: 'was accused of'
+  },
+  'be mislead': {
+    replace: 'be misled'
+  },
+  'was mislead': {
+    replace: 'was misled'
+  },
+  'were mislead': {
+    replace: 'were misled'
+  },
+  mistaked: {
+    replace: 'mistook'
+  },
+  ne: {
+    replace: 'né'
+  },
+  nee: {
+    replace: 'née'
   }
 };
