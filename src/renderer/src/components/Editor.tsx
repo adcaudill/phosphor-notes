@@ -301,7 +301,8 @@ export const Editor: React.FC<EditorProps> = ({
     settings.checkProfanities,
     settings.checkCliches,
     settings.checkIntensify,
-    settings.enableSmartTypography
+    settings.enableSmartTypography,
+    currentFile
   ]); // Re-create editor when content, mode, or grammar settings change
 
   // Handle external updates (e.g. clicking a different file in sidebar)
