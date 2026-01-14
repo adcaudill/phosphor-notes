@@ -1,5 +1,6 @@
 import { CLICHES } from './cliches';
 import { commonIssues } from './commonIssues';
+import { shouldAllCapitalized, shouldCapitalize } from './shouldCapitalize';
 
 export interface Diagnostic {
   from: number;
@@ -350,11 +351,86 @@ const checkTimeIssues: CustomCheck = (text: string) => {
   return diagnostics;
 };
 
+const checkParagraphStartWithBut: CustomCheck = (text: string) => {
+  const diagnostics: Diagnostic[] = [];
+
+  // Match "But" at the start of a paragraph (after newline or at document start)
+  // Pattern: (start of string or newline) followed by optional whitespace, then "But"
+  const paragraphStartBut = /(^|\n)(\s*)But\b/gm;
+  let m: RegExpExecArray | null;
+
+  while ((m = paragraphStartBut.exec(text)) !== null) {
+    // Calculate the start position of "But" (skip the newline/start and whitespace)
+    const butStart = m.index + m[1].length + m[2].length;
+    const butEnd = butStart + 3; // "But" is 3 characters
+
+    diagnostics.push({
+      from: butStart,
+      to: butEnd,
+      severity: 'info',
+      message:
+        'Avoid starting sentences or paragraphs with "But"; consider restructuring for stronger writing.',
+      source: 'Paragraph Style'
+    });
+  }
+
+  return diagnostics;
+};
+
+const checkCapitalization: CustomCheck = (text: string) => {
+  const diagnostics: Diagnostic[] = [];
+
+  // Match words (sequences of letters, optionally with apostrophes for contractions)
+  const wordPattern = /\b[a-z']+\b/gi;
+  let m: RegExpExecArray | null;
+
+  // eslint-disable-next-line no-cond-assign
+  while ((m = wordPattern.exec(text)) !== null) {
+    const word = m[0];
+    const normalizedWord = word.toLowerCase();
+
+    // Skip if it's all caps (already checked form) or very short
+    if (word === word.toUpperCase() || word.length < 2) {
+      continue;
+    }
+
+    // Check if it should be all caps
+    if (shouldAllCapitalized(normalizedWord)) {
+      const expectedForm = word.toUpperCase();
+      if (word !== expectedForm) {
+        diagnostics.push({
+          from: m.index,
+          to: m.index + word.length,
+          severity: 'warning',
+          message: `'${word}' should be capitalized as '${expectedForm}'`,
+          source: 'Capitalization'
+        });
+      }
+    } else if (shouldCapitalize(normalizedWord)) {
+      // Check if it should start with a capital
+      const expectedForm = word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      if (word !== expectedForm) {
+        diagnostics.push({
+          from: m.index,
+          to: m.index + word.length,
+          severity: 'warning',
+          message: `'${word}' should be capitalized as '${expectedForm}'`,
+          source: 'Capitalization'
+        });
+      }
+    }
+  }
+
+  return diagnostics;
+};
+
 const customChecks: CustomCheck[] = [
   checkIndefiniteArticles,
   checkCliches,
   checkCommonIssues,
-  checkTimeIssues
+  checkTimeIssues,
+  checkParagraphStartWithBut,
+  checkCapitalization
 ];
 
 export const runCustomChecks = (text: string, settings?: CustomCheckSettings): Diagnostic[] =>
