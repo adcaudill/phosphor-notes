@@ -13,7 +13,6 @@ import { GraphView } from './components/GraphView';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { useSettings } from './hooks/useSettings';
 import { extractFrontmatter, generateDefaultFrontmatter } from './utils/frontmatterUtils';
-import './styles/colorPalettes.css';
 
 /**
  * Extract title from markdown frontmatter, or fallback to filename
@@ -57,6 +56,8 @@ function AppContent(): React.JSX.Element {
   const [frontmatterModalOpen, setFrontmatterModalOpen] = useState(false); // Toggle for frontmatter modal
   const [focusMode, setFocusMode] = useState(false); // Toggle for focus/zen mode
   const [paragraphDimming, setParagraphDimming] = useState(settings.enableParagraphDimming); // Toggle for paragraph dimming
+  const [titleEditMode, setTitleEditMode] = useState(false); // Toggle for editing title
+  const [editingTitle, setEditingTitle] = useState(''); // The title being edited
   const [encryptionModalOpen, setEncryptionModalOpen] = useState(false); // Encryption modal visibility
   const [encryptionMode, setEncryptionMode] = useState<'unlock' | 'create'>('unlock'); // Whether we're unlocking or creating
   const [encryptionError, setEncryptionError] = useState<string | null>(null); // Error message for encryption
@@ -420,6 +421,89 @@ function AppContent(): React.JSX.Element {
   };
 
   /**
+   * Handle header mouse down for window dragging
+   * (Double-click is handled via onDoubleClick on the title element)
+   */
+  const handleHeaderMouseDown = (e: React.MouseEvent<HTMLDivElement>): void => {
+    // Don't interfere with interactive elements
+    const target = e.target as HTMLElement;
+    if (
+      target.closest('button') ||
+      target.closest('input') ||
+      target.closest('.editor-header-actions')
+    ) {
+      return;
+    }
+  };
+
+  /**
+   * Handle double-click on title to enable edit mode
+   */
+  const handleTitleDoubleClick = (e: React.MouseEvent<HTMLHeadingElement>): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (viewMode === 'editor' && currentFile) {
+      const currentTitle = getTitleFromContent(content, currentFile);
+      setEditingTitle(currentTitle);
+      setTitleEditMode(true);
+    }
+  };
+
+  /**
+   * Save the edited title to frontmatter and update the file
+   */
+  const handleTitleSave = async (newTitle: string): Promise<void> => {
+    if (!currentFile || !newTitle.trim()) {
+      setTitleEditMode(false);
+      return;
+    }
+
+    const trimmedTitle = newTitle.trim();
+
+    // Update frontmatter with new title
+    const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+    let updatedContent = content;
+
+    if (frontmatterMatch) {
+      let frontmatter = frontmatterMatch[1];
+      // Replace existing title or add new one
+      if (frontmatter.includes('title:')) {
+        frontmatter = frontmatter.replace(
+          /title:\s*["']?[^"'\n]+["']?/,
+          `title: "${trimmedTitle}"`
+        );
+      } else {
+        frontmatter = `title: "${trimmedTitle}"\n${frontmatter}`;
+      }
+      updatedContent = `---\n${frontmatter}\n---${content.slice(frontmatterMatch[0].length)}`;
+    }
+
+    // Save the updated content
+    try {
+      await window.phosphor.saveNote(currentFile, updatedContent);
+      setContent(updatedContent);
+      setIsDirty(false);
+    } catch (err) {
+      console.error('Failed to save title:', err);
+    }
+
+    setTitleEditMode(false);
+  };
+
+  /**
+   * Handle keyboard events in title input
+   */
+  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleTitleSave(editingTitle);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setTitleEditMode(false);
+    }
+  };
+
+  /**
    * Handle encryption modal submission (unlock or create)
    */
   const handleEncryptionSubmit = async (password: string): Promise<void> => {
@@ -519,15 +603,31 @@ function AppContent(): React.JSX.Element {
                 viewMode={viewMode}
               />
               <main className="main-content">
-                <div className="editor-header">
-                  <h1 className="editor-title">
-                    {viewMode === 'tasks'
-                      ? 'Tasks'
-                      : viewMode === 'graph'
-                        ? 'Graph'
-                        : getTitleFromContent(content, currentFile)}
-                  </h1>
-                  {viewMode === 'editor' && (
+                <div className="editor-header" onMouseDown={handleHeaderMouseDown}>
+                  {viewMode === 'editor' && titleEditMode ? (
+                    <input
+                      type="text"
+                      className="editor-title-input"
+                      value={editingTitle}
+                      onChange={(e) => setEditingTitle(e.target.value)}
+                      onBlur={() => handleTitleSave(editingTitle)}
+                      onKeyDown={handleTitleKeyDown}
+                      autoFocus
+                    />
+                  ) : (
+                    <h1
+                      className="editor-title"
+                      onDoubleClick={handleTitleDoubleClick}
+                      style={viewMode === 'editor' ? { cursor: 'text' } : {}}
+                    >
+                      {viewMode === 'tasks'
+                        ? 'Tasks'
+                        : viewMode === 'graph'
+                          ? 'Graph'
+                          : getTitleFromContent(content, currentFile)}
+                    </h1>
+                  )}
+                  {viewMode === 'editor' && !titleEditMode && (
                     <div className="editor-header-actions">
                       <button
                         className="settings-btn"

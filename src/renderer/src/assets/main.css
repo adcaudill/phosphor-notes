@@ -5,6 +5,7 @@
 :root {
   /* Color Palette - Light Mode Defaults */
   --color-primary: #7c3aed;
+  --color-primary-rgb: 124, 58, 237;
   --color-primary-dark: #6d28d9;
   --color-primary-light: #a78bfa;
   --color-secondary: #0ea5e9;
@@ -20,8 +21,11 @@
   --color-border: #e5e7eb;
   --color-border-light: #f3f4f6;
   --color-success: #10b981;
+  --color-success-rgb: 16, 185, 129;
   --color-warning: #f59e0b;
+  --color-warning-rgb: 245, 158, 11;
   --color-error: #ef4444;
+  --color-error-rgb: 239, 68, 68;
 
   /* Typography */
   --font-family:
@@ -140,16 +144,27 @@ body {
    while keeping interactive children (buttons, inputs) clickable. */
 .editor-header {
   -webkit-app-region: drag;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
-/* Only make interactive controls non-draggable so the rest of the header
-   (including the title) remains a large, consistent drag target. */
+/* Only make interactive controls non-draggable. */
 .editor-header .editor-header-actions,
 .editor-header .editor-header-actions *,
+.editor-header .editor-title,
+.editor-header .editor-title-input,
 .editor-header button,
 .editor-header a,
 .editor-header input {
   -webkit-app-region: no-drag;
+  pointer-events: auto;
+}
+
+/* Allow the title to be draggable but with pointer events enabled
+   so double-click works via JavaScript */
+.editor-title,
+.editor-title-input {
+  /* Inherits -webkit-app-region: no-drag from rule above, which allows pointer events */
 }
 
 .editor-title {
@@ -157,10 +172,27 @@ body {
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  width: auto;
   white-space: nowrap;
+}
+
+.editor-title-input {
+  margin: 0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  background-color: var(--color-surface);
+  border: 2px solid var(--color-primary);
+  border-radius: 4px;
+  flex: 1;
+  font-family: var(--font-family);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.editor-title-input:focus {
+  border-color: var(--color-primary-dark);
 }
 
 .relationships-toggle {
@@ -314,7 +346,7 @@ body {
 }
 
 .sidebar li.active .dirty-indicator {
-  color: #ff6b6b;
+  color: var(--color-error);
   opacity: 0.9;
 }
 
@@ -568,7 +600,7 @@ body {
 }
 
 .cm-activeLineGutter {
-  background-color: rgba(124, 58, 237, 0.1);
+  background-color: rgba(var(--color-primary-rgb), 0.1);
 }
 
 .cm-cursor {
@@ -626,14 +658,14 @@ body {
   cursor: pointer;
   font-weight: var(--font-weight-medium);
   transition: all 0.15s ease;
-  background: rgba(124, 58, 237, 0.05);
+  background: rgba(var(--color-primary-rgb), 0.05);
   border-radius: 2px;
   padding: 0 2px;
 }
 
 .cm-wiki-link:hover {
   color: var(--color-primary-dark);
-  background: rgba(124, 58, 237, 0.15);
+  background: rgba(var(--color-primary-rgb), 0.15);
   text-decoration: underline;
 }
 
@@ -1052,31 +1084,15 @@ body {
 }
 
 .status-bar.indexing-started {
-  background: #fef3c7;
-  color: #92400e;
-  border-top-color: #fbbf24;
-}
-
-@media (prefers-color-scheme: dark) {
-  .status-bar.indexing-started {
-    background: rgba(120, 80, 20, 0.3);
-    color: #fcd34d;
-    border-top-color: #f59e0b;
-  }
+  background: rgba(var(--color-warning-rgb), 0.1);
+  color: var(--color-warning);
+  border-top-color: var(--color-warning);
 }
 
 .status-bar.indexing-complete {
-  background: #dcfce7;
-  color: #166534;
-  border-top-color: #86efac;
-}
-
-@media (prefers-color-scheme: dark) {
-  .status-bar.indexing-complete {
-    background: rgba(5, 100, 5, 0.3);
-    color: #86efac;
-    border-top-color: #10b981;
-  }
+  background: rgba(var(--color-success-rgb), 0.1);
+  color: var(--color-success);
+  border-top-color: var(--color-success);
 }
 
 .status-bar.cache-loaded {
