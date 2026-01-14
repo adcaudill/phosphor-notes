@@ -429,3 +429,216 @@ export async function updateTasksForFile(
     safeError(`Failed to update tasks for file: ${filename}`, err);
   }
 }
+
+/**
+ * Extract wikilinks from markdown content (same logic as worker)
+ * Converts [[filename]] or [[filename.md]] format
+ * Always returns filenames with .md extension
+ */
+function extractWikilinks(content: string): string[] {
+  const wikiLinkRegex = /\[\[(.*?)\]\]/g;
+  const links: string[] = [];
+
+  let match;
+  while ((match = wikiLinkRegex.exec(content)) !== null) {
+    let link = match[1].trim();
+    if (!link) continue; // Skip empty matches
+
+    // Normalize: ensure .md extension
+    if (!link.endsWith('.md')) {
+      link += '.md';
+    }
+
+    links.push(link);
+  }
+
+  return links;
+}
+
+/**
+ * Get implicit parent links for a nested filepath
+ * e.g., "People/John.md" returns ["People.md"]
+ */
+function getImplicitPathLinks(filename: string): string[] {
+  const implicitLinks: string[] = [];
+
+  if (filename.includes('/')) {
+    const parts = filename.split('/');
+    // Create links to each parent level, from shallowest to deepest
+    for (let i = 1; i < parts.length; i++) {
+      const parentPath = parts.slice(0, i).join('/') + '.md';
+      implicitLinks.push(parentPath);
+    }
+  }
+
+  return implicitLinks;
+}
+
+/**
+ * Update graph for a changed file (efficient incremental update)
+ * This is called when an existing file is modified to update its outgoing links
+ * and handle any new wikilinks that were added
+ */
+export async function updateGraphForChangedFile(
+  vaultPath: string,
+  filename: string,
+  mainWindow: BrowserWindow
+): Promise<void> {
+  try {
+    // If we don't have a graph yet, skip (full indexing hasn't completed)
+    if (!lastGraph) {
+      safeDebug(`Skipping graph update for changed file ${filename}: graph not yet initialized`);
+      return;
+    }
+
+    const filePath = join(vaultPath, filename);
+
+    // Check if file exists before reading
+    try {
+      await fsp.access(filePath);
+    } catch {
+      safeDebug(`Skipping graph update for ${filename}: file does not exist`);
+      return;
+    }
+
+    const content = await readMarkdownFile(filePath, vaultPath);
+
+    // Extract wikilinks and implicit parent links from the changed file
+    const wikilinks = extractWikilinks(content);
+    const implicitLinks = getImplicitPathLinks(filename);
+    const allOutgoingLinks = [...new Set([...wikilinks, ...implicitLinks])];
+
+    // Get the old outgoing links for this file from the graph
+    const oldOutgoingLinks = lastGraph[filename] || [];
+
+    // Update the graph with the file's current outgoing links
+    lastGraph[filename] = allOutgoingLinks;
+
+    // Remove this file from backlinks of files it no longer references
+    for (const oldTarget of oldOutgoingLinks) {
+      if (!allOutgoingLinks.includes(oldTarget) && lastGraph[oldTarget]) {
+        lastGraph[oldTarget] = lastGraph[oldTarget].filter((f) => f !== filename);
+      }
+    }
+
+    // Add this file to backlinks of files it now references
+    for (const newTarget of allOutgoingLinks) {
+      if (!lastGraph[newTarget]) {
+        lastGraph[newTarget] = [];
+      }
+      // Add this file as an incoming link if not already present
+      if (!lastGraph[newTarget].includes(filename)) {
+        lastGraph[newTarget].push(filename);
+        lastGraph[newTarget].sort();
+      }
+    }
+
+    // Send updated graph to renderer
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('phosphor:graph-update', lastGraph);
+    }
+
+    try {
+      safeDebug(
+        `Updated graph for changed file ${filename}: ${allOutgoingLinks.length} outgoing links`
+      );
+    } catch {
+      // Silently ignore errors
+    }
+
+    // Persist the updated graph atomically
+    (async () => {
+      try {
+        const cacheDir = join(vaultPath, '.phosphor');
+        await fsp.mkdir(cacheDir, { recursive: true });
+        const tmpPath = join(cacheDir, 'graph.json.tmp');
+        const outPath = join(cacheDir, 'graph.json');
+        await fsp.writeFile(tmpPath, JSON.stringify(lastGraph), 'utf-8');
+        await fsp.rename(tmpPath, outPath);
+        safeDebug('Graph cache updated for changed file');
+      } catch (err) {
+        safeError('Failed to persist updated graph cache:', err);
+      }
+    })();
+  } catch (err) {
+    safeError(`Failed to update graph for changed file: ${filename}`, err);
+  }
+}
+
+/**
+ * Update graph for a single new file (efficient incremental update)
+ * This is called when a new file is created to avoid full re-indexing
+ */
+export async function updateGraphForFile(
+  vaultPath: string,
+  filename: string,
+  mainWindow: BrowserWindow
+): Promise<void> {
+  try {
+    // If we don't have a graph yet, skip (full indexing hasn't completed)
+    if (!lastGraph) {
+      safeDebug(`Skipping graph update for ${filename}: graph not yet initialized`);
+      return;
+    }
+
+    const filePath = join(vaultPath, filename);
+
+    // Check if file exists before reading
+    try {
+      await fsp.access(filePath);
+    } catch {
+      safeDebug(`Skipping graph update for ${filename}: file does not exist`);
+      return;
+    }
+
+    const content = await readMarkdownFile(filePath, vaultPath);
+
+    // Extract wikilinks and implicit parent links from the new file
+    const wikilinks = extractWikilinks(content);
+    const implicitLinks = getImplicitPathLinks(filename);
+    const allOutgoingLinks = [...new Set([...wikilinks, ...implicitLinks])];
+
+    // Update the graph with the new file's outgoing links
+    lastGraph[filename] = allOutgoingLinks;
+
+    // Update backlinks: add this file to the incoming links of files it references
+    for (const targetFile of allOutgoingLinks) {
+      if (!lastGraph[targetFile]) {
+        lastGraph[targetFile] = [];
+      }
+      // Add this file as an incoming link if not already present
+      if (!lastGraph[targetFile].includes(filename)) {
+        lastGraph[targetFile].push(filename);
+        lastGraph[targetFile].sort();
+      }
+    }
+
+    // Send updated graph to renderer
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('phosphor:graph-update', lastGraph);
+    }
+
+    try {
+      safeDebug(`Updated graph for ${filename}: ${allOutgoingLinks.length} outgoing links`);
+    } catch {
+      // Silently ignore errors
+    }
+
+    // Persist the updated graph atomically
+    (async () => {
+      try {
+        const cacheDir = join(vaultPath, '.phosphor');
+        await fsp.mkdir(cacheDir, { recursive: true });
+        const tmpPath = join(cacheDir, 'graph.json.tmp');
+        const outPath = join(cacheDir, 'graph.json');
+        await fsp.writeFile(tmpPath, JSON.stringify(lastGraph), 'utf-8');
+        await fsp.rename(tmpPath, outPath);
+        safeDebug('Graph cache updated');
+      } catch (err) {
+        safeError('Failed to persist updated graph cache:', err);
+      }
+    })();
+  } catch (err) {
+    safeError(`Failed to update graph for file: ${filename}`, err);
+  }
+}

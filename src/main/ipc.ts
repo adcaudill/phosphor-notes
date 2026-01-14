@@ -8,7 +8,9 @@ import {
   getLastGraph,
   getLastTasks,
   performSearch,
-  updateTasksForFile
+  updateTasksForFile,
+  updateGraphForFile,
+  updateGraphForChangedFile
 } from './indexer';
 import { setupWatcher, stopWatcher, markInternalSave } from './watcher';
 import { deriveMasterKey, encryptBuffer, decryptBuffer, isEncrypted, generateSalt } from './crypto';
@@ -829,10 +831,20 @@ export async function openVaultPath(vaultPath: string, mainWindow: BrowserWindow
 
   // Start file watcher for this vault
   try {
-    setupWatcher(vaultPath, mainWindow, (filename) => {
-      // Update tasks for only the changed file (efficient incremental update)
-      updateTasksForFile(vaultPath, filename, mainWindow);
-    });
+    setupWatcher(
+      vaultPath,
+      mainWindow,
+      (filename) => {
+        // Update tasks for only the changed file (efficient incremental update)
+        updateTasksForFile(vaultPath, filename, mainWindow);
+        // Also update graph for the changed file to catch new wikilinks
+        updateGraphForChangedFile(vaultPath, filename, mainWindow);
+      },
+      (filename) => {
+        // Update graph for newly added files (efficient incremental update)
+        updateGraphForFile(vaultPath, filename, mainWindow);
+      }
+    );
   } catch (err) {
     safeError('Failed to start watcher:', err);
   }
