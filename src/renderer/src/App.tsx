@@ -368,7 +368,8 @@ function AppContent(): React.JSX.Element {
       console.debug('handleFileSelect invoked for', filename);
       let noteContent = await window.phosphor.readNote(filename);
 
-      const { frontmatter } = extractFrontmatter(noteContent);
+      // Ensure frontmatter exists and capture mode/content
+      let { frontmatter, content: contentOnly } = extractFrontmatter(noteContent);
       if (!frontmatter) {
         console.debug('File missing frontmatter, adding default:', filename);
         const defaultFrontmatter = generateDefaultFrontmatter(
@@ -376,7 +377,19 @@ function AppContent(): React.JSX.Element {
           settings.defaultJournalMode
         );
         noteContent = defaultFrontmatter + '\n' + noteContent;
-        // Save the updated content with frontmatter
+        await window.phosphor.saveNote(filename, noteContent);
+
+        // Re-extract after adding frontmatter
+        const parts = extractFrontmatter(noteContent);
+        frontmatter = parts.frontmatter;
+        contentOnly = parts.content;
+      }
+
+      const isOutliner = frontmatter?.content?.mode === 'outliner';
+
+      // If outliner mode and content is empty, seed with a bullet
+      if (isOutliner && contentOnly.trim() === '') {
+        noteContent = `${frontmatter?.raw ?? ''}\n- `;
         await window.phosphor.saveNote(filename, noteContent);
       }
 
@@ -406,18 +419,26 @@ function AppContent(): React.JSX.Element {
       setCurrentFile(dailyNoteFilename);
       let noteContent = await window.phosphor.readNote(dailyNoteFilename);
 
-      // If it's a new file (empty) and in outliner mode, add initial bullet point
-      if (!noteContent) {
+      // Ensure frontmatter exists and capture mode/content
+      let { frontmatter, content: contentOnly } = extractFrontmatter(noteContent);
+      if (!frontmatter) {
         const defaultFrontmatter = generateDefaultFrontmatter(
           dailyNoteFilename,
           settings.defaultJournalMode
         );
-        if (settings.defaultJournalMode === 'outliner') {
-          noteContent = defaultFrontmatter + '\n- ';
-        } else {
-          noteContent = defaultFrontmatter + '\n';
-        }
-        // Save the initialized content
+        noteContent = defaultFrontmatter + '\n' + noteContent;
+        await window.phosphor.saveNote(dailyNoteFilename, noteContent);
+
+        const parts = extractFrontmatter(noteContent);
+        frontmatter = parts.frontmatter;
+        contentOnly = parts.content;
+      }
+
+      const isOutliner = frontmatter?.content?.mode === 'outliner';
+
+      // Seed empty outliner daily notes with a single bullet
+      if (isOutliner && contentOnly.trim() === '') {
+        noteContent = `${frontmatter?.raw ?? ''}\n- `;
         await window.phosphor.saveNote(dailyNoteFilename, noteContent);
       }
 

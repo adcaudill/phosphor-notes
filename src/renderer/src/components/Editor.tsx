@@ -14,7 +14,7 @@ import { typewriterScrollPlugin } from '../editor/extensions/typewriter';
 import { dimmingPlugin, suppressDimmingEffect } from '../editor/extensions/dimming';
 import { createGrammarLint } from '../editor/extensions/grammar';
 import { smartTypographyExtension } from '../editor/extensions/smartTypography';
-import { createOutlinerKeymap } from '../editor/extensions/outlinerKeymap';
+import { outlinerKeymapExtension } from '../editor/extensions/outlinerKeymap';
 import { createSearchExtension, createSearchAPI } from '../editor/extensions/search';
 import { useSettings } from '../hooks/useSettings';
 import { pdfWidgetPlugin } from '../editor/extensions/pdfWidget';
@@ -86,6 +86,14 @@ export const Editor: React.FC<EditorProps> = ({
     return frontmatter.content.mode === 'outliner';
   }, [frontmatter]);
 
+  // In outliner mode ensure we always start with at least one bullet
+  const initialContent = useMemo(() => {
+    if (isOutlinerMode && content.trim() === '') {
+      return '- ';
+    }
+    return content;
+  }, [content, isOutlinerMode]);
+
   // Update the frontmatter ref whenever extraction changes
   useEffect(() => {
     frontmatterRef.current = frontmatter;
@@ -119,13 +127,12 @@ export const Editor: React.FC<EditorProps> = ({
       } as KeyBinding
     ];
 
-    const finalKeymap = isOutlinerMode ? [...createOutlinerKeymap(), ...baseKeymap] : baseKeymap;
-
     // 1. Define the Initial State (use only the content, without frontmatter)
     const startState = EditorState.create({
-      doc: content,
+      doc: initialContent,
       extensions: [
-        keymap.of([...closeBracketsKeymap, ...finalKeymap]), // include close-brackets keymap first
+        keymap.of([...closeBracketsKeymap, ...baseKeymap]), // base keymap
+        ...(isOutlinerMode ? [outlinerKeymapExtension] : []), // high-precedence outliner keys
         EditorView.lineWrapping, // Soft wrap long lines
         markdown(), // Markdown syntax support
         markdownLanguage.data.of({
@@ -154,6 +161,17 @@ export const Editor: React.FC<EditorProps> = ({
 
         // 2. Listener for changes (call latest handler via ref, reconstruct with frontmatter)
         EditorView.updateListener.of((update) => {
+          // In outliner mode, do not allow an empty document — always keep a bullet present
+          if (isOutlinerMode && update.docChanged) {
+            const contentOnly = update.state.doc.toString();
+            if (contentOnly.trim() === '') {
+              update.view.dispatch({
+                changes: { from: 0, to: contentOnly.length, insert: '- ' }
+              });
+              return;
+            }
+          }
+
           if (update.docChanged) {
             try {
               const contentOnly = update.state.doc.toString();
@@ -297,6 +315,7 @@ export const Editor: React.FC<EditorProps> = ({
       view.destroy();
     };
   }, [
+    initialContent,
     content,
     enableDimming,
     isOutlinerMode,
@@ -314,16 +333,17 @@ export const Editor: React.FC<EditorProps> = ({
 
   // Handle external updates (e.g. clicking a different file in sidebar)
   useEffect(() => {
-    if (viewRef.current && content !== viewRef.current.state.doc.toString()) {
+    const nextContent = isOutlinerMode && content.trim() === '' ? '- ' : content;
+    if (viewRef.current && nextContent !== viewRef.current.state.doc.toString()) {
       viewRef.current.dispatch({
         changes: {
           from: 0,
           to: viewRef.current.state.doc.length,
-          insert: content
+          insert: nextContent
         }
       });
     }
-  }, [content]);
+  }, [content, isOutlinerMode]);
 
   // Notify parent about search panel visibility
   useEffect(() => {
