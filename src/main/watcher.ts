@@ -4,23 +4,23 @@ import { BrowserWindow } from 'electron';
 import * as path from 'path';
 
 // Safe logging that ignores EPIPE errors during shutdown
-const safeLog = (...args: unknown[]) => {
+const safeLog = (...args: unknown[]): void => {
   try {
-    console.log(...(args as any));
+    console.log(...args);
   } catch {
     // Ignore EPIPE errors that occur during shutdown
   }
 };
 
-const safeDebug = (...args: unknown[]) => {
+const safeDebug = (...args: unknown[]): void => {
   try {
-    console.debug(...(args as any));
+    console.debug(...args);
   } catch {
     // Ignore EPIPE errors that occur during shutdown
   }
 };
 
-const safeError = (msg: string, err?: unknown) => {
+const safeError = (msg: string, err?: unknown): void => {
   try {
     console.error(msg, err);
   } catch {
@@ -58,8 +58,8 @@ export function setupWatcher(
   }
 
   watcher = chokidar.watch(vaultPath, {
-    // Ignore dotfiles, system files, node_modules, and _assets (images)
-    ignored: /(^|[/\\])\.|\.DS_Store|node_modules|_assets/,
+    // Ignore dotfiles, system files, node_modules, _assets, and backups (.bak)
+    ignored: /(^|[/\\])\.|\.DS_Store|node_modules|_assets|\.bak$/,
     persistent: true,
     ignoreInitial: true, // Don't fire "add" for every file on startup
     awaitWriteFinish: {

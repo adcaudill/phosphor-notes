@@ -583,6 +583,41 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
     try {
       markInternalSave(); // Mark this as an internal save to avoid false conflict detection
 
+      // --- Backup guard: if new content is >10% smaller, copy existing file first
+      try {
+        const existingBuffer = await fsp.readFile(filePath);
+        let existingLength = existingBuffer.length;
+
+        // If encrypted, try to compare plaintext sizes for a better signal
+        if (activeMasterKey && isEncrypted(existingBuffer)) {
+          try {
+            const decrypted = decryptBuffer(existingBuffer, activeMasterKey);
+            existingLength = Buffer.byteLength(decrypted, 'utf-8');
+          } catch {
+            // Fall back to ciphertext size if decryption fails
+          }
+        } else {
+          existingLength = Buffer.byteLength(existingBuffer.toString('utf-8'), 'utf-8');
+        }
+
+        const nextLength = Buffer.byteLength(content, 'utf-8');
+        const isShrink = existingLength > 0 && nextLength < existingLength * 0.9;
+
+        if (isShrink) {
+          const parsed = path.parse(filePath);
+          const backupName = `${parsed.name}.${Date.now()}${parsed.ext}.bak`;
+          const backupPath = path.join(parsed.dir, backupName);
+          try {
+            await fsp.writeFile(backupPath, existingBuffer);
+            safeLog(`[Backup] Created ${backupName} before shrink-save`);
+          } catch (backupErr) {
+            safeWarn('[Backup] Failed to create shrink backup', backupErr);
+          }
+        }
+      } catch {
+        // If file does not exist or can't be read, skip backup
+      }
+
       // If encryption is enabled, encrypt the content before writing
       let buffer: Buffer;
       if (activeMasterKey) {

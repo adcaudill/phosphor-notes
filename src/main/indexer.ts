@@ -61,6 +61,7 @@ async function getFilesRecursively(dir: string): Promise<string[]> {
   const entries = await fsp.readdir(dir, { withFileTypes: true });
   for (const entry of entries) {
     if (entry.name.startsWith('.')) continue;
+    if (entry.name.endsWith('.bak')) continue; // Ignore backup files
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {
       files.push(...(await getFilesRecursively(fullPath)));
