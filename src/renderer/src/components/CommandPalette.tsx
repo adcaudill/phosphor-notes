@@ -17,11 +17,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
   // 1. Focus input when opened and reset state
   useEffect(() => {
     if (isOpen) {
-      setQuery('');
-      setResults([]);
-      setSelectedIndex(0);
-      // Focus after render (micro-task)
+      // Use queueMicrotask to defer state updates and avoid cascading renders
       queueMicrotask(() => {
+        setQuery('');
+        setResults([]);
+        setSelectedIndex(0);
         inputRef.current?.focus();
       });
     }
@@ -30,7 +30,10 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
   // 2. Handle Typing (Search)
   useEffect(() => {
     if (!query) {
-      setResults([]);
+      // Defer clearing results to avoid cascading renders
+      queueMicrotask(() => {
+        setResults([]);
+      });
       return;
     }
 
