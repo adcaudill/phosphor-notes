@@ -345,19 +345,22 @@ function AppContent(): React.JSX.Element {
   }, []);
 
   const handleContentChange = (newContent: string): void => {
-    // Note: We don't call setContent() here because the Editor manages its own state.
-    // Calling setContent() would update the initialDoc prop and reset CodeMirror state.
+    setContent(newContent); // keep UI (word count, status) aligned with editor text
+
+    if (skipSaveRef.current) return; // skip saving when content is being programmatically loaded
 
     setIsDirty(true); // Mark as having unsaved changes
-    if (skipSaveRef.current) return; // skip saving when content is being programmatically loaded
     if (currentFile) {
       if (debounceTimer.current) {
         window.clearTimeout(debounceTimer.current);
       }
-      debounceTimer.current = window.setTimeout(() => {
-        if (currentFile) {
-          window.phosphor.saveNote(currentFile, newContent);
+      debounceTimer.current = window.setTimeout(async () => {
+        if (!currentFile) return;
+        try {
+          await window.phosphor.saveNote(currentFile, newContent);
           setIsDirty(false); // Mark as saved
+        } catch (err) {
+          console.error('Failed to save note:', err);
         }
       }, 500) as unknown as number;
     }

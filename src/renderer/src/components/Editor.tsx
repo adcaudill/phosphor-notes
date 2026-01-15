@@ -314,9 +314,8 @@ export const Editor: React.FC<EditorProps> = ({
     return () => {
       view.destroy();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- omit initialContent to avoid remounting on every keystroke
   }, [
-    initialContent,
-    content,
     enableDimming,
     isOutlinerMode,
     settings.checkPassiveVoice,
@@ -329,7 +328,7 @@ export const Editor: React.FC<EditorProps> = ({
     settings.enableSmartTypography,
     currentFile,
     wikiPageSuggestions
-  ]); // Re-create editor when content, mode, or grammar settings change
+  ]); // Re-create editor when file, mode, or grammar settings change (intentionally omit content to avoid resets on every keystroke)
 
   // Handle external updates (e.g. clicking a different file in sidebar)
   useEffect(() => {
