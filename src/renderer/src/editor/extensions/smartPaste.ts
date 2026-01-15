@@ -9,6 +9,20 @@ const hasAssetFile = (items: DataTransferItemList | undefined): boolean => {
   });
 };
 
+const isValidUrl = (text: string): boolean => {
+  try {
+    new URL(text);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const hasSelection = (view: EditorView): boolean => {
+  const { from, to } = view.state.selection.main;
+  return from !== to;
+};
+
 export const smartPaste = EditorView.domEventHandlers({
   paste: (event, view) => {
     // If Shift key is held, allow default paste behavior; check safely for shiftKey.
@@ -20,10 +34,23 @@ export const smartPaste = EditorView.domEventHandlers({
     // Let the asset handler manage pasted files such as images or PDFs.
     if (hasAssetFile(clipboard.items)) return false;
 
+    const text = clipboard.getData('text/plain') || '';
+
+    // Paste URL over Text: If there's a selection and clipboard contains a URL,
+    // convert to a markdown link [selectedText](url)
+    if (hasSelection(view) && isValidUrl(text)) {
+      const selectedText = view.state.sliceDoc(
+        view.state.selection.main.from,
+        view.state.selection.main.to
+      );
+      const markdownLink = `[${selectedText}](${text})`;
+      event.preventDefault();
+      view.dispatch(view.state.replaceSelection(markdownLink));
+      return true;
+    }
+
     const html = clipboard.getData('text/html');
     if (!html) return false;
-
-    const text = clipboard.getData('text/plain') || '';
 
     try {
       const markdown = convertHtmlToMarkdown(html);
