@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Editor } from './components/Editor';
 import { Sidebar } from './components/Sidebar';
 import StatusBar from './components/StatusBar';
@@ -64,6 +64,13 @@ function AppContent(): React.JSX.Element {
   const [encryptionLoading, setEncryptionLoading] = useState(false); // Loading state for encryption operations
   const [isVaultEncrypted, setIsVaultEncrypted] = useState(false); // Whether current vault is encrypted
   const [isVaultUnlocked, setIsVaultUnlocked] = useState(false); // Whether vault is unlocked (only relevant if encrypted)
+  const wikiPageSuggestions = useMemo(() => {
+    const unique = new Set<string>();
+    Object.keys(graph).forEach((filename) => {
+      unique.add(filename.replace(/\.md$/, ''));
+    });
+    return Array.from(unique).sort((a, b) => a.localeCompare(b));
+  }, [graph]);
 
   // Apply color palette and theme to the document
   useEffect(() => {
@@ -689,6 +696,7 @@ function AppContent(): React.JSX.Element {
                       onLinkClick={handleLinkClick}
                       enableDimming={paragraphDimming}
                       currentFile={currentFile}
+                      wikiPageSuggestions={wikiPageSuggestions}
                     />
                   </>
                 ) : (

@@ -19,6 +19,7 @@ import { createSearchExtension, createSearchAPI } from '../editor/extensions/sea
 import { useSettings } from '../hooks/useSettings';
 import { pdfWidgetPlugin } from '../editor/extensions/pdfWidget';
 import { SearchPanel } from './SearchPanel';
+import { createWikiLinkAutocomplete } from '../editor/extensions/wikiLinkAutocomplete';
 import {
   extractFrontmatter,
   reconstructDocument,
@@ -54,6 +55,7 @@ interface EditorProps {
   enableDimming?: boolean;
   onSearchOpen?: (isOpen: boolean) => void;
   currentFile?: string | null;
+  wikiPageSuggestions?: string[];
 }
 
 export const Editor: React.FC<EditorProps> = ({
@@ -62,7 +64,8 @@ export const Editor: React.FC<EditorProps> = ({
   onLinkClick,
   enableDimming = false,
   onSearchOpen,
-  currentFile
+  currentFile,
+  wikiPageSuggestions = []
 }) => {
   const { settings } = useSettings();
   const editorRef = useRef<HTMLDivElement>(null);
@@ -145,6 +148,7 @@ export const Editor: React.FC<EditorProps> = ({
         }), // Grammar and style checking
         ...(enableDimming ? [dimmingPlugin] : []), // Paragraph dimming (optional)
         createSearchExtension(), // Search functionality
+        createWikiLinkAutocomplete(wikiPageSuggestions), // Autocomplete for wiki links
 
         // 2. Listener for changes (call latest handler via ref, reconstruct with frontmatter)
         EditorView.updateListener.of((update) => {
@@ -302,7 +306,8 @@ export const Editor: React.FC<EditorProps> = ({
     settings.checkCliches,
     settings.checkIntensify,
     settings.enableSmartTypography,
-    currentFile
+    currentFile,
+    wikiPageSuggestions
   ]); // Re-create editor when content, mode, or grammar settings change
 
   // Handle external updates (e.g. clicking a different file in sidebar)
