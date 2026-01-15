@@ -936,6 +936,22 @@ body {
   animation: fadeIn 0.15s ease;
 }
 
+.command-palette-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: calc(100vh / 3);
+  z-index: 1000;
+  animation: fadeIn 0.15s ease;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -971,7 +987,7 @@ body {
   }
 }
 
-.search-input {
+.command-palette-search-input {
   padding: var(--spacing-lg);
   border: none;
   font-size: var(--font-size-lg);
@@ -983,12 +999,12 @@ body {
   transition: border-color 0.15s ease;
 }
 
-.search-input::placeholder {
+.command-palette-search-input::placeholder {
   color: var(--color-text-secondary);
   font-weight: var(--font-weight-normal);
 }
 
-.search-input:focus {
+.command-palette-search-input:focus {
   outline: none;
   border-bottom-color: var(--color-primary);
 }
