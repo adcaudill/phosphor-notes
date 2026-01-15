@@ -18,6 +18,7 @@ import { createOutlinerKeymap } from '../editor/extensions/outlinerKeymap';
 import { createSearchExtension, createSearchAPI } from '../editor/extensions/search';
 import { useSettings } from '../hooks/useSettings';
 import { pdfWidgetPlugin } from '../editor/extensions/pdfWidget';
+import { smartPaste } from '../editor/extensions/smartPaste';
 import { SearchPanel } from './SearchPanel';
 import { createWikiLinkAutocomplete } from '../editor/extensions/wikiLinkAutocomplete';
 import {
@@ -149,6 +150,7 @@ export const Editor: React.FC<EditorProps> = ({
         ...(enableDimming ? [dimmingPlugin] : []), // Paragraph dimming (optional)
         createSearchExtension(), // Search functionality
         createWikiLinkAutocomplete(wikiPageSuggestions), // Autocomplete for wiki links
+        smartPaste,
 
         // 2. Listener for changes (call latest handler via ref, reconstruct with frontmatter)
         EditorView.updateListener.of((update) => {
