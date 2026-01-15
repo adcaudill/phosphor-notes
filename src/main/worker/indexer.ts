@@ -261,7 +261,7 @@ const initSearch = (): void => {
 
   searchEngine = new MiniSearchCtor({
     fields: ['title', 'content', 'tags'],
-    storeFields: ['title', 'filename', 'tags'],
+    storeFields: ['title', 'filename', 'tags', 'content'],
     searchOptions: {
       boost: { title: 2, tags: 1.5 },
       fuzzy: 0.2
@@ -291,9 +291,40 @@ parentPort?.on(
         return;
       }
       const results = searchEngine.search(searchMsg.query, { prefix: true });
+
+      // Generate snippets from content
+      const resultsWithSnippets = results.slice(0, 20).map((result: Record<string, unknown>) => {
+        const content = typeof result.content === 'string' ? result.content : '';
+        // Find the first line containing the search query (case-insensitive)
+        const lines = content.split('\n').filter((line) => line.trim().length > 0);
+        let snippet = '';
+
+        for (const line of lines) {
+          if (line.toLowerCase().includes(searchMsg.query.toLowerCase())) {
+            // Extract first 100 chars and clean up
+            snippet = line.substring(0, 120).trim();
+            if (snippet.length === 120) snippet += '…';
+            break;
+          }
+        }
+
+        // If no match found in content but title matched, use first non-empty line
+        if (!snippet && lines.length > 0) {
+          snippet = lines[0].substring(0, 120).trim();
+          if (snippet.length === 120) snippet += '…';
+        }
+
+        return {
+          id: result.id,
+          title: result.title,
+          filename: result.filename,
+          snippet: snippet
+        };
+      });
+
       parentPort?.postMessage({
         type: 'search-results',
-        data: results.slice(0, 20)
+        data: resultsWithSnippets
       });
       return;
     }

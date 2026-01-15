@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SearchResult } from '../../../types/phosphor';
+
+interface SearchResult {
+  id: string;
+  title: string;
+  filename: string;
+  snippet?: string;
+}
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -114,6 +120,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
                 }}
               >
                 <div className="result-title">{res.title}</div>
+                {res.snippet && <div className="result-snippet">{res.snippet}</div>}
               </li>
             ))}
         </ul>
