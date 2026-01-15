@@ -9,7 +9,8 @@ import {
   getLastTasks,
   performSearch,
   updateTasksForFile,
-  updateGraphForFile
+  updateGraphForFile,
+  updateGraphForChangedFile
 } from './indexer';
 import { setupWatcher, stopWatcher, markInternalSave } from './watcher';
 import { deriveMasterKey, encryptBuffer, decryptBuffer, isEncrypted, generateSalt } from './crypto';
@@ -468,11 +469,30 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
     if (!activeVaultPath || !mainWindow) {
       return;
     }
+
+    const normalize = (name: string): string => {
+      const trimmed = (name || '').trim();
+      if (!trimmed) return '';
+      return trimmed.endsWith('.md') ? trimmed : `${trimmed}.md`;
+    };
+
+    const normalizedSource = normalize(sourceFile);
+    const normalizedTarget = normalize(targetFile);
+
+    if (!normalizedSource) {
+      safeWarn('Wikilink click received with empty source filename');
+      return;
+    }
+
     try {
-      // First update the source file (where the wikilink was clicked) to capture the relationship
-      await updateGraphForFile(activeVaultPath, sourceFile, mainWindow);
-      // Then update the target file to capture any relationships it might have
-      await updateGraphForFile(activeVaultPath, targetFile, mainWindow);
+      // Refresh tasks and graph for the file the user just edited
+      await updateTasksForFile(activeVaultPath, normalizedSource, mainWindow);
+      await updateGraphForChangedFile(activeVaultPath, normalizedSource, mainWindow);
+
+      // If the target exists (or will exist), make sure its backlinks are recorded
+      if (normalizedTarget) {
+        await updateGraphForFile(activeVaultPath, normalizedTarget, mainWindow);
+      }
     } catch (err) {
       safeError('Failed to update graph for wikilink:', err);
     }

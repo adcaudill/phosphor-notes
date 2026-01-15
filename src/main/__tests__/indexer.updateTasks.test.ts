@@ -12,6 +12,12 @@ describe('indexer.updateTasksForFile', () => {
     // Mock electron app.getPath used by ipc module (import-time)
     vi.doMock('electron', () => ({ app: { getPath: () => '/tmp' } }));
 
+    // Mock encryption helpers so readMarkdownFile treats files as unencrypted
+    vi.doMock('../ipc', () => ({
+      isEncryptionEnabled: vi.fn().mockResolvedValue(false),
+      getActiveMasterKey: vi.fn(() => null)
+    }));
+
     // Mock fs.promises.readFile used in indexer (indexer imports { promises as fsp } from 'fs')
     const fspMock = {
       readFile: vi.fn().mockResolvedValue(sample)
@@ -38,6 +44,13 @@ describe('indexer.updateTasksForFile', () => {
     const secondContent = `- [ ] two\n- [ ] three\n`;
 
     const fspMock = { readFile: vi.fn() } as any;
+
+    vi.doMock('electron', () => ({ app: { getPath: () => '/tmp' } }));
+
+    vi.doMock('../ipc', () => ({
+      isEncryptionEnabled: vi.fn().mockResolvedValue(false),
+      getActiveMasterKey: vi.fn(() => null)
+    }));
 
     // First call returns firstContent, second call returns secondContent
     fspMock.readFile.mockResolvedValueOnce(firstContent).mockResolvedValueOnce(secondContent);

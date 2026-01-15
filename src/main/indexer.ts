@@ -388,7 +388,8 @@ export async function updateTasksForFile(
 ): Promise<void> {
   try {
     const filePath = join(vaultPath, filename);
-    const content = await fsp.readFile(filePath, 'utf-8');
+    // Use shared reader so encrypted vaults are handled the same way as the worker
+    const content = await readMarkdownFile(filePath, vaultPath);
 
     // Extract tasks from this file using the same regex as the worker
     const taskRegex = /^\s*-\s*\[([ x/])\]\s*(.*?)$/gm;
