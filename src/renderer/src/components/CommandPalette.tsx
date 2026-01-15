@@ -19,6 +19,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceTimer = useRef<number | null>(null);
+  const resultItemsRef = useRef<(HTMLLIElement | null)[]>([]);
 
   // 1. Focus input when opened and reset state
   useEffect(() => {
@@ -65,7 +66,17 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
     };
   }, [query]);
 
-  // 3. Handle Keyboard Navigation
+  // 3. Auto-scroll selected item into view
+  useEffect(() => {
+    if (resultItemsRef.current[selectedIndex]) {
+      resultItemsRef.current[selectedIndex]?.scrollIntoView({
+        block: 'nearest',
+        behavior: 'smooth'
+      });
+    }
+  }, [selectedIndex]);
+
+  // 4. Handle Keyboard Navigation
   const handleKeyDown = (e: React.KeyboardEvent): void => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -108,6 +119,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
           {results &&
             results.map((res, i) => (
               <li
+                ref={(el) => {
+                  resultItemsRef.current[i] = el;
+                }}
                 key={res.id}
                 className={i === selectedIndex ? 'result-item selected' : 'result-item'}
                 onClick={() => {
