@@ -969,6 +969,172 @@ body {
 }
 
 /* ============================================
+   ADMONITION / CALLOUT STYLING
+   ============================================ */
+
+.cm-admonition-marker {
+  /* Marker carries styling information via :has() selector on parent line */
+}
+
+/* Style the entire line based on the presence of the admonition marker */
+.cm-line:has(.cm-admonition-marker-note) {
+  background-color: rgba(59, 130, 246, 0.1);
+  border-left: 4px solid #3b82f6;
+  color: #1e40af;
+}
+
+.cm-line:has(.cm-admonition-marker-tip) {
+  background-color: rgba(16, 185, 129, 0.1);
+  border-left: 4px solid #10b981;
+  color: #065f46;
+}
+
+.cm-line:has(.cm-admonition-marker-info) {
+  background-color: rgba(59, 130, 246, 0.1);
+  border-left: 4px solid #3b82f6;
+  color: #1e40af;
+}
+
+.cm-line:has(.cm-admonition-marker-warning) {
+  background-color: rgba(245, 158, 11, 0.1);
+  border-left: 4px solid #f59e0b;
+  color: #92400e;
+}
+
+.cm-line:has(.cm-admonition-marker-danger) {
+  background-color: rgba(239, 68, 68, 0.1);
+  border-left: 4px solid #ef4444;
+  color: #7f1d1d;
+}
+
+.cm-line:has(.cm-admonition-marker-caution) {
+  background-color: rgba(239, 68, 68, 0.1);
+  border-left: 4px solid #ef4444;
+  color: #7f1d1d;
+}
+
+.cm-line:has(.cm-admonition-marker-bug) {
+  background-color: rgba(236, 72, 153, 0.1);
+  border-left: 4px solid #ec4899;
+  color: #831843;
+}
+
+.cm-line:has(.cm-admonition-marker-example) {
+  background-color: rgba(168, 85, 247, 0.1);
+  border-left: 4px solid #a855f7;
+  color: #5b21b6;
+}
+
+.cm-line:has(.cm-admonition-marker-quote) {
+  background-color: rgba(107, 114, 128, 0.1);
+  border-left: 4px solid #6b7280;
+  color: #374151;
+}
+
+/* Continuation lines */
+.cm-line:has(.cm-admonition-cont-marker-note) {
+  background-color: rgba(59, 130, 246, 0.1);
+  border-left: 4px solid #3b82f6;
+  color: #1e40af;
+}
+
+.cm-line:has(.cm-admonition-cont-marker-tip) {
+  background-color: rgba(16, 185, 129, 0.1);
+  border-left: 4px solid #10b981;
+  color: #065f46;
+}
+
+.cm-line:has(.cm-admonition-cont-marker-info) {
+  background-color: rgba(59, 130, 246, 0.1);
+  border-left: 4px solid #3b82f6;
+  color: #1e40af;
+}
+
+.cm-line:has(.cm-admonition-cont-marker-warning) {
+  background-color: rgba(245, 158, 11, 0.1);
+  border-left: 4px solid #f59e0b;
+  color: #92400e;
+}
+
+.cm-line:has(.cm-admonition-cont-marker-danger) {
+  background-color: rgba(239, 68, 68, 0.1);
+  border-left: 4px solid #ef4444;
+  color: #7f1d1d;
+}
+
+.cm-line:has(.cm-admonition-cont-marker-caution) {
+  background-color: rgba(239, 68, 68, 0.1);
+  border-left: 4px solid #ef4444;
+  color: #7f1d1d;
+}
+
+.cm-line:has(.cm-admonition-cont-marker-bug) {
+  background-color: rgba(236, 72, 153, 0.1);
+  border-left: 4px solid #ec4899;
+  color: #831843;
+}
+
+.cm-line:has(.cm-admonition-cont-marker-example) {
+  background-color: rgba(168, 85, 247, 0.1);
+  border-left: 4px solid #a855f7;
+  color: #5b21b6;
+}
+
+.cm-line:has(.cm-admonition-cont-marker-quote) {
+  background-color: rgba(107, 114, 128, 0.1);
+  border-left: 4px solid #6b7280;
+  color: #374151;
+}
+
+@media (prefers-color-scheme: dark) {
+  .cm-line:has(.cm-admonition-marker-note),
+  .cm-line:has(.cm-admonition-cont-marker-note),
+  .cm-line:has(.cm-admonition-marker-info),
+  .cm-line:has(.cm-admonition-cont-marker-info) {
+    background-color: rgba(59, 130, 246, 0.15);
+    color: #93c5fd;
+  }
+
+  .cm-line:has(.cm-admonition-marker-tip),
+  .cm-line:has(.cm-admonition-cont-marker-tip) {
+    background-color: rgba(16, 185, 129, 0.15);
+    color: #86efac;
+  }
+
+  .cm-line:has(.cm-admonition-marker-warning),
+  .cm-line:has(.cm-admonition-cont-marker-warning) {
+    background-color: rgba(245, 158, 11, 0.15);
+    color: #fcd34d;
+  }
+
+  .cm-line:has(.cm-admonition-marker-danger),
+  .cm-line:has(.cm-admonition-cont-marker-danger),
+  .cm-line:has(.cm-admonition-marker-caution),
+  .cm-line:has(.cm-admonition-cont-marker-caution) {
+    background-color: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
+  }
+
+  .cm-line:has(.cm-admonition-marker-bug),
+  .cm-line:has(.cm-admonition-cont-marker-bug) {
+    background-color: rgba(236, 72, 153, 0.15);
+    color: #f472b6;
+  }
+
+  .cm-line:has(.cm-admonition-marker-example),
+  .cm-line:has(.cm-admonition-cont-marker-example) {
+    background-color: rgba(168, 85, 247, 0.15);
+    color: #d8b4fe;
+  }
+
+  .cm-line:has(.cm-admonition-marker-quote),
+  .cm-line:has(.cm-admonition-cont-marker-quote) {
+    background-color: rgba(107, 114, 128, 0.15);
+    color: #d1d5db;
+  }
+}
+
+/* ============================================
    FRONTMATTER WIDGET
    ============================================ */
 

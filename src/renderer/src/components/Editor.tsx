@@ -12,6 +12,7 @@ import { wikiLinkHoverTooltip } from '../editor/extensions/wikiLinkPreview';
 import { imagePreviewPlugin } from '../editor/extensions/imagePreview';
 import { taskCheckboxPlugin, cycleTaskStatus } from '../editor/extensions/taskCheckbox';
 import { dateIndicatorPlugin } from '../editor/extensions/dateIndicator';
+import { admonitionWidget } from '../editor/extensions/admonitionWidget';
 import { typewriterScrollPlugin } from '../editor/extensions/typewriter';
 import { dimmingPlugin, suppressDimmingEffect } from '../editor/extensions/dimming';
 import { createGrammarLint } from '../editor/extensions/grammar';
@@ -148,6 +149,7 @@ export const Editor: React.FC<EditorProps> = ({
         syntaxHighlighting(darkModeHighlightStyle), // Use custom dark mode colors
         taskCheckboxPlugin, // Task checkboxes
         dateIndicatorPlugin, // Date pill indicators
+        admonitionWidget, // Admonition/Callout rendering
         typewriterScrollPlugin, // Typewriter scrolling (cursor centered)
         createGrammarLint({
           checkPassiveVoice: settings.checkPassiveVoice,
