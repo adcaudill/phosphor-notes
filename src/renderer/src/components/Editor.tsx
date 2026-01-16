@@ -20,7 +20,7 @@ import { createSearchExtension, createSearchAPI } from '../editor/extensions/sea
 import { useSettings } from '../hooks/useSettings';
 import { pdfWidgetPlugin } from '../editor/extensions/pdfWidget';
 import { smartPaste } from '../editor/extensions/smartPaste';
-import { getURLAtPosition, urlPlugin } from '../editor/extensions/urlHandler';
+import { getURLAtPosition, urlExtensions } from '../editor/extensions/urlHandler';
 import { SearchPanel } from './SearchPanel';
 import { createWikiLinkAutocomplete } from '../editor/extensions/wikiLinkAutocomplete';
 import {
@@ -159,7 +159,7 @@ export const Editor: React.FC<EditorProps> = ({
         ...(enableDimming ? [dimmingPlugin] : []), // Paragraph dimming (optional)
         createSearchExtension(), // Search functionality
         createWikiLinkAutocomplete(wikiPageSuggestions), // Autocomplete for wiki links
-        urlPlugin, // URL detection and styling
+        ...urlExtensions, // URL detection, styling, and tooltips
         smartPaste,
 
         // 2. Listener for changes (call latest handler via ref, reconstruct with frontmatter)
@@ -204,6 +204,16 @@ export const Editor: React.FC<EditorProps> = ({
               textDecorationStyle: 'solid',
               cursor: 'pointer',
               color: '#60a5fa'
+            },
+            '.cm-url-tooltip': {
+              backgroundColor: '#1f2937',
+              border: '1px solid #4b5563',
+              borderRadius: '4px',
+              color: '#e5e7eb',
+              padding: '4px 8px',
+              fontSize: '12px',
+              fontFamily: "Menlo, Monaco, 'Courier New', monospace",
+              whiteSpace: 'nowrap'
             }
           },
           { dark: true }
