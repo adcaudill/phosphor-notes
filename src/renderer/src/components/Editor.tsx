@@ -7,6 +7,7 @@ import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { syntaxHighlighting, HighlightStyle } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
 import { wikiLinkPlugin } from '../editor/extensions/wikiLinks';
+import { wikiLinkHoverTooltip } from '../editor/extensions/wikiLinkPreview';
 import { imagePreviewPlugin } from '../editor/extensions/imagePreview';
 import { taskCheckboxPlugin, cycleTaskStatus } from '../editor/extensions/taskCheckbox';
 import { dateIndicatorPlugin } from '../editor/extensions/dateIndicator';
@@ -200,6 +201,7 @@ export const Editor: React.FC<EditorProps> = ({
         ),
         // Wiki link plugin and click handler
         wikiLinkPlugin,
+        wikiLinkHoverTooltip, // Wiki link hover previews
         imagePreviewPlugin,
         pdfWidgetPlugin,
         EditorView.domEventHandlers({
