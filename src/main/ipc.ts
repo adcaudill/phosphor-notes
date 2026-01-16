@@ -518,6 +518,20 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
     });
   });
 
+  // URL opening handler - opens URLs in the default browser
+  ipcMain.handle('url:open', async (_, urlString: string) => {
+    try {
+      // Validate that the URL starts with a protocol
+      if (!/^(https?:\/\/|ftp:\/\/)/.test(urlString)) {
+        throw new Error('Invalid URL - must start with http://, https://, or ftp://');
+      }
+      await shell.openExternal(urlString);
+    } catch (error) {
+      safeError('Failed to open URL:', error);
+      throw error;
+    }
+  });
+
   // 2. Read Note
   ipcMain.handle('note:read', async (_, filename: string) => {
     if (!activeVaultPath) throw new Error('No vault selected');

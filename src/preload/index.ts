@@ -95,6 +95,9 @@ const api = {
   notifyWikilinkClicked: (sourceFile: string, targetFile: string) =>
     ipcRenderer.invoke('graph:wikilink-clicked', sourceFile, targetFile),
 
+  // URL opening - opens URLs in the default browser
+  openURL: (url: string) => ipcRenderer.invoke('url:open', url),
+
   // Tasks API
   getTaskIndex: () => ipcRenderer.invoke('tasks:get'),
   onTasksUpdate: (cb: (tasks: Task[]) => void) => {

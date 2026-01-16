@@ -20,6 +20,7 @@ import { createSearchExtension, createSearchAPI } from '../editor/extensions/sea
 import { useSettings } from '../hooks/useSettings';
 import { pdfWidgetPlugin } from '../editor/extensions/pdfWidget';
 import { smartPaste } from '../editor/extensions/smartPaste';
+import { getURLAtPosition, urlPlugin } from '../editor/extensions/urlHandler';
 import { SearchPanel } from './SearchPanel';
 import { createWikiLinkAutocomplete } from '../editor/extensions/wikiLinkAutocomplete';
 import {
@@ -158,6 +159,7 @@ export const Editor: React.FC<EditorProps> = ({
         ...(enableDimming ? [dimmingPlugin] : []), // Paragraph dimming (optional)
         createSearchExtension(), // Search functionality
         createWikiLinkAutocomplete(wikiPageSuggestions), // Autocomplete for wiki links
+        urlPlugin, // URL detection and styling
         smartPaste,
 
         // 2. Listener for changes (call latest handler via ref, reconstruct with frontmatter)
@@ -195,7 +197,14 @@ export const Editor: React.FC<EditorProps> = ({
               margin: '0 auto',
               padding: '40px'
             },
-            '&.cm-focused': { outline: 'none' }
+            '&.cm-focused': { outline: 'none' },
+            '.cm-url-underline': {
+              textDecoration: 'underline',
+              textDecorationColor: '#60a5fa',
+              textDecorationStyle: 'solid',
+              cursor: 'pointer',
+              color: '#60a5fa'
+            }
           },
           { dark: true }
         ),
@@ -284,6 +293,25 @@ export const Editor: React.FC<EditorProps> = ({
                   }
                   onLinkClickRef.current(linkTarget);
                   return true;
+                }
+              }
+
+              // Handle URL clicks with Cmd/Ctrl+Click
+              const isModifierClick = event.metaKey || event.ctrlKey;
+              if (isModifierClick && viewRef.current) {
+                const pos = viewRef.current.posAtCoords({
+                  x: event.clientX,
+                  y: event.clientY
+                });
+                if (pos !== null) {
+                  const url = getURLAtPosition(viewRef.current, pos);
+                  if (url) {
+                    event.preventDefault();
+                    window.phosphor
+                      .openURL(url)
+                      .catch((err) => console.error('Failed to open URL:', err));
+                    return true;
+                  }
                 }
               }
             } catch (err) {

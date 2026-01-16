@@ -39,6 +39,7 @@ export interface PhosphorAPI {
   ) => Promise<Array<{ id: string; title: string; filename: string; snippet?: string }>>;
   notifyWikilinkClicked: (sourceFile: string, targetFile: string) => Promise<void>;
   deleteNote: (filename: string) => Promise<boolean>;
+  openURL: (url: string) => Promise<void>;
 
   // Encryption
   isEncryptionEnabled: () => Promise<boolean>;
