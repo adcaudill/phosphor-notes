@@ -608,6 +608,34 @@ body {
   color: var(--color-text-secondary);
 }
 
+/* Folding gutter (CodeMirror fold markers) */
+.cm-foldGutter {
+  width: 28px;
+}
+
+.cm-foldGutter .cm-gutterElement {
+  padding: 0 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+}
+
+.cm-foldGutter .cm-gutterElement::after {
+  content: '▾';
+  font-size: 12px;
+  line-height: 1;
+  transition: transform 120ms ease;
+  opacity: 0.9;
+}
+
+.cm-foldGutter .cm-gutterElement.folded::after,
+.cm-foldGutter .cm-gutterElement.cm-folded::after {
+  transform: rotate(-90deg);
+  content: '▸';
+}
+
 .cm-activeLineGutter {
   background-color: rgba(var(--color-primary-rgb), 0.1);
 }

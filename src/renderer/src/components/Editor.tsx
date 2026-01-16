@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, KeyBinding } from '@codemirror/view';
+import { foldGutter, foldKeymap } from '@codemirror/language';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
@@ -133,10 +134,11 @@ export const Editor: React.FC<EditorProps> = ({
     const startState = EditorState.create({
       doc: initialContent,
       extensions: [
-        keymap.of([...closeBracketsKeymap, ...baseKeymap]), // base keymap
+        keymap.of([...closeBracketsKeymap, ...baseKeymap, ...foldKeymap]), // base keymap + folding
         ...(isOutlinerMode ? [outlinerKeymapExtension] : []), // high-precedence outliner keys
         EditorView.lineWrapping, // Soft wrap long lines
         markdown(), // Markdown syntax support
+        foldGutter(),
         markdownLanguage.data.of({
           closeBrackets: { brackets: ['(', '[', '{', '`', '```', '*', '_'] }
         }),
