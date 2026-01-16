@@ -1,4 +1,4 @@
-import { EditorView } from '@codemirror/view';
+import { EditorView, ViewPlugin, ViewUpdate } from '@codemirror/view';
 import type { EditorState, Extension } from '@codemirror/state';
 
 interface Replacement {
@@ -76,17 +76,28 @@ function maybeHandleSymbols(
   to: number,
   text: string
 ): Replacement | null {
-  if (text !== ')') return null;
-  const prevThree = state.sliceDoc(Math.max(0, from - 3), from).toLowerCase();
-  if (prevThree.endsWith('(c')) {
-    return { from: from - 2, to, insert: '©' };
+  if (text.length !== 1) return null;
+
+  const patternMap: Array<{ key: string; symbol: string }> = [
+    { key: '(c)', symbol: '©' },
+    { key: '(r)', symbol: '®' },
+    { key: '(tm)', symbol: '™' }
+  ];
+
+  for (const { key, symbol } of patternMap) {
+    const patternLen = key.length;
+
+    // Typed char completes the pattern (e.g., typing ')')
+    const startWithChar = from - (patternLen - 1);
+    if (startWithChar >= 0) {
+      const tailWithChar = (state.sliceDoc(startWithChar, from) + text).toLowerCase();
+      if (tailWithChar === key) {
+        const suffix = text === ')' ? '' : text;
+        return { from: startWithChar, to, insert: `${symbol}${suffix}` };
+      }
+    }
   }
-  if (prevThree.endsWith('(r')) {
-    return { from: from - 2, to, insert: '®' };
-  }
-  if (prevThree.endsWith('(tm')) {
-    return { from: from - 3, to, insert: '™' };
-  }
+
   return null;
 }
 
@@ -108,8 +119,26 @@ function maybeHandleQuotes(
   return { from, to, insert: replacement };
 }
 
+function findSymbolBeforeCursor(state: EditorState, pos: number): Replacement | null {
+  const tail = state.sliceDoc(Math.max(0, pos - 5), pos).toLowerCase();
+  const patternMap: Array<{ key: string; symbol: string }> = [
+    { key: '(c)', symbol: '©' },
+    { key: '(r)', symbol: '®' },
+    { key: '(tm)', symbol: '™' }
+  ];
+
+  for (const { key, symbol } of patternMap) {
+    if (!tail.endsWith(key)) continue;
+    const start = pos - key.length;
+    if (start < 0) return null;
+    return { from: start, to: pos, insert: symbol };
+  }
+
+  return null;
+}
+
 export function smartTypographyExtension(): Extension {
-  return EditorView.inputHandler.of((view, from, to, text) => {
+  const inputHandler = EditorView.inputHandler.of((view, from, to, text) => {
     if (!text || isInsideCode(view.state, from)) {
       return false;
     }
@@ -135,4 +164,23 @@ export function smartTypographyExtension(): Extension {
     });
     return true;
   });
+
+  const symbolOnMove = ViewPlugin.fromClass(
+    class {
+      update(update: ViewUpdate): void {
+        if (!update.selectionSet && !update.docChanged) return;
+        const pos = update.state.selection.main.head;
+        if (isInsideCode(update.state, pos)) return;
+        const replacement = findSymbolBeforeCursor(update.state, pos);
+        if (!replacement) return;
+
+        update.view.dispatch({
+          changes: { from: replacement.from, to: replacement.to, insert: replacement.insert },
+          selection: { anchor: replacement.from + replacement.insert.length }
+        });
+      }
+    }
+  );
+
+  return [inputHandler, symbolOnMove];
 }

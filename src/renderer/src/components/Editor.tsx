@@ -138,9 +138,9 @@ export const Editor: React.FC<EditorProps> = ({
         EditorView.lineWrapping, // Soft wrap long lines
         markdown(), // Markdown syntax support
         markdownLanguage.data.of({
-          closeBrackets: { brackets: ['[', '{', '`', '```', '*', '**', '_', '__'] }
+          closeBrackets: { brackets: ['(', '[', '{', '`', '```', '*', '_'] }
         }),
-        closeBrackets(), // Automatic bracket closing
+        closeBrackets(), // Automatic bracket closing; brackets configured via markdownLanguage data
         ...(settings.enableSmartTypography ? [smartTypographyExtension()] : []), // Smart quotes/dashes/symbols
         history(), // Undo/Redo stack
         syntaxHighlighting(darkModeHighlightStyle), // Use custom dark mode colors
