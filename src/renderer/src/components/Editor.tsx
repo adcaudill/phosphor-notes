@@ -32,24 +32,24 @@ import {
 
 // Dark mode highlight style with proper color contrast
 const darkModeHighlightStyle = HighlightStyle.define([
-  { tag: t.heading, color: '#60a5fa', fontWeight: 'bold' },
-  { tag: t.heading1, color: '#60a5fa', fontWeight: 'bold' },
-  { tag: t.heading2, color: '#60a5fa', fontWeight: 'bold' },
-  { tag: t.heading3, color: '#60a5fa', fontWeight: 'bold' },
-  { tag: t.processingInstruction, color: '#b0b0b0' }, // For --- and similar
-  { tag: t.punctuation, color: '#b0b0b0' },
-  { tag: t.quote, color: '#78716c', fontStyle: 'italic' },
-  { tag: t.link, color: '#60a5fa' },
-  { tag: t.url, color: '#4ade80' },
-  { tag: t.emphasis, color: '#ecf0f1', fontStyle: 'italic' },
-  { tag: t.strong, color: '#ecf0f1', fontWeight: 'bold' },
-  { tag: t.strikethrough, color: '#6b7280', textDecoration: 'line-through' },
-  { tag: t.meta, color: '#b0b0b0' },
-  { tag: t.comment, color: '#6b7280', fontStyle: 'italic' },
-  { tag: t.atom, color: '#b0b0b0' },
-  { tag: t.keyword, color: '#b0b0b0' },
-  { tag: t.string, color: '#f87171' },
-  { tag: t.variableName, color: '#ecf0f1' }
+  { tag: t.heading, color: 'var(--editor-link)', fontWeight: 'bold' },
+  { tag: t.heading1, color: 'var(--editor-link)', fontWeight: 'bold' },
+  { tag: t.heading2, color: 'var(--editor-link)', fontWeight: 'bold' },
+  { tag: t.heading3, color: 'var(--editor-link)', fontWeight: 'bold' },
+  { tag: t.processingInstruction, color: 'var(--editor-muted)' }, // For --- and similar
+  { tag: t.punctuation, color: 'var(--editor-muted)' },
+  { tag: t.quote, color: 'var(--editor-quote)', fontStyle: 'italic' },
+  { tag: t.link, color: 'var(--editor-link)' },
+  { tag: t.url, color: 'var(--editor-url)' },
+  { tag: t.emphasis, color: 'var(--editor-emphasis)', fontStyle: 'italic' },
+  { tag: t.strong, color: 'var(--editor-emphasis)', fontWeight: 'bold' },
+  { tag: t.strikethrough, color: 'var(--editor-strike)', textDecoration: 'line-through' },
+  { tag: t.meta, color: 'var(--editor-muted)' },
+  { tag: t.comment, color: 'var(--editor-strike)', fontStyle: 'italic' },
+  { tag: t.atom, color: 'var(--editor-muted)' },
+  { tag: t.keyword, color: 'var(--editor-muted)' },
+  { tag: t.string, color: 'var(--editor-string)' },
+  { tag: t.variableName, color: 'var(--editor-emphasis)' }
 ]);
 
 interface EditorProps {
@@ -192,9 +192,9 @@ export const Editor: React.FC<EditorProps> = ({
         EditorView.theme(
           {
             '&': { height: '100%', fontSize: '16px' },
-            '.cm-scroller': { fontFamily: "Menlo, Monaco, 'Courier New', monospace" },
+            '.cm-scroller': { fontFamily: 'var(--font-editor)' },
             '.cm-content': {
-              caretColor: '#569cd6',
+              caretColor: 'var(--editor-caret)',
               maxWidth: '800px',
               margin: '0 auto',
               padding: '40px'
@@ -202,19 +202,19 @@ export const Editor: React.FC<EditorProps> = ({
             '&.cm-focused': { outline: 'none' },
             '.cm-url-underline': {
               textDecoration: 'underline',
-              textDecorationColor: '#60a5fa',
+              textDecorationColor: 'var(--editor-link)',
               textDecorationStyle: 'solid',
               cursor: 'pointer',
-              color: '#60a5fa'
+              color: 'var(--editor-link)'
             },
             '.cm-url-tooltip': {
-              backgroundColor: '#1f2937',
-              border: '1px solid #4b5563',
+              backgroundColor: 'var(--editor-tooltip-bg)',
+              border: '1px solid var(--editor-tooltip-border)',
               borderRadius: '4px',
-              color: '#e5e7eb',
+              color: 'var(--editor-tooltip-text)',
               padding: '4px 8px',
               fontSize: '12px',
-              fontFamily: "Menlo, Monaco, 'Courier New', monospace",
+              fontFamily: 'var(--font-editor)',
               whiteSpace: 'nowrap'
             }
           },
