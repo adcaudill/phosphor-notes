@@ -73,7 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (viewMode !== 'editor' && onEditorClick) {
       onEditorClick();
     }
-    
+
     onFileSelect(file);
 
     // Fade back in

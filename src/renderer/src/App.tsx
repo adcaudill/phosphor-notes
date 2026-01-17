@@ -42,6 +42,8 @@ function AppContent(): React.JSX.Element {
   const [content, setContent] = useState('');
   const [vaultName, setVaultName] = useState<string | null>(null);
   const [currentFile, setCurrentFile] = useState<string | null>(null);
+  const [fileHistory, setFileHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState<number>(-1);
   const [filesVersion, setFilesVersion] = useState<number>(0);
   const debounceTimer = useRef<number | null>(null);
   const [graph, setGraph] = useState<Record<string, string[]>>({});
@@ -404,6 +406,14 @@ function AppContent(): React.JSX.Element {
       skipSaveRef.current = true;
       setContent(noteContent);
       setCurrentFile(filename);
+      // Update navigation history - avoid duplicate consecutive entries
+      setFileHistory((prev) => {
+        const last = prev[historyIndex] ?? null;
+        if (last === filename) return prev;
+        const newHist = prev.slice(0, historyIndex + 1).concat(filename);
+        setHistoryIndex(newHist.length - 1);
+        return newHist;
+      });
       setConflict(null); // Clear conflict if switching files
       setIsDirty(false); // New file is not dirty
       // Update MRU for the opened file so there's a single place
@@ -420,6 +430,40 @@ function AppContent(): React.JSX.Element {
       }, 600);
     } catch (err) {
       console.error('Failed to read note', filename, err);
+    }
+  };
+
+  /** Load a file from history index without mutating the history stack */
+  const loadFileAtHistoryIndex = async (idx: number): Promise<void> => {
+    if (idx < 0 || idx >= fileHistory.length) return;
+    const filename = fileHistory[idx];
+    try {
+      skipSaveRef.current = true;
+      const noteContent = await window.phosphor.readNote(filename);
+      setContent(noteContent);
+      setCurrentFile(filename);
+      setConflict(null);
+      setIsDirty(false);
+      setHistoryIndex(idx);
+      // Bump filesVersion so Sidebar re-fetches MRU
+      setFilesVersion((v) => v + 1);
+      setTimeout(() => {
+        skipSaveRef.current = false;
+      }, 600);
+    } catch (err) {
+      console.error('Failed to load history file', filename, err);
+    }
+  };
+
+  const navigateBack = async (): Promise<void> => {
+    if (historyIndex > 0) {
+      await loadFileAtHistoryIndex(historyIndex - 1);
+    }
+  };
+
+  const navigateForward = async (): Promise<void> => {
+    if (historyIndex < fileHistory.length - 1) {
+      await loadFileAtHistoryIndex(historyIndex + 1);
     }
   };
 
@@ -456,6 +500,19 @@ function AppContent(): React.JSX.Element {
       }
 
       setContent(noteContent);
+      try {
+        await window.phosphor.updateMRU(dailyNoteFilename);
+      } catch (err) {
+        console.debug('Failed to update MRU:', err);
+      }
+      // Initialize navigation history with the daily note on first load
+      setFileHistory((prev) => {
+        if (prev.length === 0 || historyIndex === -1) {
+          setHistoryIndex(0);
+          return [dailyNoteFilename];
+        }
+        return prev;
+      });
     } catch (err) {
       console.error('Failed to load vault content:', err);
     }
@@ -615,6 +672,14 @@ function AppContent(): React.JSX.Element {
     const content = await window.phosphor.readNote(filename);
     setCurrentFile(filename);
     setContent(content);
+    // Update navigation history so wikilink opens are recorded
+    setFileHistory((prev) => {
+      const last = prev[historyIndex] ?? null;
+      if (last === filename) return prev;
+      const newHist = prev.slice(0, historyIndex + 1).concat(filename);
+      setHistoryIndex(newHist.length - 1);
+      return newHist;
+    });
     // Trigger a save to ensure it appears in sidebar immediately
     await window.phosphor.saveNote(filename, content);
     // Update MRU when wikilink is clicked
@@ -673,6 +738,10 @@ function AppContent(): React.JSX.Element {
                         ? 'Graph'
                         : getTitleFromContent(content, currentFile)
                   }
+                  onNavigateBack={navigateBack}
+                  onNavigateForward={navigateForward}
+                  canGoBack={historyIndex > 0}
+                  canGoForward={historyIndex < fileHistory.length - 1}
                 />
                 {viewMode === 'editor' && (
                   <DailyNav

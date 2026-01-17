@@ -12,6 +12,10 @@ type Props = {
   onOpenFrontmatter: () => void;
   onToggleInformationSidebar: () => void;
   currentTitle: string;
+  onNavigateBack?: () => void;
+  onNavigateForward?: () => void;
+  canGoBack?: boolean;
+  canGoForward?: boolean;
 };
 
 export default function EditorHeader({
@@ -25,10 +29,29 @@ export default function EditorHeader({
   onTitleDoubleClick,
   onOpenFrontmatter,
   onToggleInformationSidebar,
-  currentTitle
+  currentTitle,
+  onNavigateBack,
+  onNavigateForward,
+  canGoBack,
+  canGoForward
 }: Props): React.JSX.Element {
   return (
     <div className="editor-header" onMouseDown={handleHeaderMouseDown}>
+      {viewMode === 'editor' && (
+        <div className="editor-nav-buttons">
+          <button className="nav-back" onClick={onNavigateBack} disabled={!canGoBack} title="Back">
+            <span className="material-symbols-outlined">arrow_back</span>
+          </button>
+          <button
+            className="nav-forward"
+            onClick={onNavigateForward}
+            disabled={!canGoForward}
+            title="Forward"
+          >
+            <span className="material-symbols-outlined">arrow_forward</span>
+          </button>
+        </div>
+      )}
       {viewMode === 'editor' && titleEditMode ? (
         <input
           type="text"
