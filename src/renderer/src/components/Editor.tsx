@@ -67,381 +67,390 @@ export interface EditorHandle {
   scrollToLine: (lineNumber: number) => void;
 }
 
-export const Editor = forwardRef<EditorHandle, EditorProps>(({
-  initialDoc,
-  onChange,
-  onLinkClick,
-  enableDimming = false,
-  onSearchOpen,
-  currentFile,
-  wikiPageSuggestions = []
-}, ref) => {
-  const { settings } = useSettings();
-  useImperativeHandle(ref, () => ({
-    scrollToLine: (lineNumber: number) => {
-      if (!viewRef.current) return;
-      const lines = viewRef.current.state.doc.lines;
-      if (lineNumber < 1 || lineNumber > lines) return;
-      let pos = 0;
-      for (let i = 1; i < lineNumber; i++) {
-        pos += viewRef.current.state.doc.line(i).length + 1;
-      }
-      viewRef.current.dispatch({
-        effects: EditorView.scrollIntoView(pos, { y: 'center' })
-      });
-    }
-  }), []);
-  const editorRef = useRef<HTMLDivElement>(null);
-  const viewRef = useRef<EditorView>(null);
-  const onChangeRef = useRef(onChange);
-  const onLinkClickRef = useRef(onLinkClick);
-  const frontmatterRef = useRef<Frontmatter | null>(null);
-  const [showSearch, setShowSearch] = useState(false);
-  const [searchAPI, setSearchAPI] = useState<ReturnType<typeof createSearchAPI> | null>(null);
-
-  // Extract frontmatter and content, memoized to avoid re-extraction on every render
-  const { frontmatter, content } = useMemo(() => extractFrontmatter(initialDoc), [initialDoc]);
-
-  // Determine if this is an outliner mode document
-  const isOutlinerMode = useMemo(() => {
-    if (!frontmatter || !frontmatter.content) return false;
-    return frontmatter.content.mode === 'outliner';
-  }, [frontmatter]);
-
-  // In outliner mode ensure we always start with at least one bullet
-  const initialContent = useMemo(() => {
-    if (isOutlinerMode && content.trim() === '') {
-      return '- ';
-    }
-    return content;
-  }, [content, isOutlinerMode]);
-
-  // Update the frontmatter ref whenever extraction changes
-  useEffect(() => {
-    frontmatterRef.current = frontmatter;
-  }, [frontmatter]);
-
-  // Keep refs up-to-date so CodeMirror listeners call the latest handlers
-  useEffect(() => {
-    onChangeRef.current = onChange;
-  }, [onChange]);
-  useEffect(() => {
-    onLinkClickRef.current = onLinkClick;
-  }, [onLinkClick]);
-
-  useEffect(() => {
-    if (!editorRef.current) return;
-
-    // Build the keymap based on journal mode
-    const baseKeymap = [
-      ...defaultKeymap,
-      ...historyKeymap,
-      {
-        key: 'Mod-Enter',
-        run: cycleTaskStatus
-      } as KeyBinding,
-      {
-        key: 'Mod-f',
-        run: () => {
-          setShowSearch((prev) => !prev);
-          return true;
+export const Editor = forwardRef<EditorHandle, EditorProps>(
+  (
+    {
+      initialDoc,
+      onChange,
+      onLinkClick,
+      enableDimming = false,
+      onSearchOpen,
+      currentFile,
+      wikiPageSuggestions = []
+    },
+    ref
+  ) => {
+    const { settings } = useSettings();
+    useImperativeHandle(
+      ref,
+      () => ({
+        scrollToLine: (lineNumber: number) => {
+          if (!viewRef.current) return;
+          const lines = viewRef.current.state.doc.lines;
+          if (lineNumber < 1 || lineNumber > lines) return;
+          let pos = 0;
+          for (let i = 1; i < lineNumber; i++) {
+            pos += viewRef.current.state.doc.line(i).length + 1;
+          }
+          viewRef.current.dispatch({
+            effects: EditorView.scrollIntoView(pos, { y: 'center' })
+          });
         }
-      } as KeyBinding
-    ];
+      }),
+      []
+    );
+    const editorRef = useRef<HTMLDivElement>(null);
+    const viewRef = useRef<EditorView>(null);
+    const onChangeRef = useRef(onChange);
+    const onLinkClickRef = useRef(onLinkClick);
+    const frontmatterRef = useRef<Frontmatter | null>(null);
+    const [showSearch, setShowSearch] = useState(false);
+    const [searchAPI, setSearchAPI] = useState<ReturnType<typeof createSearchAPI> | null>(null);
 
-    // 1. Define the Initial State (use only the content, without frontmatter)
-    const startState = EditorState.create({
-      doc: initialContent,
-      extensions: [
-        keymap.of([...closeBracketsKeymap, ...baseKeymap, ...foldKeymap]), // base keymap + folding
-        ...(isOutlinerMode ? [outlinerKeymapExtension] : []), // high-precedence outliner keys
-        EditorView.lineWrapping, // Soft wrap long lines
-        markdown(), // Markdown syntax support
-        foldGutter(),
-        markdownLanguage.data.of({
-          closeBrackets: { brackets: ['(', '[', '{', '`', '```', '*', '_'] }
-        }),
-        closeBrackets(), // Automatic bracket closing; brackets configured via markdownLanguage data
-        ...(settings.enableSmartTypography ? [smartTypographyExtension()] : []), // Smart quotes/dashes/symbols
-        history(), // Undo/Redo stack
-        syntaxHighlighting(darkModeHighlightStyle), // Use custom dark mode colors
-        taskCheckboxPlugin, // Task checkboxes
-        dateIndicatorPlugin, // Date pill indicators
-        admonitionWidget, // Admonition/Callout rendering
-        typewriterScrollPlugin, // Typewriter scrolling (cursor centered)
-        createGrammarLint({
-          checkPassiveVoice: settings.checkPassiveVoice,
-          checkSimplification: settings.checkSimplification,
-          checkInclusiveLanguage: settings.checkInclusiveLanguage,
-          checkReadability: settings.checkReadability,
-          checkProfanities: settings.checkProfanities,
-          checkCliches: settings.checkCliches,
-          checkIntensify: settings.checkIntensify
-        }), // Grammar and style checking
-        ...(enableDimming ? [dimmingPlugin] : []), // Paragraph dimming (optional)
-        createSearchExtension(), // Search functionality
-        createWikiLinkAutocomplete(wikiPageSuggestions), // Autocomplete for wiki links
-        ...urlExtensions, // URL detection, styling, and tooltips
-        smartPaste,
+    // Extract frontmatter and content, memoized to avoid re-extraction on every render
+    const { frontmatter, content } = useMemo(() => extractFrontmatter(initialDoc), [initialDoc]);
 
-        // 2. Listener for changes (call latest handler via ref, reconstruct with frontmatter)
-        EditorView.updateListener.of((update) => {
-          // In outliner mode, do not allow an empty document — always keep a bullet present
-          if (isOutlinerMode && update.docChanged) {
-            const contentOnly = update.state.doc.toString();
-            if (contentOnly.trim() === '') {
-              update.view.dispatch({
-                changes: { from: 0, to: contentOnly.length, insert: '- ' }
-              });
-              return;
-            }
+    // Determine if this is an outliner mode document
+    const isOutlinerMode = useMemo(() => {
+      if (!frontmatter || !frontmatter.content) return false;
+      return frontmatter.content.mode === 'outliner';
+    }, [frontmatter]);
+
+    // In outliner mode ensure we always start with at least one bullet
+    const initialContent = useMemo(() => {
+      if (isOutlinerMode && content.trim() === '') {
+        return '- ';
+      }
+      return content;
+    }, [content, isOutlinerMode]);
+
+    // Update the frontmatter ref whenever extraction changes
+    useEffect(() => {
+      frontmatterRef.current = frontmatter;
+    }, [frontmatter]);
+
+    // Keep refs up-to-date so CodeMirror listeners call the latest handlers
+    useEffect(() => {
+      onChangeRef.current = onChange;
+    }, [onChange]);
+    useEffect(() => {
+      onLinkClickRef.current = onLinkClick;
+    }, [onLinkClick]);
+
+    useEffect(() => {
+      if (!editorRef.current) return;
+
+      // Build the keymap based on journal mode
+      const baseKeymap = [
+        ...defaultKeymap,
+        ...historyKeymap,
+        {
+          key: 'Mod-Enter',
+          run: cycleTaskStatus
+        } as KeyBinding,
+        {
+          key: 'Mod-f',
+          run: () => {
+            setShowSearch((prev) => !prev);
+            return true;
           }
+        } as KeyBinding
+      ];
 
-          if (update.docChanged) {
-            try {
+      // 1. Define the Initial State (use only the content, without frontmatter)
+      const startState = EditorState.create({
+        doc: initialContent,
+        extensions: [
+          keymap.of([...closeBracketsKeymap, ...baseKeymap, ...foldKeymap]), // base keymap + folding
+          ...(isOutlinerMode ? [outlinerKeymapExtension] : []), // high-precedence outliner keys
+          EditorView.lineWrapping, // Soft wrap long lines
+          markdown(), // Markdown syntax support
+          foldGutter(),
+          markdownLanguage.data.of({
+            closeBrackets: { brackets: ['(', '[', '{', '`', '```', '*', '_'] }
+          }),
+          closeBrackets(), // Automatic bracket closing; brackets configured via markdownLanguage data
+          ...(settings.enableSmartTypography ? [smartTypographyExtension()] : []), // Smart quotes/dashes/symbols
+          history(), // Undo/Redo stack
+          syntaxHighlighting(darkModeHighlightStyle), // Use custom dark mode colors
+          taskCheckboxPlugin, // Task checkboxes
+          dateIndicatorPlugin, // Date pill indicators
+          admonitionWidget, // Admonition/Callout rendering
+          typewriterScrollPlugin, // Typewriter scrolling (cursor centered)
+          createGrammarLint({
+            checkPassiveVoice: settings.checkPassiveVoice,
+            checkSimplification: settings.checkSimplification,
+            checkInclusiveLanguage: settings.checkInclusiveLanguage,
+            checkReadability: settings.checkReadability,
+            checkProfanities: settings.checkProfanities,
+            checkCliches: settings.checkCliches,
+            checkIntensify: settings.checkIntensify
+          }), // Grammar and style checking
+          ...(enableDimming ? [dimmingPlugin] : []), // Paragraph dimming (optional)
+          createSearchExtension(), // Search functionality
+          createWikiLinkAutocomplete(wikiPageSuggestions), // Autocomplete for wiki links
+          ...urlExtensions, // URL detection, styling, and tooltips
+          smartPaste,
+
+          // 2. Listener for changes (call latest handler via ref, reconstruct with frontmatter)
+          EditorView.updateListener.of((update) => {
+            // In outliner mode, do not allow an empty document — always keep a bullet present
+            if (isOutlinerMode && update.docChanged) {
               const contentOnly = update.state.doc.toString();
-              const fullDoc = reconstructDocument(frontmatterRef.current, contentOnly);
-              onChangeRef.current(fullDoc);
-            } catch (e) {
-              console.error(e);
-            }
-          }
-        }),
-
-        // 3. Visual Styling (Minimalist Theme)
-        EditorView.theme(
-          {
-            '&': { height: '100%', fontSize: '16px' },
-            '.cm-scroller': { fontFamily: 'var(--font-editor)' },
-            '.cm-content': {
-              caretColor: 'var(--editor-caret)',
-              maxWidth: '800px',
-              margin: '0 auto',
-              padding: '40px'
-            },
-            '&.cm-focused': { outline: 'none' },
-            '.cm-url-underline': {
-              textDecoration: 'underline',
-              textDecorationColor: 'var(--editor-link)',
-              textDecorationStyle: 'solid',
-              cursor: 'pointer',
-              color: 'var(--editor-link)'
-            },
-            '.cm-url-tooltip': {
-              backgroundColor: 'var(--editor-tooltip-bg)',
-              border: '1px solid var(--editor-tooltip-border)',
-              borderRadius: '4px',
-              color: 'var(--editor-tooltip-text)',
-              padding: '4px 8px',
-              fontSize: '12px',
-              fontFamily: 'var(--font-editor)',
-              whiteSpace: 'nowrap'
-            }
-          },
-          { dark: true }
-        ),
-        // Wiki link plugin and click handler
-        wikiLinkPlugin,
-        wikiLinkHoverTooltip, // Wiki link hover previews
-        imagePreviewPlugin,
-        pdfWidgetPlugin,
-        EditorView.domEventHandlers({
-          paste: (event, view) => {
-            const items = event.clipboardData?.items;
-            if (!items) return false;
-
-            const insertAsset = async (file: File): Promise<void> => {
-              const buffer = await file.arrayBuffer();
-              const filename = await window.phosphor.saveAsset(buffer, file.name);
-              const text = `![[${filename}]]`;
-              view.dispatch(view.state.replaceSelection(text));
-            };
-
-            for (const item of items) {
-              const file = item.getAsFile();
-              if (!file) continue;
-
-              const isImage = file.type.startsWith('image/');
-              const isPdf = file.type === 'application/pdf';
-              if (!isImage && !isPdf) continue;
-
-              event.preventDefault();
-              insertAsset(file).catch((err) => console.error('Failed to save asset:', err));
-              return true;
-            }
-            return false;
-          },
-          drop: (event, view) => {
-            const files = event.dataTransfer?.files;
-            if (!files) return false;
-
-            const insertAssetAtPosition = async (file: File, pos: number): Promise<void> => {
-              const buffer = await file.arrayBuffer();
-              const filename = await window.phosphor.saveAsset(buffer, file.name);
-              const text = `![[${filename}]]`;
-              view.dispatch({
-                changes: {
-                  from: pos,
-                  insert: text
-                }
-              });
-            };
-
-            for (const file of files) {
-              const isImage = file.type.startsWith('image/');
-              const isPdf = file.type === 'application/pdf';
-              if (!isImage && !isPdf) continue;
-
-              event.preventDefault();
-
-              const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
-              if (pos === null) return true;
-
-              insertAssetAtPosition(file, pos).catch((err) =>
-                console.error('Failed to save asset:', err)
-              );
-
-              return true;
-            }
-            return false;
-          },
-          click: (event) => {
-            try {
-              const target = event.target as HTMLElement | null;
-
-              // Handle wiki link clicks
-              const linkEl =
-                target?.closest && (target.closest('.cm-wiki-link') as HTMLElement | null);
-              if (linkEl) {
-                const linkTarget = linkEl.getAttribute('data-link-target') || undefined;
-                console.debug('Wiki link clicked:', linkTarget);
-                if (linkTarget && typeof onLinkClickRef.current === 'function') {
-                  event.preventDefault();
-                  // Notify main process to update graph for both the current file and the target file
-                  if (currentFile) {
-                    window.phosphor
-                      .notifyWikilinkClicked(currentFile, linkTarget)
-                      .catch((err) => console.error('Failed to notify wikilink click:', err));
-                  }
-                  onLinkClickRef.current(linkTarget);
-                  return true;
-                }
-              }
-
-              // Handle URL clicks with Cmd/Ctrl+Click
-              const isModifierClick = event.metaKey || event.ctrlKey;
-              if (isModifierClick && viewRef.current) {
-                const pos = viewRef.current.posAtCoords({
-                  x: event.clientX,
-                  y: event.clientY
+              if (contentOnly.trim() === '') {
+                update.view.dispatch({
+                  changes: { from: 0, to: contentOnly.length, insert: '- ' }
                 });
-                if (pos !== null) {
-                  const url = getURLAtPosition(viewRef.current, pos);
-                  if (url) {
+                return;
+              }
+            }
+
+            if (update.docChanged) {
+              try {
+                const contentOnly = update.state.doc.toString();
+                const fullDoc = reconstructDocument(frontmatterRef.current, contentOnly);
+                onChangeRef.current(fullDoc);
+              } catch (e) {
+                console.error(e);
+              }
+            }
+          }),
+
+          // 3. Visual Styling (Minimalist Theme)
+          EditorView.theme(
+            {
+              '&': { height: '100%', fontSize: '16px' },
+              '.cm-scroller': { fontFamily: 'var(--font-editor)' },
+              '.cm-content': {
+                caretColor: 'var(--editor-caret)',
+                maxWidth: '800px',
+                margin: '0 auto',
+                padding: '40px'
+              },
+              '&.cm-focused': { outline: 'none' },
+              '.cm-url-underline': {
+                textDecoration: 'underline',
+                textDecorationColor: 'var(--editor-link)',
+                textDecorationStyle: 'solid',
+                cursor: 'pointer',
+                color: 'var(--editor-link)'
+              },
+              '.cm-url-tooltip': {
+                backgroundColor: 'var(--editor-tooltip-bg)',
+                border: '1px solid var(--editor-tooltip-border)',
+                borderRadius: '4px',
+                color: 'var(--editor-tooltip-text)',
+                padding: '4px 8px',
+                fontSize: '12px',
+                fontFamily: 'var(--font-editor)',
+                whiteSpace: 'nowrap'
+              }
+            },
+            { dark: true }
+          ),
+          // Wiki link plugin and click handler
+          wikiLinkPlugin,
+          wikiLinkHoverTooltip, // Wiki link hover previews
+          imagePreviewPlugin,
+          pdfWidgetPlugin,
+          EditorView.domEventHandlers({
+            paste: (event, view) => {
+              const items = event.clipboardData?.items;
+              if (!items) return false;
+
+              const insertAsset = async (file: File): Promise<void> => {
+                const buffer = await file.arrayBuffer();
+                const filename = await window.phosphor.saveAsset(buffer, file.name);
+                const text = `![[${filename}]]`;
+                view.dispatch(view.state.replaceSelection(text));
+              };
+
+              for (const item of items) {
+                const file = item.getAsFile();
+                if (!file) continue;
+
+                const isImage = file.type.startsWith('image/');
+                const isPdf = file.type === 'application/pdf';
+                if (!isImage && !isPdf) continue;
+
+                event.preventDefault();
+                insertAsset(file).catch((err) => console.error('Failed to save asset:', err));
+                return true;
+              }
+              return false;
+            },
+            drop: (event, view) => {
+              const files = event.dataTransfer?.files;
+              if (!files) return false;
+
+              const insertAssetAtPosition = async (file: File, pos: number): Promise<void> => {
+                const buffer = await file.arrayBuffer();
+                const filename = await window.phosphor.saveAsset(buffer, file.name);
+                const text = `![[${filename}]]`;
+                view.dispatch({
+                  changes: {
+                    from: pos,
+                    insert: text
+                  }
+                });
+              };
+
+              for (const file of files) {
+                const isImage = file.type.startsWith('image/');
+                const isPdf = file.type === 'application/pdf';
+                if (!isImage && !isPdf) continue;
+
+                event.preventDefault();
+
+                const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+                if (pos === null) return true;
+
+                insertAssetAtPosition(file, pos).catch((err) =>
+                  console.error('Failed to save asset:', err)
+                );
+
+                return true;
+              }
+              return false;
+            },
+            click: (event) => {
+              try {
+                const target = event.target as HTMLElement | null;
+
+                // Handle wiki link clicks
+                const linkEl =
+                  target?.closest && (target.closest('.cm-wiki-link') as HTMLElement | null);
+                if (linkEl) {
+                  const linkTarget = linkEl.getAttribute('data-link-target') || undefined;
+                  console.debug('Wiki link clicked:', linkTarget);
+                  if (linkTarget && typeof onLinkClickRef.current === 'function') {
                     event.preventDefault();
-                    window.phosphor
-                      .openURL(url)
-                      .catch((err) => console.error('Failed to open URL:', err));
+                    // Notify main process to update graph for both the current file and the target file
+                    if (currentFile) {
+                      window.phosphor
+                        .notifyWikilinkClicked(currentFile, linkTarget)
+                        .catch((err) => console.error('Failed to notify wikilink click:', err));
+                    }
+                    onLinkClickRef.current(linkTarget);
                     return true;
                   }
                 }
+
+                // Handle URL clicks with Cmd/Ctrl+Click
+                const isModifierClick = event.metaKey || event.ctrlKey;
+                if (isModifierClick && viewRef.current) {
+                  const pos = viewRef.current.posAtCoords({
+                    x: event.clientX,
+                    y: event.clientY
+                  });
+                  if (pos !== null) {
+                    const url = getURLAtPosition(viewRef.current, pos);
+                    if (url) {
+                      event.preventDefault();
+                      window.phosphor
+                        .openURL(url)
+                        .catch((err) => console.error('Failed to open URL:', err));
+                      return true;
+                    }
+                  }
+                }
+              } catch (err) {
+                console.error('Error handling click', err);
               }
-            } catch (err) {
-              console.error('Error handling click', err);
+              return false;
             }
-            return false;
+          })
+        ]
+      });
+
+      // 4. Create the View
+      const view = new EditorView({
+        state: startState,
+        parent: editorRef.current
+      });
+
+      viewRef.current = view;
+
+      // Initialize search API after view is created
+      setSearchAPI(() => createSearchAPI(view));
+
+      // Enable spell checking on CodeMirror's content element
+      const contentEl = view.contentDOM;
+      if (contentEl) {
+        contentEl.spellcheck = true;
+      }
+
+      // Cleanup on unmount
+      return () => {
+        view.destroy();
+      };
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- omit initialContent to avoid remounting on every keystroke
+    }, [
+      enableDimming,
+      isOutlinerMode,
+      settings.checkPassiveVoice,
+      settings.checkSimplification,
+      settings.checkInclusiveLanguage,
+      settings.checkReadability,
+      settings.checkProfanities,
+      settings.checkCliches,
+      settings.checkIntensify,
+      settings.enableSmartTypography,
+      currentFile,
+      wikiPageSuggestions
+    ]); // Re-create editor when file, mode, or grammar settings change (intentionally omit content to avoid resets on every keystroke)
+
+    // Handle external updates (e.g. clicking a different file in sidebar)
+    useEffect(() => {
+      const nextContent = isOutlinerMode && content.trim() === '' ? '- ' : content;
+      if (viewRef.current && nextContent !== viewRef.current.state.doc.toString()) {
+        viewRef.current.dispatch({
+          changes: {
+            from: 0,
+            to: viewRef.current.state.doc.length,
+            insert: nextContent
           }
-        })
-      ]
-    });
+        });
+      }
+    }, [content, isOutlinerMode]);
 
-    // 4. Create the View
-    const view = new EditorView({
-      state: startState,
-      parent: editorRef.current
-    });
+    // Notify parent about search panel visibility
+    useEffect(() => {
+      if (onSearchOpen) {
+        onSearchOpen(showSearch);
+      }
+    }, [showSearch, onSearchOpen]);
 
-    viewRef.current = view;
+    // Disable dimming when search is open
+    useEffect(() => {
+      if (viewRef.current && enableDimming) {
+        // Suppress dimming when search is open, unsuppress when closed
+        viewRef.current.dispatch({
+          effects: suppressDimmingEffect.of(showSearch)
+        });
+      }
+    }, [showSearch, enableDimming]);
 
-    // Initialize search API after view is created
-    setSearchAPI(() => createSearchAPI(view));
-
-    // Enable spell checking on CodeMirror's content element
-    const contentEl = view.contentDOM;
-    if (contentEl) {
-      contentEl.spellcheck = true;
-    }
-
-    // Cleanup on unmount
-    return () => {
-      view.destroy();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- omit initialContent to avoid remounting on every keystroke
-  }, [
-    enableDimming,
-    isOutlinerMode,
-    settings.checkPassiveVoice,
-    settings.checkSimplification,
-    settings.checkInclusiveLanguage,
-    settings.checkReadability,
-    settings.checkProfanities,
-    settings.checkCliches,
-    settings.checkIntensify,
-    settings.enableSmartTypography,
-    currentFile,
-    wikiPageSuggestions
-  ]); // Re-create editor when file, mode, or grammar settings change (intentionally omit content to avoid resets on every keystroke)
-
-  // Handle external updates (e.g. clicking a different file in sidebar)
-  useEffect(() => {
-    const nextContent = isOutlinerMode && content.trim() === '' ? '- ' : content;
-    if (viewRef.current && nextContent !== viewRef.current.state.doc.toString()) {
-      viewRef.current.dispatch({
-        changes: {
-          from: 0,
-          to: viewRef.current.state.doc.length,
-          insert: nextContent
-        }
-      });
-    }
-  }, [content, isOutlinerMode]);
-
-  // Notify parent about search panel visibility
-  useEffect(() => {
-    if (onSearchOpen) {
-      onSearchOpen(showSearch);
-    }
-  }, [showSearch, onSearchOpen]);
-
-  // Disable dimming when search is open
-  useEffect(() => {
-    if (viewRef.current && enableDimming) {
-      // Suppress dimming when search is open, unsuppress when closed
-      viewRef.current.dispatch({
-        effects: suppressDimmingEffect.of(showSearch)
-      });
-    }
-  }, [showSearch, enableDimming]);
-
-  return (
-    <div
-      style={{
-        flex: 1,
-        minHeight: 0,
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column'
-      }}
-    >
+    return (
       <div
-        ref={editorRef}
-        style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}
-        className="editor-container"
-        spellCheck="true"
-      />
-      {showSearch && <SearchPanel searchAPI={searchAPI} onClose={() => setShowSearch(false)} />}
-    </div>
-  );
-});
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column'
+        }}
+      >
+        <div
+          ref={editorRef}
+          style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}
+          className="editor-container"
+          spellCheck="true"
+        />
+        {showSearch && <SearchPanel searchAPI={searchAPI} onClose={() => setShowSearch(false)} />}
+      </div>
+    );
+  }
+);
 
 Editor.displayName = 'Editor';
