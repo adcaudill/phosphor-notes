@@ -132,12 +132,7 @@ export const InformationPanel: React.FC<InformationPanelProps> = ({
                     <button
                       key={file}
                       className="information-item incoming"
-                      onClick={() => {
-                        window.phosphor.updateMRU(file).catch((err) => {
-                          console.debug('Failed to update MRU:', err);
-                        });
-                        onFileSelect(file);
-                      }}
+                      onClick={() => onFileSelect(file)}
                       title={file}
                     >
                       <span className="information-item-icon">←</span>
@@ -159,12 +154,7 @@ export const InformationPanel: React.FC<InformationPanelProps> = ({
                     <button
                       key={file}
                       className="information-item outgoing"
-                      onClick={() => {
-                        window.phosphor.updateMRU(file).catch((err) => {
-                          console.debug('Failed to update MRU:', err);
-                        });
-                        onFileSelect(file);
-                      }}
+                      onClick={() => onFileSelect(file)}
                       title={file}
                     >
                       <span className="information-item-name">{file}</span>

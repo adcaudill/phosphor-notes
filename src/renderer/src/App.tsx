@@ -406,6 +406,12 @@ function AppContent(): React.JSX.Element {
       setCurrentFile(filename);
       setConflict(null); // Clear conflict if switching files
       setIsDirty(false); // New file is not dirty
+      // Update MRU for the opened file so there's a single place
+      try {
+        await window.phosphor.updateMRU(filename);
+      } catch (err) {
+        console.debug('Failed to update MRU:', err);
+      }
       // Bump filesVersion so Sidebar re-fetches MRU
       setFilesVersion((v) => v + 1);
       // Allow saves after the debounce window

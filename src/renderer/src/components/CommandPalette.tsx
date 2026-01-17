@@ -88,10 +88,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
       e.preventDefault();
       if (results[selectedIndex]) {
         const filename = results[selectedIndex].filename;
-        // Update MRU when file is selected from command palette
-        window.phosphor.updateMRU(filename).catch((err) => {
-          console.debug('Failed to update MRU:', err);
-        });
         onSelect(filename);
         onClose();
       }
@@ -125,10 +121,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
                 key={res.id}
                 className={i === selectedIndex ? 'result-item selected' : 'result-item'}
                 onClick={() => {
-                  // Update MRU when file is selected from command palette
-                  window.phosphor.updateMRU(res.filename).catch((err) => {
-                    console.debug('Failed to update MRU:', err);
-                  });
                   onSelect(res.filename);
                   onClose();
                 }}

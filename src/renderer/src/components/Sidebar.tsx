@@ -51,12 +51,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       if (viewMode !== 'editor' && onEditorClick) {
         onEditorClick();
       }
-      // Update MRU when daily note is opened
-      try {
-        const updatedMRU = await window.phosphor.updateMRU(dailyFilename);
-        setFiles(updatedMRU);
-      } catch (err) {
-        console.debug('Failed to update MRU:', err);
+      // If we're not in editor view, switch to editor
+      if (viewMode !== 'editor' && onEditorClick) {
+        onEditorClick();
       }
       onFileSelect(dailyFilename);
     } catch (err) {
@@ -76,16 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (viewMode !== 'editor' && onEditorClick) {
       onEditorClick();
     }
-
-    // Update MRU
-    try {
-      const updatedMRU = await window.phosphor.updateMRU(file);
-      setFiles(updatedMRU);
-    } catch (err) {
-      console.debug('Failed to update MRU:', err);
-    }
-
-    // Trigger the file selection
+    
     onFileSelect(file);
 
     // Fade back in
