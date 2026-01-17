@@ -1,4 +1,5 @@
 import React, { useReducer, useEffect, useRef } from 'react';
+import 'material-symbols';
 import { extractFrontmatter } from '../utils/frontmatterUtils';
 
 interface FrontmatterModalProps {
@@ -197,7 +198,7 @@ export function FrontmatterModal({
                     onClick={() => handleDeleteField(key)}
                     title="Delete field"
                   >
-                    🗑️
+                    <span className="material-symbols-outlined">delete</span>
                   </button>
                 </div>
               ))}
@@ -236,7 +237,7 @@ export function FrontmatterModal({
                 <strong>Name:</strong> {currentFile}
               </div>
               <button className="delete-file-btn" onClick={handleDelete}>
-                🗑️ Delete File
+                Delete File
               </button>
             </div>
           </div>

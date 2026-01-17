@@ -1936,6 +1936,7 @@ body {
   padding: 4px 8px;
   opacity: 0.6;
   transition: opacity 0.15s ease;
+  color: var(--color-text-primary);
 }
 
 .field-delete-btn:hover,
