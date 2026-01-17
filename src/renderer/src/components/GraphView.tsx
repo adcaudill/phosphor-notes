@@ -168,7 +168,9 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
           .radius((d) => {
             const baseRadius = 6;
             const maxRadiusIncrease = 10;
-            return baseRadius + ((d.degree || 0) / Math.max(maxDegree, 1)) * maxRadiusIncrease + 8;
+            const calculatedRadius =
+              baseRadius + ((d.degree || 0) / Math.max(maxDegree, 1)) * maxRadiusIncrease + 8;
+            return calculatedRadius * 3; // multiplied to give more space & avoid overlap
           })
           .strength(0.8)
       )
