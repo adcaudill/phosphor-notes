@@ -99,7 +99,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ onTaskClick }) => {
   useEffect(() => {
     const grouped: GroupedTasks = {};
 
-    let tasksToGroup = [...tasks];
+    const tasksToGroup = [...tasks];
 
     // Always sort by urgency
     const urgencyOrder = { overdue: 0, today: 1, upcoming: 2, 'no-date': 3 };
