@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import 'material-symbols';
 
 interface SidebarProps {
   onFileSelect: (filename: string) => void;
@@ -108,21 +109,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onClick={onEditorClick}
           title="Editor view"
         >
-          📝
+          <span className="material-symbols-outlined">edit_note</span>
         </button>
         <button
           className={`nav-btn ${viewMode === 'tasks' ? 'active' : ''}`}
           onClick={onTasksClick}
           title="Tasks view"
         >
-          ✓
+          <span className="material-symbols-outlined">task</span>
         </button>
         <button
           className={`nav-btn ${viewMode === 'graph' ? 'active' : ''}`}
           onClick={onGraphClick}
           title="Graph view"
         >
-          🕸️
+          <span className="material-symbols-outlined">graph_3</span>
         </button>
       </div>
       <h2

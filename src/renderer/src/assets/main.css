@@ -263,6 +263,7 @@ body {
   padding: var(--spacing-sm);
   transition: opacity 0.15s ease;
   opacity: 0.6;
+  color: var(--color-text-primary);
 }
 
 .information-toggle:hover {
@@ -282,6 +283,7 @@ body {
   padding: var(--spacing-sm);
   transition: opacity 0.15s ease;
   opacity: 0.6;
+  color: var(--color-text-primary);
 }
 
 .settings-btn:hover {

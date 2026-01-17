@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import 'material-symbols';
 import { calculateReadingStats, formatReadTime, formatWordCount } from '../utils/readingStats';
 
 export type Status = { type: string; message: string } | null;
@@ -19,20 +20,21 @@ export function StatusBar({
     return calculateReadingStats(content);
   }, [content]);
 
-  const getIcon = (type?: string): string => {
+  const getIcon = (type?: string): React.ReactNode => {
+    const cls = 'material-symbols-outlined';
     switch (type) {
       case 'indexing-started':
-        return '⟳';
+        return <span className={cls}>autorenew</span>;
       case 'indexing-complete':
-        return '✓';
+        return <span className={cls}>check</span>;
       case 'cache-loaded':
-        return '📦';
+        return <span className={cls}>inventory_2</span>;
       case 'vault-opened':
-        return '📁';
+        return <span className={cls}>folder_open</span>;
       case 'error':
-        return '⚠';
+        return <span className={cls}>warning</span>;
       default:
-        return '';
+        return null;
     }
   };
 
@@ -45,7 +47,7 @@ export function StatusBar({
           className="status-bar-encryption-icon"
           title={isVaultUnlocked ? 'Vault is encrypted and unlocked' : 'Vault is encrypted'}
         >
-          🔐
+          <span className="material-symbols-outlined">encrypted</span>
         </span>
       )}
       {status ? (

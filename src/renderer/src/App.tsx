@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import 'material-symbols';
 import { Editor, type EditorHandle } from './components/Editor';
 import { Sidebar } from './components/Sidebar';
 import StatusBar from './components/StatusBar';
@@ -676,14 +677,14 @@ function AppContent(): React.JSX.Element {
                         onClick={() => setFrontmatterModalOpen(true)}
                         title="Edit file settings"
                       >
-                        🔧
+                        <span className="material-symbols-outlined">edit_attributes</span>
                       </button>
                       <button
                         className="information-toggle"
                         onClick={() => setShowInformationSidebar(!showInformationSidebar)}
                         title="Toggle information panel"
                       >
-                        ℹ️
+                        <span className="material-symbols-outlined">info</span>
                       </button>
                     </div>
                   )}
