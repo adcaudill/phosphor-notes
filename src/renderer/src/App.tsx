@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Editor } from './components/Editor';
+import { Editor, type EditorHandle } from './components/Editor';
 import { Sidebar } from './components/Sidebar';
 import StatusBar from './components/StatusBar';
-import { RelationshipsPanel } from './components/RelationshipsPanel';
+import { InformationPanel } from './components/InformationPanel';
 import { CommandPalette } from './components/CommandPalette';
 import { SettingsModal } from './components/SettingsModal';
 import { FrontmatterModal } from './components/FrontmatterModal';
@@ -65,6 +65,7 @@ function AppContent(): React.JSX.Element {
   const [encryptionLoading, setEncryptionLoading] = useState(false); // Loading state for encryption operations
   const [isVaultEncrypted, setIsVaultEncrypted] = useState(false); // Whether current vault is encrypted
   const [isVaultUnlocked, setIsVaultUnlocked] = useState(false); // Whether vault is unlocked (only relevant if encrypted)
+  const editorRef = useRef<EditorHandle>(null);
   const wikiPageSuggestions = useMemo(() => {
     const unique = new Set<string>();
     Object.keys(graph).forEach((filename) => {
@@ -618,6 +619,15 @@ function AppContent(): React.JSX.Element {
     setFilesVersion((v) => v + 1);
   };
 
+  /**
+   * Handle header click from Information Panel to scroll to that line
+   */
+  const handleHeaderClick = (lineNumber: number): void => {
+    if (editorRef.current?.scrollToLine) {
+      editorRef.current.scrollToLine(lineNumber);
+    }
+  };
+
   return (
     <div className="app-container">
       {vaultName ? (
@@ -723,6 +733,7 @@ function AppContent(): React.JSX.Element {
                 {viewMode === 'editor' ? (
                   <>
                     <Editor
+                      ref={editorRef}
                       initialDoc={content}
                       onChange={handleContentChange}
                       onLinkClick={handleLinkClick}
@@ -763,11 +774,13 @@ function AppContent(): React.JSX.Element {
             </div>
 
             {showRelationshipsSidebar && (
-              <RelationshipsPanel
+              <InformationPanel
                 currentFile={currentFile}
+                content={content}
                 graph={graph}
                 backlinks={backlinks}
                 onFileSelect={handleFileSelect}
+                onHeaderClick={handleHeaderClick}
               />
             )}
           </div>

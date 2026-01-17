@@ -493,10 +493,10 @@ body {
 }
 
 /* ============================================
-   RELATIONSHIPS PANEL (RIGHT SIDEBAR)
+   INFORMATION PANEL (RIGHT SIDEBAR)
    ============================================ */
 
-.relationships-panel {
+.information-panel {
   width: 300px;
   background-color: var(--color-sidebar-bg);
   border-left: 1px solid var(--color-border);
@@ -508,7 +508,14 @@ body {
   flex-shrink: 0;
 }
 
-.relationships-header {
+/* Information Section */
+.information-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.information-section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -516,13 +523,13 @@ body {
   border-bottom: 1px solid var(--color-border);
 }
 
-.relationships-title {
+.information-section-title {
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
   font-size: var(--font-size-xs);
 }
 
-.relationships-count {
+.information-section-count {
   background-color: var(--color-primary);
   color: white;
   padding: var(--spacing-xs) var(--spacing-sm);
@@ -531,7 +538,7 @@ body {
   font-weight: var(--font-weight-medium);
 }
 
-.relationships-empty {
+.information-empty {
   padding: var(--spacing-md);
   text-align: center;
   color: var(--color-text-secondary);
@@ -539,23 +546,102 @@ body {
   font-size: var(--font-size-sm);
 }
 
-.relationships-content {
+.information-content {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
 }
 
-.relationship-group {
+/* Document Outline Styles */
+.outline-section {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
 }
 
-.relationship-group-header {
+.outline-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.outline-item {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background-color: var(--color-bg);
+  border: 0px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+.outline-item:hover {
+  background-color: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+
+.outline-item:active {
+  transform: translateY(0);
+}
+
+.outline-item-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.outline-level-1 {
+  font-weight: var(--font-weight-semibold);
+}
+.outline-level-2 {
+  font-weight: var(--font-weight-semibold);
+}
+.outline-level-3 {
+  font-weight: var(--font-weight-medium);
+}
+.outline-level-4 {
+  font-weight: var(--font-weight-medium);
+}
+.outline-level-5 {
+  font-weight: var(--font-weight-normal);
+}
+.outline-level-6 {
+  font-weight: var(--font-weight-normal);
+  opacity: 0.9;
+}
+
+/* Relationships Section */
+.relationships-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.information-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.information-group-header {
   padding: var(--spacing-xs) var(--spacing-sm);
 }
 
-.relationship-group-title {
+.information-group-title {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-secondary);
@@ -563,13 +649,13 @@ body {
   letter-spacing: 0.5px;
 }
 
-.relationship-group-items {
+.information-group-items {
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-xs);
 }
 
-.relationship-item {
+.information-item {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-xs);
@@ -587,7 +673,7 @@ body {
   text-overflow: ellipsis;
 }
 
-.relationship-item:hover {
+.information-item:hover {
   background-color: var(--color-primary);
   color: white;
   border-color: var(--color-primary);
@@ -595,28 +681,28 @@ body {
   transform: translateY(-1px);
 }
 
-.relationship-item:active {
+.information-item:active {
   transform: translateY(0);
 }
 
-.relationship-item-icon {
+.information-item-icon {
   font-size: var(--font-size-xs);
   opacity: 0.7;
   flex-shrink: 0;
 }
 
-.relationship-item-name {
+.information-item-name {
   overflow: hidden;
   text-overflow: ellipsis;
   flex: 1;
   min-width: 0;
 }
 
-.relationship-item.incoming {
+.information-item.incoming {
   /* Styling for incoming links - leftward arrow */
 }
 
-.relationship-item.outgoing {
+.information-item.outgoing {
   /* Styling for outgoing links - rightward arrow */
 }
 

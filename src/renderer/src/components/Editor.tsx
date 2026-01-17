@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useMemo, useState } from 'react';
+import { useEffect, useRef, useMemo, useState, forwardRef, useImperativeHandle } from 'react';
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, KeyBinding } from '@codemirror/view';
 import { foldGutter, foldKeymap } from '@codemirror/language';
@@ -63,7 +63,11 @@ interface EditorProps {
   wikiPageSuggestions?: string[];
 }
 
-export const Editor: React.FC<EditorProps> = ({
+export interface EditorHandle {
+  scrollToLine: (lineNumber: number) => void;
+}
+
+export const Editor = forwardRef<EditorHandle, EditorProps>(({
   initialDoc,
   onChange,
   onLinkClick,
@@ -71,8 +75,22 @@ export const Editor: React.FC<EditorProps> = ({
   onSearchOpen,
   currentFile,
   wikiPageSuggestions = []
-}) => {
+}, ref) => {
   const { settings } = useSettings();
+  useImperativeHandle(ref, () => ({
+    scrollToLine: (lineNumber: number) => {
+      if (!viewRef.current) return;
+      const lines = viewRef.current.state.doc.lines;
+      if (lineNumber < 1 || lineNumber > lines) return;
+      let pos = 0;
+      for (let i = 1; i < lineNumber; i++) {
+        pos += viewRef.current.state.doc.line(i).length + 1;
+      }
+      viewRef.current.dispatch({
+        effects: EditorView.scrollIntoView(pos, { y: 'center' })
+      });
+    }
+  }), []);
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView>(null);
   const onChangeRef = useRef(onChange);
@@ -424,4 +442,6 @@ export const Editor: React.FC<EditorProps> = ({
       {showSearch && <SearchPanel searchAPI={searchAPI} onClose={() => setShowSearch(false)} />}
     </div>
   );
-};
+});
+
+Editor.displayName = 'Editor';
