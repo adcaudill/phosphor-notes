@@ -6,6 +6,7 @@ import { RelationshipsPanel } from './components/RelationshipsPanel';
 import { CommandPalette } from './components/CommandPalette';
 import { SettingsModal } from './components/SettingsModal';
 import { FrontmatterModal } from './components/FrontmatterModal';
+import DailyNav from './components/DailyNav';
 import { TasksView } from './components/TasksView';
 import { EncryptionModal } from './components/EncryptionModal';
 import { AboutModal } from './components/AboutModal';
@@ -677,6 +678,13 @@ function AppContent(): React.JSX.Element {
                     </div>
                   )}
                 </div>
+                {viewMode === 'editor' && (
+                  <DailyNav
+                    currentFile={currentFile}
+                    content={content}
+                    onOpenFile={handleFileSelect}
+                  />
+                )}
                 {conflict && (
                   <div className="conflict-banner">
                     ⚠️ File changed on disk. You have unsaved changes.
