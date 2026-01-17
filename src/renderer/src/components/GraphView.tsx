@@ -96,6 +96,51 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
     resize();
     window.addEventListener('resize', resize);
 
+    // Resolve theme CSS variables for canvas rendering (colors, fonts)
+    const resolvedStyle = getComputedStyle(canvas.parentElement || document.documentElement);
+    const getVar = (name: string, fallback = ''): string =>
+      (resolvedStyle.getPropertyValue(name) || fallback).trim();
+
+    const parseHex = (hex: string): { r: number; g: number; b: number } | null => {
+      const h = hex.replace('#', '').trim();
+      if (h.length === 3) {
+        return {
+          r: parseInt(h[0] + h[0], 16),
+          g: parseInt(h[1] + h[1], 16),
+          b: parseInt(h[2] + h[2], 16)
+        };
+      }
+      if (h.length === 6) {
+        return {
+          r: parseInt(h.slice(0, 2), 16),
+          g: parseInt(h.slice(2, 4), 16),
+          b: parseInt(h.slice(4, 6), 16)
+        };
+      }
+      return null;
+    };
+
+    const toRgba = (color: string, alpha = 1): string => {
+      const c = color.trim();
+      if (!c) return `rgba(148,163,184,${alpha})`;
+      if (c.startsWith('rgba')) return c;
+      if (c.startsWith('rgb')) {
+        return c.replace(/rgb\(/, 'rgba(').replace(/\)$/, `, ${alpha})`);
+      }
+      const p = parseHex(c);
+      if (p) return `rgba(${p.r}, ${p.g}, ${p.b}, ${alpha})`;
+      return `rgba(148,163,184,${alpha})`;
+    };
+
+    const cssPrimary = getVar('--color-primary', '#60a5fa');
+    const cssPrimaryRgb = getVar('--color-primary-rgb', '').replace(/\s+/g, '');
+    const cssTextPrimary = getVar('--color-text-primary', '#94a3b8');
+    const cssTextSecondary = getVar('--color-text-secondary', '#cbd5e1');
+    const bodyStyle = getComputedStyle(document.body);
+    const cssFontFamily =
+      bodyStyle.fontFamily || '"Inter", "SF Pro Text", -apple-system, system-ui, sans-serif';
+    const cssFontSize = getVar('--font-size-sm', '12px');
+
     let transform = transformRef.current;
     let isDragging = false;
     let draggedNode: GraphNode | null = null;
@@ -108,7 +153,7 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
 
       // Edges
       ctx.beginPath();
-      ctx.strokeStyle = 'rgba(148, 163, 184, 0.6)';
+      ctx.strokeStyle = toRgba(cssTextSecondary, 0.6);
       ctx.lineWidth = 1;
       links.forEach((link) => {
         const source = link.source as GraphNode;
@@ -128,8 +173,8 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
         const scaledRadius =
           baseRadius + ((node.degree || 0) / Math.max(maxDegree, 1)) * maxRadiusIncrease;
         ctx.beginPath();
-        ctx.fillStyle = '#60a5fa';
-        ctx.strokeStyle = 'rgba(96, 165, 250, 0.35)';
+        ctx.fillStyle = cssPrimary;
+        ctx.strokeStyle = cssPrimaryRgb ? `rgba(${cssPrimaryRgb}, 0.35)` : toRgba(cssPrimary, 0.35);
         ctx.lineWidth = 2;
         ctx.arc(node.x, node.y, scaledRadius, 0, Math.PI * 2);
         ctx.fill();
@@ -137,8 +182,8 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
 
         // Labels only when zoomed in
         if (transform.k > 1.1) {
-          ctx.fillStyle = '#cbd5e1';
-          ctx.font = '12px "Inter", "SF Pro Text", -apple-system, system-ui, sans-serif';
+          ctx.fillStyle = cssTextPrimary;
+          ctx.font = `${cssFontSize} ${cssFontFamily}`;
           // strip file extension for label
           const label = node.id.replace(/\.[^/.]+$/, '');
           ctx.fillText(label, node.x + 10, node.y + 4);
