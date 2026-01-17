@@ -607,18 +607,23 @@ body {
 .outline-level-1 {
   font-weight: var(--font-weight-semibold);
 }
+
 .outline-level-2 {
   font-weight: var(--font-weight-semibold);
 }
+
 .outline-level-3 {
   font-weight: var(--font-weight-medium);
 }
+
 .outline-level-4 {
   font-weight: var(--font-weight-medium);
 }
+
 .outline-level-5 {
   font-weight: var(--font-weight-normal);
 }
+
 .outline-level-6 {
   font-weight: var(--font-weight-normal);
   opacity: 0.9;
