@@ -54,8 +54,24 @@ function extractWikilinks(content: string): string[] {
     let link = match[1].trim();
     if (!link) continue; // Skip empty matches
 
-    // Normalize: ensure .md extension
-    if (!link.endsWith('.md')) {
+    // Remove alias or heading parts like 'file|alias' or 'file#heading'
+    link = link.split('|')[0].split('#')[0].trim();
+    if (!link) continue;
+
+    // Normalize relative path markers
+    if (link.startsWith('./')) link = link.slice(2);
+
+    // If link has an extension and it's not .md, treat it as an attachment and skip
+    const lastDot = link.lastIndexOf('.');
+    if (lastDot !== -1) {
+      const ext = link.substring(lastDot + 1).toLowerCase();
+      if (ext !== 'md') {
+        // Attachment (e.g., .png, .jpg, .pdf) - do not add to graph
+        continue;
+      }
+      // already ends with .md - keep as-is
+    } else {
+      // No extension - assume a markdown file and add .md
       link += '.md';
     }
 
