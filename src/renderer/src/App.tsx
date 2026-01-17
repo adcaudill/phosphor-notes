@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import 'material-symbols';
 import { Editor, type EditorHandle } from './components/Editor';
+import EditorHeader from './components/EditorHeader';
 import { Sidebar } from './components/Sidebar';
 import StatusBar from './components/StatusBar';
 import { InformationPanel } from './components/InformationPanel';
@@ -646,49 +647,27 @@ function AppContent(): React.JSX.Element {
                 viewMode={viewMode}
               />
               <main className="main-content">
-                <div className="editor-header" onMouseDown={handleHeaderMouseDown}>
-                  {viewMode === 'editor' && titleEditMode ? (
-                    <input
-                      type="text"
-                      className="editor-title-input"
-                      value={editingTitle}
-                      onChange={(e) => setEditingTitle(e.target.value)}
-                      onBlur={() => handleTitleSave(editingTitle)}
-                      onKeyDown={handleTitleKeyDown}
-                      autoFocus
-                    />
-                  ) : (
-                    <h1
-                      className="editor-title"
-                      onDoubleClick={handleTitleDoubleClick}
-                      style={viewMode === 'editor' ? { cursor: 'text' } : {}}
-                    >
-                      {viewMode === 'tasks'
-                        ? 'Tasks'
-                        : viewMode === 'graph'
-                          ? 'Graph'
-                          : getTitleFromContent(content, currentFile)}
-                    </h1>
-                  )}
-                  {viewMode === 'editor' && !titleEditMode && (
-                    <div className="editor-header-actions">
-                      <button
-                        className="settings-btn"
-                        onClick={() => setFrontmatterModalOpen(true)}
-                        title="Edit file settings"
-                      >
-                        <span className="material-symbols-outlined">edit_attributes</span>
-                      </button>
-                      <button
-                        className="information-toggle"
-                        onClick={() => setShowInformationSidebar(!showInformationSidebar)}
-                        title="Toggle information panel"
-                      >
-                        <span className="material-symbols-outlined">info</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
+                <EditorHeader
+                  handleHeaderMouseDown={handleHeaderMouseDown}
+                  viewMode={viewMode}
+                  titleEditMode={titleEditMode}
+                  editingTitle={editingTitle}
+                  onEditingTitleChange={setEditingTitle}
+                  onTitleSave={handleTitleSave}
+                  onTitleKeyDown={handleTitleKeyDown}
+                  onTitleDoubleClick={handleTitleDoubleClick}
+                  onOpenFrontmatter={() => setFrontmatterModalOpen(true)}
+                  onToggleInformationSidebar={() =>
+                    setShowInformationSidebar(!showInformationSidebar)
+                  }
+                  currentTitle={
+                    viewMode === 'tasks'
+                      ? 'Tasks'
+                      : viewMode === 'graph'
+                        ? 'Graph'
+                        : getTitleFromContent(content, currentFile)
+                  }
+                />
                 {viewMode === 'editor' && (
                   <DailyNav
                     currentFile={currentFile}
