@@ -181,7 +181,7 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
         ctx.stroke();
 
         // Labels only when zoomed in
-        if (transform.k > 1.1) {
+        if (transform.k > 0.7) {
           ctx.fillStyle = cssTextPrimary;
           ctx.font = `${cssFontSize} ${cssFontFamily}`;
           // strip file extension for label
@@ -212,7 +212,7 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
         forceCollide<GraphNode>()
           .radius((d) => {
             const baseRadius = 6;
-            const maxRadiusIncrease = 10;
+            const maxRadiusIncrease = 50;
             const calculatedRadius =
               baseRadius + ((d.degree || 0) / Math.max(maxDegree, 1)) * maxRadiusIncrease + 8;
             return calculatedRadius * 3; // multiplied to give more space & avoid overlap
@@ -237,8 +237,15 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
     selection.call(zoomBehavior);
 
     // Apply a sensible initial zoom so node labels are visible by default.
-    // Labels are rendered when transform.k > 1.1, so choose a value above that.
-    const initialScale = 1.2;
+    // Unless there are more than 100 nodes, then start zoomed out to avoid clutter.
+    let initialScale;
+
+    if (nodes.length > 100) {
+      initialScale = 0.2;
+    } else {
+      initialScale = 1.0;
+    }
+
     const initialTransform = zoomIdentity
       .translate((width / 2) * (1 - initialScale), (height / 2) * (1 - initialScale))
       .scale(initialScale);
@@ -267,7 +274,7 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
     const findNodeAt = (x: number, y: number): GraphNode | undefined => {
       const hitRadius = 10;
       const baseRadius = 6;
-      const maxRadiusIncrease = 10;
+      const maxRadiusIncrease = 50;
       return nodes.find((node) => {
         if (node.x === undefined || node.y === undefined) return false;
         const scaledRadius =
