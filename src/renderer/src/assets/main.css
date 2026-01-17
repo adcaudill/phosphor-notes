@@ -255,7 +255,7 @@ body {
   transform: translateY(1px);
 }
 
-.relationships-toggle {
+.information-toggle {
   background: none;
   border: none;
   font-size: 18px;
@@ -265,7 +265,7 @@ body {
   opacity: 0.6;
 }
 
-.relationships-toggle:hover {
+.information-toggle:hover {
   opacity: 1;
 }
 
@@ -629,8 +629,8 @@ body {
   opacity: 0.9;
 }
 
-/* Relationships Section */
-.relationships-section {
+/* Information Section */
+.information-section {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);

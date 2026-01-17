@@ -53,7 +53,7 @@ function AppContent(): React.JSX.Element {
   const [conflict, setConflict] = useState<string | null>(null); // Filename that has a conflict
   const [isDirty, setIsDirty] = useState(false); // Whether current file has unsaved changes
   const [viewMode, setViewMode] = useState<'editor' | 'tasks' | 'graph'>('editor'); // Switch between editor, tasks, and graph views
-  const [showRelationshipsSidebar, setShowRelationshipsSidebar] = useState(false); // Toggle for relationships sidebar
+  const [showInformationSidebar, setShowInformationSidebar] = useState(false); // Toggle for information sidebar
   const [frontmatterModalOpen, setFrontmatterModalOpen] = useState(false); // Toggle for frontmatter modal
   const [focusMode, setFocusMode] = useState(false); // Toggle for focus/zen mode
   const [paragraphDimming, setParagraphDimming] = useState(settings.enableParagraphDimming); // Toggle for paragraph dimming
@@ -679,11 +679,11 @@ function AppContent(): React.JSX.Element {
                         🔧
                       </button>
                       <button
-                        className="relationships-toggle"
-                        onClick={() => setShowRelationshipsSidebar(!showRelationshipsSidebar)}
-                        title="Toggle relationships panel"
+                        className="information-toggle"
+                        onClick={() => setShowInformationSidebar(!showInformationSidebar)}
+                        title="Toggle information panel"
                       >
-                        🔗
+                        ℹ️
                       </button>
                     </div>
                   )}
@@ -773,7 +773,7 @@ function AppContent(): React.JSX.Element {
               </main>
             </div>
 
-            {showRelationshipsSidebar && (
+            {showInformationSidebar && (
               <InformationPanel
                 currentFile={currentFile}
                 content={content}

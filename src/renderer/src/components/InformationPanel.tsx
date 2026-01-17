@@ -107,7 +107,7 @@ export const InformationPanel: React.FC<InformationPanelProps> = ({
       )}
 
       {/* Document Relationships Section */}
-      <div className="information-section relationships-section">
+      <div className="information-section">
         <div className="information-section-header">
           <span className="information-section-title">Document Relationships</span>
           <span className="information-section-count">
