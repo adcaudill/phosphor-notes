@@ -60,6 +60,10 @@ This project would not be possible without the incredible open-source libraries 
 - [CodeMirror](https://codemirror.net/)
 - [sodium](https://github.com/jedisct1/libsodium)
 
+## Download & Installation
+
+Installation packages are not yet available. As this project is in early development, you will need to build from source. Follow the instructions in the **Development Setup** section below. If you are not comfortable building from source, please check back later for pre-built installers.
+
 ## Development Setup
 
 Phosphor Notes is built for **macOS** (initially) using modern web technologies. Follow these steps to set up your local development environment. While the current focus is on macOS, contributions for Windows and Linux support are welcome & the application _should_ work cross-platform though testing is limited.
