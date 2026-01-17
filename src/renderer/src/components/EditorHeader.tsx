@@ -40,7 +40,7 @@ export default function EditorHeader({
       {viewMode === 'editor' && (
         <div className="editor-nav-buttons">
           <button className="nav-back" onClick={onNavigateBack} disabled={!canGoBack} title="Back">
-            <span className="material-symbols-outlined">arrow_back</span>
+            <span className="material-symbols-outlined">arrow_back_ios</span>
           </button>
           <button
             className="nav-forward"
@@ -48,7 +48,7 @@ export default function EditorHeader({
             disabled={!canGoForward}
             title="Forward"
           >
-            <span className="material-symbols-outlined">arrow_forward</span>
+            <span className="material-symbols-outlined">arrow_forward_ios</span>
           </button>
         </div>
       )}
