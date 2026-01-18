@@ -151,16 +151,14 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
       ctx.translate(transform.x, transform.y);
       ctx.scale(transform.k, transform.k);
 
-      // 1. CALCULATE VIEWPORT BOUNDARIES (In Graph Coordinates)
-      // We add a 'buffer' (e.g., 50px) to ensure circles/text cut off
-      // at the edge don't disappear abruptly.
+      // Viewport boundaries for culling
       const buffer = 50;
       const minX = -transform.x / transform.k - buffer;
       const maxX = (width - transform.x) / transform.k + buffer;
       const minY = -transform.y / transform.k - buffer;
       const maxY = (height - transform.y) / transform.k + buffer;
 
-      // Edges
+      // Setup the edges - draw all in one go for performance
       ctx.beginPath();
       ctx.strokeStyle = toRgba(cssTextSecondary, 0.6);
       ctx.lineWidth = 1;
@@ -170,50 +168,57 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
         if (source.x === undefined || source.y === undefined) return;
         if (target.x === undefined || target.y === undefined) return;
 
-        // (Lines are cheap, so this is less critical than nodes, but helps).
-        const isSourceVisible =
-          source.x >= minX && source.x <= maxX && source.y >= minY && source.y <= maxY;
-        const isTargetVisible =
-          target.x >= minX && target.x <= maxX && target.y >= minY && target.y <= maxY;
-
-        if (!isSourceVisible && !isTargetVisible) return;
+        // Link culling - skip if both ends are off screen
+        if (
+          (source.x < minX || source.x > maxX || source.y < minY || source.y > maxY) &&
+          (target.x < minX || target.x > maxX || target.y < minY || target.y > maxY)
+        ) {
+          return;
+        }
 
         ctx.moveTo(source.x, source.y);
         ctx.lineTo(target.x, target.y);
       });
       ctx.stroke();
 
-      // Nodes
+      ctx.beginPath();
+      ctx.fillStyle = cssPrimary;
+      ctx.strokeStyle = cssPrimaryRgb ? `rgba(${cssPrimaryRgb}, 0.35)` : toRgba(cssPrimary, 0.35);
+      ctx.lineWidth = 2;
+
       nodes.forEach((node) => {
         if (node.x === undefined || node.y === undefined) return;
 
-        // Skip invisible nodes
-        if (node.x < minX || node.x > maxX || node.y < minY || node.y > maxY) {
-          return;
-        }
+        // Node culling - skip if node is off screen
+        if (node.x < minX || node.x > maxX || node.y < minY || node.y > maxY) return;
 
         const baseRadius = 6;
         const maxRadiusIncrease = 10;
         const scaledRadius =
           baseRadius + ((node.degree || 0) / Math.max(maxDegree, 1)) * maxRadiusIncrease;
 
-        ctx.beginPath();
-        ctx.fillStyle = cssPrimary;
-        ctx.strokeStyle = cssPrimaryRgb ? `rgba(${cssPrimaryRgb}, 0.35)` : toRgba(cssPrimary, 0.35);
-        ctx.lineWidth = 2;
+        // moveTo creates a sub-path so circles aren't connected by lines
+        ctx.moveTo(node.x + scaledRadius, node.y);
         ctx.arc(node.x, node.y, scaledRadius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
+      });
 
-        // Labels only when zoomed in
-        if (transform.k > 0.7) {
-          ctx.fillStyle = cssTextPrimary;
-          ctx.font = `${cssFontSize} ${cssFontFamily}`;
-          // strip file extension for label
+      // Draw all nodes in one fill/stroke operation
+      ctx.fill();
+      ctx.stroke();
+
+      // We only loop for text if we are actually zoomed in close enough
+      if (transform.k > 0.7) {
+        ctx.fillStyle = cssTextPrimary;
+        ctx.font = `${cssFontSize} ${cssFontFamily}`;
+
+        nodes.forEach((node) => {
+          if (node.x === undefined || node.y === undefined) return;
+          if (node.x < minX || node.x > maxX || node.y < minY || node.y > maxY) return;
+
           const label = node.id.replace(/\.[^/.]+$/, '');
           ctx.fillText(label, node.x + 10, node.y + 4);
-        }
-      });
+        });
+      }
 
       ctx.restore();
     };
