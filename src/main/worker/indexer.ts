@@ -377,7 +377,11 @@ parentPort?.on(
             const implicitLinks = getImplicitPathLinks(filename);
             const allLinks = [...links, ...implicitLinks];
 
-            graph[filename] = allLinks;
+            // Deduplicate links (preserve insertion order) so multiple wikilinks
+            // to the same target only create a single graph edge.
+            const uniqueLinks = Array.from(new Set(allLinks));
+
+            graph[filename] = uniqueLinks;
 
             // Extract tasks from this file
             const fileTasks = extractTasks(content, filename);
