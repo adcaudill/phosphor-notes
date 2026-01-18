@@ -536,28 +536,14 @@ export async function updateGraphForChangedFile(
     const implicitLinks = getImplicitPathLinks(filename);
     const allOutgoingLinks = [...new Set([...wikilinks, ...implicitLinks])];
 
-    // Get the old outgoing links for this file from the graph
-    const oldOutgoingLinks = lastGraph[filename] || [];
-
     // Update the graph with the file's current outgoing links
     lastGraph[filename] = allOutgoingLinks;
-
-    // Remove this file from backlinks of files it no longer references
-    for (const oldTarget of oldOutgoingLinks) {
-      if (!allOutgoingLinks.includes(oldTarget) && lastGraph[oldTarget]) {
-        lastGraph[oldTarget] = lastGraph[oldTarget].filter((f) => f !== filename);
-      }
-    }
-
-    // Add this file to backlinks of files it now references
-    for (const newTarget of allOutgoingLinks) {
-      if (!lastGraph[newTarget]) {
-        lastGraph[newTarget] = [];
-      }
-      // Add this file as an incoming link if not already present
-      if (!lastGraph[newTarget].includes(filename)) {
-        lastGraph[newTarget].push(filename);
-        lastGraph[newTarget].sort();
+    // Ensure target nodes exist in the graph so the UI can display linked-to nodes.
+    // NOTE: we deliberately do NOT mutate other files' link lists here — the
+    // canonical representation is a forward graph (file -> outgoing links).
+    for (const target of allOutgoingLinks) {
+      if (!lastGraph[target]) {
+        lastGraph[target] = [];
       }
     }
 
@@ -642,15 +628,10 @@ export async function updateGraphForFile(
     // Update the graph with the new file's outgoing links
     lastGraph[filename] = allOutgoingLinks;
 
-    // Update backlinks: add this file to the incoming links of files it references
+    // Ensure target nodes exist in the graph so the UI can display linked-to nodes.
     for (const targetFile of allOutgoingLinks) {
       if (!lastGraph[targetFile]) {
         lastGraph[targetFile] = [];
-      }
-      // Add this file as an incoming link if not already present
-      if (!lastGraph[targetFile].includes(filename)) {
-        lastGraph[targetFile].push(filename);
-        lastGraph[targetFile].sort();
       }
     }
 

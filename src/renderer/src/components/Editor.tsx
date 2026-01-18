@@ -165,9 +165,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
         doc: initialContent,
         extensions: [
           keymap.of([...closeBracketsKeymap, ...baseKeymap, ...foldKeymap]), // base keymap + folding
-          ...(isOutlinerMode
-            ? [outlinerKeymapExtension, outlinerHangingIndentExtension]
-            : []), // outliner behavior + wrapped indent
+          ...(isOutlinerMode ? [outlinerKeymapExtension, outlinerHangingIndentExtension] : []), // outliner behavior + wrapped indent
           EditorView.lineWrapping, // Soft wrap long lines
           markdown(), // Markdown syntax support
           foldGutter(),

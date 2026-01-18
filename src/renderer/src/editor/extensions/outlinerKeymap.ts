@@ -7,7 +7,13 @@ import {
   ViewUpdate,
   keymap
 } from '@codemirror/view';
-import { ChangeSpec, EditorSelection, Prec, RangeSetBuilder, type Extension } from '@codemirror/state';
+import {
+  ChangeSpec,
+  EditorSelection,
+  Prec,
+  RangeSetBuilder,
+  type Extension
+} from '@codemirror/state';
 
 /**
  * Get the indentation level of a line (number of spaces at the start)
