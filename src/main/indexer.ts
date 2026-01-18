@@ -148,10 +148,23 @@ async function tryStartWorkerFromFile(
           if (!vaultPath) return;
           const cacheDir = join(vaultPath, '.phosphor');
           await fsp.mkdir(cacheDir, { recursive: true });
-          const tmpPath = join(cacheDir, 'graph.json.tmp');
+          const uniqueTmpPath = join(
+            cacheDir,
+            `graph.json.tmp.${Date.now()}.${Math.random().toString(36).slice(2)}`
+          );
           const outPath = join(cacheDir, 'graph.json');
-          await fsp.writeFile(tmpPath, JSON.stringify(graph), 'utf-8');
-          await fsp.rename(tmpPath, outPath);
+          await fsp.writeFile(uniqueTmpPath, JSON.stringify(graph), 'utf-8');
+          try {
+            await fsp.rename(uniqueTmpPath, outPath);
+          } catch (renameErr) {
+            // If rename fails, try to clean up the tmp file
+            try {
+              await fsp.unlink(uniqueTmpPath);
+            } catch {
+              // Silently ignore cleanup errors
+            }
+            throw renameErr;
+          }
           safeLog('Graph cache saved to', outPath);
         } catch (err) {
           safeError('Failed to persist graph cache:', err);
@@ -279,10 +292,23 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
                 if (!vaultPath) return;
                 const cacheDir = join(vaultPath, '.phosphor');
                 await fsp.mkdir(cacheDir, { recursive: true });
-                const tmpPath = join(cacheDir, 'graph.json.tmp');
+                const uniqueTmpPath = join(
+                  cacheDir,
+                  `graph.json.tmp.${Date.now()}.${Math.random().toString(36).slice(2)}`
+                );
                 const outPath = join(cacheDir, 'graph.json');
-                await fsp.writeFile(tmpPath, JSON.stringify(graph), 'utf-8');
-                await fsp.rename(tmpPath, outPath);
+                await fsp.writeFile(uniqueTmpPath, JSON.stringify(graph), 'utf-8');
+                try {
+                  await fsp.rename(uniqueTmpPath, outPath);
+                } catch (renameErr) {
+                  // If rename fails, try to clean up the tmp file
+                  try {
+                    await fsp.unlink(uniqueTmpPath);
+                  } catch {
+                    // Silently ignore cleanup errors
+                  }
+                  throw renameErr;
+                }
                 console.log('Graph cache saved to', outPath);
               } catch (err) {
                 console.error('Failed to persist graph cache:', err);
@@ -553,10 +579,23 @@ export async function updateGraphForChangedFile(
       try {
         const cacheDir = join(vaultPath, '.phosphor');
         await fsp.mkdir(cacheDir, { recursive: true });
-        const tmpPath = join(cacheDir, 'graph.json.tmp');
+        const uniqueTmpPath = join(
+          cacheDir,
+          `graph.json.tmp.${Date.now()}.${Math.random().toString(36).slice(2)}`
+        );
         const outPath = join(cacheDir, 'graph.json');
-        await fsp.writeFile(tmpPath, JSON.stringify(lastGraph), 'utf-8');
-        await fsp.rename(tmpPath, outPath);
+        await fsp.writeFile(uniqueTmpPath, JSON.stringify(lastGraph), 'utf-8');
+        try {
+          await fsp.rename(uniqueTmpPath, outPath);
+        } catch (renameErr) {
+          // If rename fails, try to clean up the tmp file
+          try {
+            await fsp.unlink(uniqueTmpPath);
+          } catch {
+            // Silently ignore cleanup errors
+          }
+          throw renameErr;
+        }
         safeDebug('Graph cache updated for changed file');
       } catch (err) {
         safeError('Failed to persist updated graph cache:', err);
@@ -631,10 +670,23 @@ export async function updateGraphForFile(
       try {
         const cacheDir = join(vaultPath, '.phosphor');
         await fsp.mkdir(cacheDir, { recursive: true });
-        const tmpPath = join(cacheDir, 'graph.json.tmp');
+        const uniqueTmpPath = join(
+          cacheDir,
+          `graph.json.tmp.${Date.now()}.${Math.random().toString(36).slice(2)}`
+        );
         const outPath = join(cacheDir, 'graph.json');
-        await fsp.writeFile(tmpPath, JSON.stringify(lastGraph), 'utf-8');
-        await fsp.rename(tmpPath, outPath);
+        await fsp.writeFile(uniqueTmpPath, JSON.stringify(lastGraph), 'utf-8');
+        try {
+          await fsp.rename(uniqueTmpPath, outPath);
+        } catch (renameErr) {
+          // If rename fails, try to clean up the tmp file
+          try {
+            await fsp.unlink(uniqueTmpPath);
+          } catch {
+            // Silently ignore cleanup errors
+          }
+          throw renameErr;
+        }
         safeDebug('Graph cache updated');
       } catch (err) {
         safeError('Failed to persist updated graph cache:', err);

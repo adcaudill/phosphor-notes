@@ -155,10 +155,18 @@ function extractTasks(content: string, filename: string): Task[] {
     // Extract due date from task text
     let dueDate: string | undefined;
 
+    // Try Phosphor @-notation style: @due(YYYY-MM-DD)
+    const atDueMatch = text.match(/@due\((\d{4}-\d{2}-\d{2})\)/);
+    if (atDueMatch) {
+      dueDate = atDueMatch[1];
+    }
+
     // Try emoji style: 📅 YYYY-MM-DD
-    const emojiDateMatch = text.match(/📅\s*(\d{4}-\d{2}-\d{2})/);
-    if (emojiDateMatch) {
-      dueDate = emojiDateMatch[1];
+    if (!dueDate) {
+      const emojiDateMatch = text.match(/📅\s*(\d{4}-\d{2}-\d{2})/);
+      if (emojiDateMatch) {
+        dueDate = emojiDateMatch[1];
+      }
     }
 
     // Try Org-mode style: DEADLINE: <YYYY-MM-DD ...>

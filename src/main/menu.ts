@@ -68,6 +68,12 @@ export function createMenu(mainWindow: BrowserWindow | null): void {
           mainWindow?.webContents.send('menu:lock-vault');
         }
       },
+      {
+        label: 'Import Logseq Vault...',
+        click: () => {
+          mainWindow?.webContents.send('menu:import-logseq');
+        }
+      },
       { type: 'separator' },
       {
         label: 'Search',

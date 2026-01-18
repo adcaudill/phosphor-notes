@@ -12,7 +12,7 @@ export interface TaskMetadata {
 
 /**
  * Parse task metadata from raw task text
- * Supports both emoji style (📅 2026-01-15 🔁 +1w) and Org-mode style
+ * Supports emoji style (📅 2026-01-15 🔁 +1w), Org-mode style, and Phosphor @-notation style
  */
 export function parseTaskMetadata(rawText: string): TaskMetadata {
   let text = rawText;
@@ -28,22 +28,48 @@ export function parseTaskMetadata(rawText: string): TaskMetadata {
     text = text.replace(completeMatch[0], '').trim();
   }
 
-  // 2. Extract Recurrence (🔁 +1d/w/m/y)
-  const recurMatch = text.match(/🔁\s?(\+\d+[dwmy])/i);
-  if (recurMatch) {
-    recurrence = recurMatch[1].toLowerCase();
-    text = text.replace(recurMatch[0], '').trim();
+  // 2. Extract Phosphor @-notation style metadata
+  // @due(YYYY-MM-DD) and @repeat(interval)
+  const dueMeta = text.match(/@due\((\d{4}-\d{2}-\d{2})\)/);
+  if (dueMeta) {
+    dueDate = parseDate(dueMeta[1]);
+    text = text.replace(dueMeta[0], '').trim();
   }
 
-  // 3. Extract Due Date (📅 YYYY-MM-DD)
-  const dateMatch = text.match(/📅\s*(\d{4}-\d{2}-\d{2})/);
-  if (dateMatch) {
-    const dateStr = dateMatch[1];
-    dueDate = parseDate(dateStr);
-    text = text.replace(dateMatch[0], '').trim();
+  const repeatMeta = text.match(/@repeat\(([1-9]\d*[ymwdhMS])\)/);
+  if (repeatMeta) {
+    // Convert to +format for compatibility with addInterval function
+    const interval = repeatMeta[1];
+    // Extract number and unit
+    const match = interval.match(/^([1-9]\d*)([ymwdhMS])$/);
+    if (match) {
+      const amount = match[1];
+      const unit = match[2].toLowerCase();
+      recurrence = `+${amount}${unit}`;
+    }
+    text = text.replace(repeatMeta[0], '').trim();
   }
 
-  // 4. Support Org-Mode SCHEDULED style
+  // 3. Extract Emoji Recurrence (🔁 +1d/w/m/y)
+  if (!recurrence) {
+    const recurMatch = text.match(/🔁\s?(\+\d+[dwmy])/i);
+    if (recurMatch) {
+      recurrence = recurMatch[1].toLowerCase();
+      text = text.replace(recurMatch[0], '').trim();
+    }
+  }
+
+  // 4. Extract Emoji Due Date (📅 YYYY-MM-DD)
+  if (!dueDate) {
+    const dateMatch = text.match(/📅\s*(\d{4}-\d{2}-\d{2})/);
+    if (dateMatch) {
+      const dateStr = dateMatch[1];
+      dueDate = parseDate(dateStr);
+      text = text.replace(dateMatch[0], '').trim();
+    }
+  }
+
+  // 5. Support Org-Mode SCHEDULED style
   if (!scheduledDate) {
     const scheduledMatch = text.match(/SCHEDULED:\s*<(\d{4}-\d{2}-\d{2})/i);
     if (scheduledMatch) {
@@ -51,7 +77,7 @@ export function parseTaskMetadata(rawText: string): TaskMetadata {
     }
   }
 
-  // 5. Support Org-Mode DEADLINE style
+  // 6. Support Org-Mode DEADLINE style
   if (!dueDate) {
     const deadlineMatch = text.match(/DEADLINE:\s*<(\d{4}-\d{2}-\d{2})/i);
     if (deadlineMatch) {

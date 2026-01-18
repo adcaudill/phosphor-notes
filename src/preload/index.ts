@@ -37,6 +37,18 @@ const api = {
     return () => ipcRenderer.removeListener('phosphor:status', handler);
   },
 
+  // Event subscription for import progress
+  onImportProgress: (
+    cb: (progress: { current: number; total: number; currentFile: string }) => void
+  ) => {
+    const handler = (
+      _event: IpcRendererEvent,
+      data: { current: number; total: number; currentFile: string }
+    ): void => cb(data);
+    ipcRenderer.on('phosphor:import-progress', handler);
+    return () => ipcRenderer.removeListener('phosphor:import-progress', handler);
+  },
+
   // Event subscription for menu events
   onMenuEvent: (eventName: string, cb: () => void) => {
     const handler = (): void => cb();
@@ -131,6 +143,9 @@ const api = {
 
   // Delete note
   deleteNote: (filename: string) => ipcRenderer.invoke('note:delete', filename),
+
+  // Import Logseq vault
+  importLogseq: () => ipcRenderer.invoke('import:logseq'),
 
   // Get app versions
   getVersions: () => ipcRenderer.invoke('app:get-versions'),

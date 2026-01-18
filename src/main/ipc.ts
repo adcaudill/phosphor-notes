@@ -1,7 +1,8 @@
 import { ipcMain, dialog, BrowserWindow, app, shell } from 'electron';
 import * as fsp from 'fs/promises';
-import * as fs from 'fs/promises';
+import * as fs from 'fs';
 import * as path from 'path';
+import { Worker } from 'worker_threads';
 import {
   startIndexing,
   stopIndexing,
@@ -540,7 +541,7 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
     const filePath = validateAndResolvePath(activeVaultPath, filename);
 
     try {
-      const buffer = await fs.readFile(filePath);
+      const buffer = await fsp.readFile(filePath);
 
       // Check if file is encrypted
       if (activeMasterKey && isEncrypted(buffer)) {
@@ -564,7 +565,7 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
         await fsp.mkdir(dir, { recursive: true });
         // Auto-create parent .md files and check if we created any
         const parentFilesCreated = await ensureParentFilesExist(activeVaultPath, filePath);
-        await fs.writeFile(filePath, ''); // Create empty file
+        await fsp.writeFile(filePath, ''); // Create empty file
 
         // If we created parent files, trigger a graph re-index
         if (parentFilesCreated && mainWindow && !mainWindow.isDestroyed()) {
@@ -640,7 +641,7 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
         buffer = Buffer.from(content, 'utf-8');
       }
 
-      await fs.writeFile(filePath, buffer);
+      await fsp.writeFile(filePath, buffer);
 
       // If we created parent files, trigger a graph re-index
       if (parentFilesCreated && mainWindow && !mainWindow.isDestroyed()) {
@@ -879,6 +880,180 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
     } catch (err) {
       safeError('[Encryption] Failed to create encryption:', err);
       return false;
+    }
+  });
+
+  // ============ IMPORT HANDLERS ============
+
+  // Import Logseq graph
+  ipcMain.handle('import:logseq', async () => {
+    if (!activeVaultPath) {
+      return { success: false, error: 'No vault selected' };
+    }
+
+    try {
+      // Show file dialog to select Logseq vault directory
+      const result = await dialog.showOpenDialog(mainWindow!, {
+        properties: ['openDirectory'],
+        message: 'Select your Logseq Vault directory',
+        title: 'Import Logseq Vault'
+      });
+
+      if (result.canceled || result.filePaths.length === 0) {
+        return { success: false, error: 'No directory selected' };
+      }
+
+      const sourceDir = result.filePaths[0];
+
+      // Notify UI that import is starting
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('phosphor:status', {
+          type: 'import-starting',
+          message: 'Starting Logseq import...'
+        });
+      }
+
+      // Start the import in a worker thread
+      return new Promise((resolve) => {
+        let worker: Worker | null = null;
+        const workerPath = path.join(__dirname, 'worker', 'importer.js');
+
+        // Helper to start the worker
+        async function startWorker(): Promise<void> {
+          if (fs.existsSync(workerPath)) {
+            // Normal: run compiled worker
+            worker = new Worker(workerPath);
+          } else {
+            // Fallback for dev: transpile the TS source at runtime and run via eval
+            const possibleSrc = path.resolve(process.cwd(), 'src', 'main', 'worker', 'importer.ts');
+            if (fs.existsSync(possibleSrc)) {
+              try {
+                safeLog('Import: compiled worker missing, using runtime TS fallback');
+                const tsCode = fs.readFileSync(possibleSrc, 'utf-8');
+                // Transpile with Typescript at runtime to CommonJS
+                const ts = await import('typescript');
+                const transpiled = ts.transpileModule(tsCode, {
+                  compilerOptions: {
+                    module: ts.ModuleKind.CommonJS,
+                    target: ts.ScriptTarget.ES2020
+                  }
+                }).outputText;
+
+                // Start worker from transpiled code using eval
+                worker = new Worker(transpiled, { eval: true });
+              } catch (err) {
+                throw new Error(`Failed to start importer worker: ${String(err)}`);
+              }
+            } else {
+              throw new Error(
+                `Importer worker not found at ${workerPath} and source fallback not available`
+              );
+            }
+          }
+
+          if (!worker) {
+            throw new Error('Failed to create worker');
+          }
+
+          // Handle messages from worker
+          worker.on('message', (message: { type: string; [key: string]: unknown }) => {
+            if (message.type === 'progress') {
+              const progress = message as {
+                type: string;
+                current: number;
+                total: number;
+                currentFile: string;
+              };
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('phosphor:import-progress', {
+                  current: progress.current,
+                  total: progress.total,
+                  currentFile: progress.currentFile
+                });
+              }
+            } else if (message.type === 'success') {
+              const success = message as {
+                type: string;
+                filesImported: number;
+                assetsImported: number;
+              };
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('phosphor:status', {
+                  type: 'import-success',
+                  message: `Imported ${success.filesImported} files and ${success.assetsImported} assets`
+                });
+              }
+
+              // Re-index the vault to pick up the new files
+              try {
+                stopIndexing();
+                if (activeVaultPath && mainWindow && !mainWindow.isDestroyed()) {
+                  startIndexing(activeVaultPath, mainWindow);
+                }
+              } catch (err) {
+                safeError('Failed to re-index after import:', err);
+              }
+
+              worker?.terminate();
+              resolve({ success: true, filesImported: success.filesImported });
+            } else if (message.type === 'error') {
+              const error = message as { type: string; message: string };
+              safeError('Import error:', error.message);
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('phosphor:status', {
+                  type: 'import-error',
+                  message: `Import failed: ${error.message}`
+                });
+              }
+              worker?.terminate();
+              resolve({ success: false, error: error.message });
+            }
+          });
+
+          // Handle worker errors
+          worker.on('error', (err: Error) => {
+            safeError('Worker error:', err);
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('phosphor:status', {
+                type: 'import-error',
+                message: `Worker error: ${err.message}`
+              });
+            }
+            worker?.terminate();
+            resolve({ success: false, error: err.message });
+          });
+
+          // Handle worker exit
+          worker.on('exit', (code: number) => {
+            if (code !== 0 && mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('phosphor:status', {
+                type: 'import-error',
+                message: `Worker exited with code ${code}`
+              });
+            }
+          });
+
+          // Send the import request to the worker
+          worker.postMessage({
+            sourceDir: sourceDir,
+            targetDir: activeVaultPath
+          });
+        }
+
+        startWorker().catch((err) => {
+          safeError('Failed to start import worker:', err);
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('phosphor:status', {
+              type: 'import-error',
+              message: `Failed to start import: ${String(err)}`
+            });
+          }
+          resolve({ success: false, error: String(err) });
+        });
+      });
+    } catch (err) {
+      safeError('Import handler error:', err);
+      return { success: false, error: String(err) };
     }
   });
 

@@ -48,6 +48,12 @@ export interface PhosphorAPI {
   isVaultUnlocked: () => Promise<boolean>;
   createEncryption: (password: string) => Promise<boolean>; // Create encryption for vault
 
+  // Import
+  importLogseq: () => Promise<{ success: boolean; error?: string; filesImported?: number }>;
+  onImportProgress: (
+    cb: (progress: { current: number; total: number; currentFile: string }) => void
+  ) => () => void;
+
   // Tasks
   getTaskIndex: () => Promise<Task[]>;
   onTasksUpdate: (cb: (tasks: Task[]) => void) => () => void;

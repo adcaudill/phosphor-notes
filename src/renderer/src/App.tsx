@@ -276,6 +276,21 @@ function AppContent(): React.JSX.Element {
       }
     });
 
+    const unsubscribeImportLogseq = window.phosphor.onMenuEvent?.(
+      'menu:import-logseq',
+      async () => {
+        try {
+          const result = await window.phosphor.importLogseq?.();
+          if (result && typeof result === 'object' && 'success' in result && result.success) {
+            // Import succeeded, vault will be re-indexed automatically
+            console.log('Logseq import completed');
+          }
+        } catch (err) {
+          console.error('Failed to import Logseq vault:', err);
+        }
+      }
+    );
+
     // File change watchers - external file modifications
     const unsubscribeFileChanged = window.phosphor.onFileChanged?.((filename: string) => {
       console.debug('[FileWatcher] File changed externally:', filename);
@@ -346,6 +361,7 @@ function AppContent(): React.JSX.Element {
       if (unsubscribeAbout) unsubscribeAbout();
       if (unsubscribeEnableEncryption) unsubscribeEnableEncryption();
       if (unsubscribeLockVault) unsubscribeLockVault();
+      if (unsubscribeImportLogseq) unsubscribeImportLogseq();
       if (statusTimerRef.current) window.clearTimeout(statusTimerRef.current);
     };
   }, []);
