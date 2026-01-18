@@ -151,6 +151,15 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
       ctx.translate(transform.x, transform.y);
       ctx.scale(transform.k, transform.k);
 
+      // 1. CALCULATE VIEWPORT BOUNDARIES (In Graph Coordinates)
+      // We add a 'buffer' (e.g., 50px) to ensure circles/text cut off
+      // at the edge don't disappear abruptly.
+      const buffer = 50;
+      const minX = -transform.x / transform.k - buffer;
+      const maxX = (width - transform.x) / transform.k + buffer;
+      const minY = -transform.y / transform.k - buffer;
+      const maxY = (height - transform.y) / transform.k + buffer;
+
       // Edges
       ctx.beginPath();
       ctx.strokeStyle = toRgba(cssTextSecondary, 0.6);
@@ -160,6 +169,15 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
         const target = link.target as GraphNode;
         if (source.x === undefined || source.y === undefined) return;
         if (target.x === undefined || target.y === undefined) return;
+
+        // (Lines are cheap, so this is less critical than nodes, but helps).
+        const isSourceVisible =
+          source.x >= minX && source.x <= maxX && source.y >= minY && source.y <= maxY;
+        const isTargetVisible =
+          target.x >= minX && target.x <= maxX && target.y >= minY && target.y <= maxY;
+
+        if (!isSourceVisible && !isTargetVisible) return;
+
         ctx.moveTo(source.x, source.y);
         ctx.lineTo(target.x, target.y);
       });
@@ -168,10 +186,17 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
       // Nodes
       nodes.forEach((node) => {
         if (node.x === undefined || node.y === undefined) return;
+
+        // Skip invisible nodes
+        if (node.x < minX || node.x > maxX || node.y < minY || node.y > maxY) {
+          return;
+        }
+
         const baseRadius = 6;
         const maxRadiusIncrease = 10;
         const scaledRadius =
           baseRadius + ((node.degree || 0) / Math.max(maxDegree, 1)) * maxRadiusIncrease;
+
         ctx.beginPath();
         ctx.fillStyle = cssPrimary;
         ctx.strokeStyle = cssPrimaryRgb ? `rgba(${cssPrimaryRgb}, 0.35)` : toRgba(cssPrimary, 0.35);
