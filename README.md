@@ -42,6 +42,7 @@ Whether you are managing complex projects, journaling your daily life, or writin
 - **Zero-Knowledge Encryption:** Optional, robust vault encryption using **Argon2id** (Key Derivation) and **XChaCha20-Poly1305** (Authenticated Encryption). Your password is never stored; your data is unreadable without it.
 - **Rich Media:** Drag-and-drop images (`.png`, `.jpg`) directly into the editor. Assets are stored locally (and encrypted if the vault is locked).
 - **Color Palettes:** Three built-in themes (Snow, Amber, Green) inspired by the colors of classic CRT monitors, with light/dark modes.
+- **Logseq Importer:** Seamlessly migrate your Logseq data (Markdown files with embedded metadata) into Phosphor Notes. This importer preserves backlinks, tags, and task statuses, and includes images and other attachments.
 - **File Shrink Backups:** Automatic, time-stamped backups of files when saving smaller versions, reducing the risk of data loss (saved if the new content is more than 10% smaller).
 - **Performance:** Built on Electron and React with a custom **Node worker** architecture to handle indexing thousands of files without UI lag.
 - **Cross-Platform:** Designed for macOS initially, with plans for Windows and Linux support.
