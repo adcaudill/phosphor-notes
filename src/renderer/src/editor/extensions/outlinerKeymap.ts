@@ -1,5 +1,13 @@
-import { EditorView, KeyBinding, keymap } from '@codemirror/view';
-import { ChangeSpec, EditorSelection, Prec, type Extension } from '@codemirror/state';
+import {
+  Decoration,
+  DecorationSet,
+  EditorView,
+  KeyBinding,
+  ViewPlugin,
+  ViewUpdate,
+  keymap
+} from '@codemirror/view';
+import { ChangeSpec, EditorSelection, Prec, RangeSetBuilder, type Extension } from '@codemirror/state';
 
 /**
  * Get the indentation level of a line (number of spaces at the start)
@@ -162,3 +170,64 @@ export function createOutlinerKeymap(): KeyBinding[] {
 
 // High-precedence keymap extension to override markdown list continuation
 export const outlinerKeymapExtension: Extension = Prec.high(keymap.of(createOutlinerKeymap()));
+
+// Apply hanging indents so wrapped lines stay aligned under their list item text
+export const outlinerHangingIndentExtension: Extension = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+
+    constructor(view: EditorView) {
+      this.decorations = this.build(view);
+    }
+
+    update(update: ViewUpdate): void {
+      if (update.docChanged || update.viewportChanged) {
+        this.decorations = this.build(update.view);
+      }
+    }
+
+    build(view: EditorView): DecorationSet {
+      const builder = new RangeSetBuilder<Decoration>();
+
+      for (const { from, to } of view.visibleRanges) {
+        let pos = from;
+        while (pos <= to) {
+          const line = view.state.doc.lineAt(pos);
+          const indent = this.hangingIndentColumns(line.text);
+
+          if (indent > 0) {
+            const indentValue = `${indent}ch`;
+            builder.add(
+              line.from,
+              line.from,
+              Decoration.line({
+                attributes: {
+                  style: `text-indent:-${indentValue};padding-left:${indentValue};`
+                }
+              })
+            );
+          }
+
+          pos = line.to + 1;
+        }
+      }
+
+      return builder.finish();
+    }
+
+    hangingIndentColumns(text: string): number {
+      // Bullet lines indent by their leading spaces plus the marker width
+      const bulletMatch = text.match(/^(\s*)-\s/);
+      if (bulletMatch) return bulletMatch[1].length + 2;
+
+      // Continuation lines rely on their leading spaces
+      const leadingSpaces = text.match(/^(\s+)/);
+      if (leadingSpaces) return leadingSpaces[1].length;
+
+      return 0;
+    }
+  },
+  {
+    decorations: (v) => v.decorations
+  }
+);

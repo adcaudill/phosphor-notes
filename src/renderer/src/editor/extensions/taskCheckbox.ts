@@ -42,7 +42,9 @@ class TaskCheckboxWidget extends WidgetType {
     indicator.textContent = circleChar;
     indicator.style.display = 'inline-block';
     indicator.style.marginRight = '6px';
-    indicator.style.marginLeft = '-24px';
+    indicator.style.marginLeft = '-2px';
+    indicator.style.width = '1.4em';
+    indicator.style.textAlign = 'center';
     indicator.style.cursor = 'pointer';
     indicator.style.fontSize = '1.1em';
     indicator.style.lineHeight = '1';

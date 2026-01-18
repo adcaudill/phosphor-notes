@@ -17,7 +17,10 @@ import { typewriterScrollPlugin } from '../editor/extensions/typewriter';
 import { dimmingPlugin, suppressDimmingEffect } from '../editor/extensions/dimming';
 import { createGrammarLint } from '../editor/extensions/grammar';
 import { smartTypographyExtension } from '../editor/extensions/smartTypography';
-import { outlinerKeymapExtension } from '../editor/extensions/outlinerKeymap';
+import {
+  outlinerHangingIndentExtension,
+  outlinerKeymapExtension
+} from '../editor/extensions/outlinerKeymap';
 import { createSearchExtension, createSearchAPI } from '../editor/extensions/search';
 import { useSettings } from '../hooks/useSettings';
 import { pdfWidgetPlugin } from '../editor/extensions/pdfWidget';
@@ -162,7 +165,9 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
         doc: initialContent,
         extensions: [
           keymap.of([...closeBracketsKeymap, ...baseKeymap, ...foldKeymap]), // base keymap + folding
-          ...(isOutlinerMode ? [outlinerKeymapExtension] : []), // high-precedence outliner keys
+          ...(isOutlinerMode
+            ? [outlinerKeymapExtension, outlinerHangingIndentExtension]
+            : []), // outliner behavior + wrapped indent
           EditorView.lineWrapping, // Soft wrap long lines
           markdown(), // Markdown syntax support
           foldGutter(),
