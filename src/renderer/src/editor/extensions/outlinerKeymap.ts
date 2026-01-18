@@ -59,6 +59,25 @@ function findBulletIndent(state: EditorView['state'], lineNumber: number): strin
 }
 
 /**
+ * Find the nearest bullet line (including current) above the given line number.
+ * Returns the line and the regex match if found, otherwise null.
+ */
+function findNearestBulletLine(
+  state: EditorView['state'],
+  lineNumber: number
+): {
+  line: { from: number; to: number; number: number; text: string };
+  match: RegExpMatchArray;
+} | null {
+  for (let n = lineNumber; n >= 1; n--) {
+    const line = state.doc.line(n);
+    const match = line.text.match(/^(\s*)-\s*(\[(?: |x|X)\]\s)?/);
+    if (match) return { line, match };
+  }
+  return null;
+}
+
+/**
  * Handler for Enter key in outliner mode
  * Creates a new bullet point at the same indentation level
  */
@@ -67,7 +86,14 @@ export const outlinerEnter = (view: EditorView): boolean => {
     const line = view.state.doc.lineAt(range.head);
     // Use the nearest bullet's indent so continuations (Shift+Enter) don't drift deeper
     const bulletIndent = findBulletIndent(view.state, line.number);
-    const insertText = '\n' + bulletIndent + '- ';
+
+    // If the nearest bullet above (or current) is a task (has a checkbox),
+    // insert a new unchecked checkbox `- [ ] ` for the new item.
+    const nearest = findNearestBulletLine(view.state, line.number);
+    let insertText = '\n' + bulletIndent + '- ';
+    if (nearest && /\[(?: |x|X)\]/.test(nearest.line.text)) {
+      insertText = '\n' + bulletIndent + '- [ ] ';
+    }
 
     const change: ChangeSpec = { from: range.head, to: range.head, insert: insertText };
     const cursor = EditorSelection.cursor(range.head + insertText.length);
