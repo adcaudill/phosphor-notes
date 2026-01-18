@@ -4,7 +4,7 @@ import {
   type CompletionContext,
   type CompletionResult
 } from '@codemirror/autocomplete';
-import type { Extension } from '@codemirror/state';
+import { EditorSelection, type Extension } from '@codemirror/state';
 
 // Build an autocomplete source for wiki links based on known pages
 export function createWikiLinkAutocomplete(pages: string[]): Extension {
@@ -29,12 +29,14 @@ export function createWikiLinkAutocomplete(pages: string[]): Extension {
         apply: (view, _completion, applyFrom, applyTo) => {
           const hasClosing = view.state.sliceDoc(applyTo, applyTo + 2) === ']]';
           const insertText = name + (hasClosing ? '' : ']]');
+          const cursorAfter = applyFrom + name.length + 2; // position after the closing ']]'
           view.dispatch({
             changes: {
               from: applyFrom,
               to: applyTo,
               insert: insertText
-            }
+            },
+            selection: EditorSelection.single(cursorAfter)
           });
         }
       }));
