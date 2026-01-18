@@ -41,6 +41,7 @@
     "fs-extra": "^11.3.3",
     "material-symbols": "^0.40.2",
     "minisearch": "^7.2.0",
+    "react-datepicker": "^9.1.0",
     "retext": "^9.0.0",
     "retext-contractions": "^6.0.0",
     "retext-english": "^5.0.0",

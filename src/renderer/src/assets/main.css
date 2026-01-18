@@ -277,6 +277,77 @@ body {
   margin-left: auto;
 }
 
+/* Calendar / DatePicker button shown in the editor header */
+.calendar-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  padding: var(--spacing-sm);
+  transition: opacity 0.15s ease;
+  opacity: 0.6;
+  color: var(--color-text-primary);
+}
+
+.calendar-btn:hover {
+  opacity: 1;
+}
+
+/* React DatePicker overrides to match app theme */
+.editor-header .react-datepicker-popper {
+  z-index: 2200;
+}
+
+.editor-header .react-datepicker {
+  background: var(--color-background-secondary);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-lg);
+  color: var(--color-text-primary);
+  border-radius: 8px;
+  padding: 6px;
+  font-family: var(--font-family);
+}
+
+.editor-header .react-datepicker__header {
+  background: transparent;
+}
+
+.editor-header .react-datepicker__current-month {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.editor-header .react-datepicker__day,
+.editor-header .react-datepicker__day--selected,
+.editor-header .react-datepicker__day--keyboard-selected {
+  background: var(--color-background);
+  color: var(--color-text-primary);
+}
+
+.editor-header .react-datepicker__day-name {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.editor-header .react-datepicker__day:not([aria-disabled='true']):hover {
+  background: var(--color-surface-dark);
+}
+
+.editor-header .react-datepicker__day--selected,
+.editor-header .react-datepicker__day--keyboard-selected {
+  background: var(--color-sidebar-hover);
+}
+
+.editor-header .react-datepicker-popper[data-placement^='bottom'] .react-datepicker__triangle {
+  fill: var(--color-background-secondary);
+  color: var(--color-background-secondary);
+  stroke: var(--color-border);
+}
+
+.editor-header .react-datepicker__tab-loop {
+  margin-left: -8px;
+}
+
 /* Navigation buttons (back/forward) shown on the left of the editor header */
 .editor-nav-buttons {
   display: flex;
