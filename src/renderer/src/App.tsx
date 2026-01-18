@@ -846,6 +846,7 @@ function AppContent(): React.JSX.Element {
 
             {showInformationSidebar && (
               <InformationPanel
+                key={currentFile ?? 'no-file'}
                 currentFile={currentFile}
                 content={content}
                 graph={graph}

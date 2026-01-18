@@ -56,9 +56,21 @@ export const InformationPanel: React.FC<InformationPanelProps> = ({
       return { outgoing: [], incoming: [], totalConnections: 0 };
     }
 
+    // Normalize lookup for graph/backlinks keys: some producers store filenames
+    // with or without the `.md` extension. Try several variants to find matches.
+    const tryLookup = (obj: Record<string, string[]>, key: string): string[] => {
+      if (!obj) return [];
+      if (obj[key]) return obj[key];
+      const noExt = key.replace(/\.md$/i, '');
+      if (obj[noExt]) return obj[noExt];
+      const withExt = key.endsWith('.md') ? key : `${key}.md`;
+      if (obj[withExt]) return obj[withExt];
+      return [];
+    };
+
     // Only include markdown files (.md extension)
-    const out = (graph[currentFile] || []).filter((f) => f.endsWith('.md'));
-    const inc = (backlinks[currentFile] || []).filter((f) => f.endsWith('.md'));
+    const out = tryLookup(graph, currentFile).filter((f) => f.endsWith('.md'));
+    const inc = tryLookup(backlinks, currentFile).filter((f) => f.endsWith('.md'));
     return {
       outgoing: out,
       incoming: inc,
