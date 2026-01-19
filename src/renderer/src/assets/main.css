@@ -649,6 +649,8 @@ body {
   flex-direction: column;
   gap: var(--spacing-md);
   flex-shrink: 0;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* Information Section */
