@@ -682,6 +682,14 @@ function AppContent(): React.JSX.Element {
     console.debug('Backlinks changed ->', backlinks);
   }, [backlinks]);
 
+  // If user leaves the editor view (switches to tasks or graph)
+  // and the information sidebar is open, close it automatically.
+  useEffect(() => {
+    if (viewMode !== 'editor' && showInformationSidebar) {
+      setShowInformationSidebar(false);
+    }
+  }, [viewMode, showInformationSidebar]);
+
   const handleLinkClick = async (linkText: string): Promise<void> => {
     const filename = linkText.endsWith('.md') ? linkText : `${linkText}.md`;
     // readNote will create the file if missing (per main IPC behavior)
