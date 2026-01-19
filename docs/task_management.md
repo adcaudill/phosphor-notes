@@ -9,15 +9,18 @@ This guide explains how to create and manage tasks in Phosphor. It describes the
 - [ ] Buy groceries
 
 Status characters used by the app:
+
 - `○` — todo (empty checkbox, stored as `[ ]`)
 - `◐` — doing (in-progress, stored as `[/]`)
 - `✓` — done (completed, stored as `[x]`)
 
 You can toggle a task's status by:
+
 - Clicking the checkbox indicator at the start of the line.
 - Using the keyboard shortcut: `Mod+Enter` (Cmd+Enter on macOS) when the cursor is on the task line.
 
 Notes about toggling:
+
 - Click/clicking the indicator cycles `todo → doing → done → todo`.
 - Keyboard `Mod+Enter` also cycles but behaves slightly differently for timestamps (see "Completion timestamps").
 
@@ -36,6 +39,7 @@ When a task is marked done the app may add a completion timestamp appended to th
 You can add a due date using any of the supported forms. The editor will parse these and show them in the Tasks panel.
 
 Supported due date forms (examples):
+
 - Emoji style: `📅 2026-01-15`
 - Phosphor style: `@due(2026-01-15)`
 - Org-mode style (deadline): `DEADLINE: <2026-01-15>`
@@ -45,6 +49,7 @@ Example:
 - [ ] File tax return 📅 2026-04-15
 
 The Tasks panel categorizes due dates as:
+
 - `🔴 Overdue` — date before today
 - `🟠 Today` — date is today
 - `🔵 Upcoming` — date after today
@@ -57,10 +62,12 @@ The Tasks panel categorizes due dates as:
 ## Recurring tasks
 
 You can make a task recurring by adding recurrence metadata. Supported styles:
+
 - Phosphor style: `@repeat(1w)` (one week)
 - Emoji style: `🔁 +1w`
 
 Recurrence format notes:
+
 - Recurrence is expressed as an interval: `+<n><unit>` where unit can be `d` (days), `w` (weeks), `m` (months), `y` (years).
 - Example units: `+1d`, `+2w`, `+1m`, `+1y`.
 
@@ -69,6 +76,7 @@ Example recurring task:
 - [ ] Water plants 📅 2026-01-20 🔁 +1w
 
 What happens when you complete a recurring task:
+
 - Completing the current occurrence marks the current line as done and appends a completion timestamp.
 - The editor inserts a new occurrence immediately below with the due date advanced by the recurrence interval and the checkbox reset to `[ ]` (todo).
 
@@ -82,6 +90,7 @@ After completing (click the checkbox):
 - [ ] Water plants 📅 2026-01-27 🔁 +1w
 
 Notes:
+
 - The inserted next occurrence keeps the same line text (metadata and recurrence) but advances the date.
 - Completion via the checkbox click handler adds the timestamp; keyboard toggling also advances recurring items but the timestamp behavior differs.
 
@@ -102,28 +111,29 @@ Notes:
   - file and line number (clicking a task navigates to that line in the note)
 
 Filters available in the Tasks panel:
+
 - Status filter: All / Todo / Doing / Done
 - Due date filter: All / Overdue / Today / Upcoming / No Date
 
 ## Examples
 
-1) Simple todo
+1. Simple todo
 
 - [ ] Call Alice
 
-2) Todo with due date (emoji)
+2. Todo with due date (emoji)
 
 - [ ] Project proposal 📅 2026-02-01
 
-3) Todo with due date (Phosphor meta)
+3. Todo with due date (Phosphor meta)
 
 - [ ] Project proposal @due(2026-02-01)
 
-4) Recurring weekly task
+4. Recurring weekly task
 
 - [ ] Run report 📅 2026-01-16 🔁 +1w
 
-5) Org-mode style deadline
+5. Org-mode style deadline
 
 - [ ] Submit invoice DEADLINE: <2026-02-10>
 
