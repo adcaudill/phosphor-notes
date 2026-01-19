@@ -121,6 +121,11 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+.vcenter-text {
+  display: inline-flex;
+  align-items: center;
+}
+
 /* ============================================
    APP LAYOUT
    ============================================ */

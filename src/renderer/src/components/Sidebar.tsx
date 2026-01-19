@@ -134,7 +134,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
       </div>
       <h2
-        className="daily-heading"
+        className="daily-heading vcenter-text"
         role="button"
         tabIndex={0}
         onClick={openDaily}
@@ -146,9 +146,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         }}
         title="Open today's daily note"
       >
+        <span className="material-symbols-outlined">calendar_today</span>
         Daily
       </h2>
-      <h2>Favorites</h2>
+      <h2 className="vcenter-text">
+        <span className="material-symbols-outlined">bookmarks</span>Favorites
+      </h2>
       <ul>
         {favorites.map((file) => (
           <li
@@ -168,7 +171,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </li>
         ))}
       </ul>
-      <h2>Recent</h2>
+      <h2 className="vcenter-text">
+        <span className="material-symbols-outlined">history</span>Recent
+      </h2>
       <ul className={isFading ? 'fade-out' : ''}>
         {files
           .filter((file) => !favorites.includes(file))
