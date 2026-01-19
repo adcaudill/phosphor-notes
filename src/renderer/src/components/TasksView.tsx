@@ -71,6 +71,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ onTaskClick }) => {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'all' | 'todo' | 'doing' | 'done'>('all');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [filtersLoaded, setFiltersLoaded] = useState(false);
 
   useEffect(() => {
     const loadTasks = async (): Promise<void> => {
@@ -94,6 +95,51 @@ export const TasksView: React.FC<TasksViewProps> = ({ onTaskClick }) => {
 
     return () => unsubscribe();
   }, []);
+  // Load saved filter settings (last used) on mount
+  useEffect(() => {
+    let mounted = true;
+    const loadSettings = async (): Promise<void> => {
+      try {
+        const settings = await window.phosphor.getSettings();
+        if (!mounted) return;
+        if (settings.lastTasksStatusFilter !== undefined) {
+          setStatusFilter(settings.lastTasksStatusFilter as 'all' | 'todo' | 'doing' | 'done');
+        }
+        if (settings.lastTasksDateFilter !== undefined) {
+          setDateFilter(settings.lastTasksDateFilter as DateFilter);
+        }
+      } catch (err) {
+        console.error('Failed to load settings for TasksView:', err);
+      } finally {
+        if (mounted) setFiltersLoaded(true);
+      }
+    };
+
+    loadSettings();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Persist status/date filter changes to app settings so they are remembered.
+  // Only persist after we've loaded existing settings to avoid overwriting
+  // saved values with initial defaults on mount.
+  useEffect(() => {
+    if (!filtersLoaded) return;
+
+    const persist = async (): Promise<void> => {
+      try {
+        await window.phosphor.setMultipleSettings({
+          lastTasksStatusFilter: statusFilter,
+          lastTasksDateFilter: dateFilter
+        });
+      } catch (err) {
+        console.error('Failed to save TasksView filter settings:', err);
+      }
+    };
+
+    persist();
+  }, [statusFilter, dateFilter, filtersLoaded]);
 
   // Group tasks by file and sort by urgency (always)
   useEffect(() => {
@@ -175,10 +221,17 @@ export const TasksView: React.FC<TasksViewProps> = ({ onTaskClick }) => {
   const doingCount = tasks.filter((t) => t.status === 'doing').length;
   const doneCount = tasks.filter((t) => t.status === 'done').length;
 
-  const overdueCount = tasks.filter((t) => getUrgencyCategory(t) === 'overdue').length;
-  const todayCount = tasks.filter((t) => getUrgencyCategory(t) === 'today').length;
-  const upcomingCount = tasks.filter((t) => getUrgencyCategory(t) === 'upcoming').length;
-  const noDueCount = tasks.filter((t) => getUrgencyCategory(t) === 'no-date').length;
+  // For due-date filter counts, respect the active status filter so
+  // the Due Date options only reflect tasks for the selected status.
+  const tasksForDueCounts =
+    statusFilter === 'all' ? tasks : tasks.filter((t) => t.status === statusFilter);
+
+  const overdueCount = tasksForDueCounts.filter((t) => getUrgencyCategory(t) === 'overdue').length;
+  const todayCount = tasksForDueCounts.filter((t) => getUrgencyCategory(t) === 'today').length;
+  const upcomingCount = tasksForDueCounts.filter(
+    (t) => getUrgencyCategory(t) === 'upcoming'
+  ).length;
+  const noDueCount = tasksForDueCounts.filter((t) => getUrgencyCategory(t) === 'no-date').length;
 
   if (loading) {
     return <div className="tasks-view loading">Loading tasks...</div>;

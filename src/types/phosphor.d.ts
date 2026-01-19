@@ -102,6 +102,9 @@ export interface UserSettings {
     x?: number;
     y?: number;
   };
+  // Persist last-used task view filters
+  lastTasksStatusFilter?: 'all' | 'todo' | 'doing' | 'done';
+  lastTasksDateFilter?: 'all' | 'overdue' | 'today' | 'upcoming' | 'no-date';
 }
 
 declare global {
