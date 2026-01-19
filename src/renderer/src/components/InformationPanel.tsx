@@ -1,6 +1,11 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { calculateReadingStats, formatReadTime, formatWordCount } from '../utils/readingStats';
+import {
+  calculateReadingStats,
+  formatReadTime,
+  formatWordCount,
+  calculateSentenceAvgLength
+} from '../utils/readingStats';
 import rs from 'text-readability';
 
 interface DocumentHeader {
@@ -187,6 +192,15 @@ export const InformationPanel: React.FC<InformationPanelProps> = ({
     }
   }, [content]);
 
+  const avgSentenceLength = useMemo(() => {
+    try {
+      const v = calculateSentenceAvgLength(content || '');
+      return isFinite(v) ? v : 0;
+    } catch {
+      return 0;
+    }
+  }, [content]);
+
   // Tooltip state for previews of incoming files (simple: positioned next to link)
   const [tooltip, setTooltip] = useState<{
     visible: boolean;
@@ -340,6 +354,12 @@ export const InformationPanel: React.FC<InformationPanelProps> = ({
             <div className="doc-info-row">
               <div className="doc-info-key">Reading Time (Aloud)</div>
               <div className="doc-info-value">{formatReadTime(readAloudStats)}</div>
+            </div>
+            <div className="doc-info-row">
+              <div className="doc-info-key">Avg. Sentence Length</div>
+              <div className="doc-info-value">
+                {avgSentenceLength ? `${avgSentenceLength.toFixed(1)} words` : '—'}
+              </div>
             </div>
             <div className="doc-info-row">
               <div className="doc-info-key">Flesch Reading Ease</div>

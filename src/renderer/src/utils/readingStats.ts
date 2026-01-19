@@ -24,6 +24,55 @@ function extractContent(doc: string): string {
   return doc;
 }
 
+function lexiconCount(doc: string): number {
+  const uniqueWords = new Set<string>();
+
+  const words = doc
+    .toLowerCase()
+    .split(/\s+/)
+    .map((word) => word.replace(/[^\w']/g, '')) // Remove punctuation
+    .filter((word) => word.length > 0); // Filter out empty strings
+
+  for (const word of words) {
+    uniqueWords.add(word);
+  }
+
+  return uniqueWords.size;
+}
+
+/**
+ * Extract sentences from content, ignoring frontmatter
+ */
+function extractSentences(doc: string): string[] {
+  const content = extractContent(doc);
+
+  const validSentences: string[] = [];
+  const sentences = content.split(/ *[.?!]['")\]]*[ |\n](?=[A-Z])/g);
+
+  for (const sentence of sentences) {
+    if (!(lexiconCount(sentence) <= 2)) {
+      validSentences.push(sentence);
+    }
+  }
+
+  return validSentences;
+}
+
+/**
+ * Calculate average sentence length in words
+ */
+export function calculateSentenceAvgLength(doc: string): number {
+  const sentences = extractSentences(doc);
+  if (sentences.length === 0) return 0;
+
+  const totalWords = sentences.reduce((sum, sentence) => {
+    const wordCount = sentence.trim().split(/\s+/).length;
+    return sum + wordCount;
+  }, 0);
+
+  return totalWords / sentences.length;
+}
+
 /**
  * Calculate reading statistics for document content
  *
