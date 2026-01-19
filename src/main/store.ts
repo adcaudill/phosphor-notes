@@ -185,3 +185,52 @@ export async function updateMRU(vaultPath: string, filename: string): Promise<st
   await saveMRU(vaultPath, mruData);
   return mruData.files;
 }
+
+// Favorites management (stored in vault's .phosphor/favorites.json)
+interface FavoritesData {
+  files: string[];
+}
+
+function getFavoritesPath(vaultPath: string): string {
+  return path.join(vaultPath, '.phosphor', 'favorites.json');
+}
+
+async function loadFavorites(vaultPath: string): Promise<FavoritesData> {
+  try {
+    const favPath = getFavoritesPath(vaultPath);
+    const raw = await fsp.readFile(favPath, 'utf-8');
+    return JSON.parse(raw) as FavoritesData;
+  } catch {
+    return { files: [] };
+  }
+}
+
+async function saveFavorites(vaultPath: string, data: FavoritesData): Promise<void> {
+  try {
+    await ensureMRUDir(vaultPath); // ensures .phosphor exists
+    const favPath = getFavoritesPath(vaultPath);
+    await fsp.writeFile(favPath, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Failed to save favorites:', err);
+  }
+}
+
+export async function getFavorites(vaultPath: string): Promise<string[]> {
+  const data = await loadFavorites(vaultPath);
+  return data.files;
+}
+
+export async function toggleFavorite(vaultPath: string, filename: string): Promise<string[]> {
+  const data = await loadFavorites(vaultPath);
+
+  const idx = data.files.indexOf(filename);
+  if (idx > -1) {
+    data.files.splice(idx, 1);
+  } else {
+    // add to front
+    data.files.unshift(filename);
+  }
+
+  await saveFavorites(vaultPath, data);
+  return data.files;
+}

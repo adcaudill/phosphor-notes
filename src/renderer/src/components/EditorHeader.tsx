@@ -20,6 +20,7 @@ type Props = {
   canGoBack?: boolean;
   canGoForward?: boolean;
   onOpenFile?: (filename: string) => void;
+  currentFile?: string | null;
 };
 
 const CustomButton = forwardRef<
@@ -70,12 +71,35 @@ export default function EditorHeader({
   onNavigateForward,
   canGoBack,
   canGoForward,
-  onOpenFile
+  onOpenFile,
+  currentFile
 }: Props): React.JSX.Element {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const dpRef = useRef<ReactDatePicker | null>(null);
   const suppressOpenRef = useRef<boolean>(false);
+  const [isFavorite, setIsFavorite] = useState<boolean>(false);
+
+  React.useEffect(() => {
+    let mounted = true;
+    const loadFav = async (): Promise<void> => {
+      if (!currentFile) {
+        setIsFavorite(false);
+        return;
+      }
+      try {
+        const favs = await window.phosphor.getFavorites();
+        if (!mounted) return;
+        setIsFavorite(favs.includes(currentFile));
+      } catch (err) {
+        console.debug('Failed to load favorites:', err);
+      }
+    };
+    loadFav();
+    return () => {
+      mounted = false;
+    };
+  }, [currentFile]);
 
   const handleDateSelect = (date: Date | null): void => {
     setSelectedDate(date);
@@ -132,6 +156,24 @@ export default function EditorHeader({
       )}
       {viewMode === 'editor' && !titleEditMode && (
         <div className="editor-header-actions">
+          {viewMode === 'editor' && currentFile && (
+            <button
+              className="favorite-btn"
+              onClick={async () => {
+                try {
+                  const updated = await window.phosphor.toggleFavorite(currentFile);
+                  setIsFavorite(updated.includes(currentFile));
+                } catch (err) {
+                  console.debug('Failed to toggle favorite:', err);
+                }
+              }}
+              title={isFavorite ? 'Remove favorite' : 'Add to favorites'}
+            >
+              <span className="material-symbols-outlined">
+                {isFavorite ? 'bookmark_check' : 'bookmark_add'}
+              </span>
+            </button>
+          )}
           <DatePicker
             selected={selectedDate}
             onChange={(d) => handleDateSelect(d)}

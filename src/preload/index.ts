@@ -22,6 +22,15 @@ const api = {
 
   updateMRU: (filename: string) => ipcRenderer.invoke('vault:update-mru', filename),
 
+  // Favorites
+  getFavorites: () => ipcRenderer.invoke('favorites:get'),
+  toggleFavorite: (filename: string) => ipcRenderer.invoke('favorites:toggle', filename),
+  onFavoritesChange: (cb: (favorites: string[]) => void) => {
+    const handler = (_event: IpcRendererEvent, data: string[]): void => cb(data);
+    ipcRenderer.on('phosphor:favorites-updated', handler);
+    return () => ipcRenderer.removeListener('phosphor:favorites-updated', handler);
+  },
+
   // Event subscription for graph updates
   onGraphUpdate: (cb: (graph: Record<string, string[]>) => void) => {
     const handler = (_event: IpcRendererEvent, data: Record<string, string[]>): void => cb(data);

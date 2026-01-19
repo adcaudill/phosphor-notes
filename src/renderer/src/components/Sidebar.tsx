@@ -23,6 +23,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   viewMode = 'editor'
 }) => {
   const [files, setFiles] = useState<string[]>([]);
+  const [favorites, setFavorites] = useState<string[]>([]);
   const [isFading, setIsFading] = useState(false);
   const [isClickDisabled, setIsClickDisabled] = useState(false);
   const fadeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -33,7 +34,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
       setFiles(mruList);
     };
 
+    const fetchFavorites = async (): Promise<void> => {
+      try {
+        const fav = await window.phosphor.getFavorites();
+        setFavorites(fav);
+      } catch (err) {
+        console.debug('Failed to load favorites:', err);
+      }
+    };
+
     fetchMRUFiles();
+    fetchFavorites();
+
+    const unsub = window.phosphor.onFavoritesChange?.((updated: string[]) => {
+      setFavorites(updated);
+    });
+
+    return () => {
+      if (unsub) unsub();
+    };
   }, [refreshSignal]);
 
   useEffect(() => {
@@ -129,9 +148,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       >
         Daily
       </h2>
-      <h2>Recent</h2>
-      <ul className={isFading ? 'fade-out' : ''}>
-        {files.map((file) => (
+      <h2>Favorites</h2>
+      <ul>
+        {favorites.map((file) => (
           <li
             key={file}
             className={file === activeFile ? 'active' : ''}
@@ -141,15 +160,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }
             }}
             style={{
-              pointerEvents: isClickDisabled ? 'none' : 'auto',
-              opacity: isFading ? 0.5 : 1,
-              transition: 'opacity 300ms ease-in-out'
+              pointerEvents: isClickDisabled ? 'none' : 'auto'
             }}
           >
             {file}
             {file === activeFile && isDirty && <span className="dirty-indicator">•</span>}
           </li>
         ))}
+      </ul>
+      <h2>Recent</h2>
+      <ul className={isFading ? 'fade-out' : ''}>
+        {files
+          .filter((file) => !favorites.includes(file))
+          .map((file) => (
+            <li
+              key={file}
+              className={file === activeFile ? 'active' : ''}
+              onClick={() => {
+                if (!isClickDisabled) {
+                  performFadeTransition(file);
+                }
+              }}
+              style={{
+                pointerEvents: isClickDisabled ? 'none' : 'auto',
+                opacity: isFading ? 0.5 : 1,
+                transition: 'opacity 300ms ease-in-out'
+              }}
+            >
+              {file}
+              {file === activeFile && isDirty && <span className="dirty-indicator">•</span>}
+            </li>
+          ))}
       </ul>
     </div>
   );

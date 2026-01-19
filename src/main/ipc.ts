@@ -15,7 +15,7 @@ import {
 } from './indexer';
 import { setupWatcher, stopWatcher, markInternalSave } from './watcher';
 import { deriveMasterKey, encryptBuffer, decryptBuffer, isEncrypted, generateSalt } from './crypto';
-import { initializeMRU, getMRUFiles, updateMRU } from './store';
+import { initializeMRU, getMRUFiles, updateMRU, getFavorites, toggleFavorite } from './store';
 import sodium from 'sodium-native';
 
 // Safe logging that ignores EPIPE errors during shutdown
@@ -786,6 +786,25 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
   ipcMain.handle('vault:update-mru', async (_, filename: string) => {
     if (!activeVaultPath) return [];
     return updateMRU(activeVaultPath, filename);
+  });
+
+  // Favorites handlers
+  ipcMain.handle('favorites:get', async () => {
+    if (!activeVaultPath) return [];
+    return getFavorites(activeVaultPath);
+  });
+
+  ipcMain.handle('favorites:toggle', async (_, filename: string) => {
+    if (!activeVaultPath) return [];
+    const updated = await toggleFavorite(activeVaultPath, filename);
+    try {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('phosphor:favorites-updated', updated);
+      }
+    } catch (err) {
+      safeWarn('Failed to send favorites-updated event', err);
+    }
+    return updated;
   });
 
   // 5. Delete Note

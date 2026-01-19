@@ -759,6 +759,7 @@ function AppContent(): React.JSX.Element {
                   canGoBack={historyIndex > 0}
                   canGoForward={historyIndex < fileHistory.length - 1}
                   onOpenFile={handleFileSelect}
+                  currentFile={currentFile}
                 />
                 {viewMode === 'editor' && (
                   <DailyNav

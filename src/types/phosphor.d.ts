@@ -25,7 +25,10 @@ export interface PhosphorAPI {
 
   listFiles: () => Promise<string[]>;
   getMRUFiles: () => Promise<string[]>;
+  getFavorites: () => Promise<string[]>;
   updateMRU: (filename: string) => Promise<string[]>;
+  toggleFavorite: (filename: string) => Promise<string[]>;
+  onFavoritesChange: (cb: (favorites: string[]) => void) => () => void;
   onGraphUpdate: (cb: (graph: Record<string, string[]>) => void) => () => void;
   onStatusUpdate: (cb: (status: { type: string; message: string }) => void) => () => void;
   onMenuEvent: (eventName: string, cb: () => void) => () => void;
