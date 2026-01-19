@@ -1337,5 +1337,137 @@ export const commonIssues = {
   },
   'free reign': {
     replace: 'free rein'
+  },
+  'another think coming': {
+    replace: 'another thing coming'
+  },
+  'as dust fell': {
+    replace: 'as dusk fell'
+  },
+  'biting my time': {
+    replace: 'biding my time'
+  },
+  'bond fire': {
+    replace: 'bonfire'
+  },
+  'chicken spots': {
+    replace: 'chicken pox'
+  },
+  civilware: {
+    replace: 'silverware'
+  },
+  'close-a-phobia': {
+    replace: 'claustrophobia'
+  },
+  consinct: {
+    replace: 'concise'
+  },
+  'curly roads': {
+    replace: 'curvy roads'
+  },
+  'doggy-dog-world': {
+    replace: 'dog-eat-dog world'
+  },
+  'escape goat': {
+    replace: 'scapegoat'
+  },
+  'illicit a response': {
+    replace: 'elicit a response'
+  },
+  'in other worlds': {
+    replace: 'in other words'
+  },
+  'last stitch effort': {
+    replace: 'last-ditch effort'
+  },
+  magnaphone: {
+    replace: 'megaphone'
+  },
+  'mist of things': {
+    replace: 'midst of things'
+  },
+  'nip it in the butt': {
+    replace: 'nip it in the bud'
+  },
+  'nose drills': {
+    replace: 'nostrils'
+  },
+  'old wise tale': {
+    replace: "old wives' tale"
+  },
+  'optical delusion': {
+    replace: 'optical illusion'
+  },
+  'out of bounce': {
+    replace: 'out of bounds'
+  },
+  ostenspacious: {
+    replace: 'ostentatious'
+  },
+  overfloating: {
+    replace: 'overflowing'
+  },
+  'pass mustard': {
+    replace: 'pass muster'
+  },
+  'peak my interest': {
+    replace: 'pique my interest'
+  },
+  'peak your interest': {
+    replace: 'pique your interest'
+  },
+  'per say': {
+    replace: 'per se'
+  },
+  'play possum': {
+    replace: 'play opossum'
+  },
+  'pre-meditated': {
+    replace: 'premeditated'
+  },
+  presciption: {
+    replace: 'prescription'
+  },
+  platemats: {
+    replace: 'placemats'
+  },
+  'radar detester': {
+    replace: 'radar detector'
+  },
+  'rebel rouser': {
+    replace: 'rabble rouser'
+  },
+  'rubble rouser': {
+    replace: 'rabble rouser'
+  },
+  'rot-iron': {
+    replace: 'wrought iron'
+  },
+  'scandally clad': {
+    replace: 'scantily clad'
+  },
+  'stand at a tension': {
+    replace: 'stand at attention'
+  },
+  'take it for granite': {
+    replace: 'take it for granted'
+  },
+  'takes two to tangle': {
+    replace: 'takes two to tango'
+  },
+  'tow the line': {
+    replace: 'toe the line'
+  },
+  'wet your appetite': {
+    replace: 'whet your appetite'
+  },
+  'vim and vinegar': {
+    replace: 'vim and vigor'
+  },
+  wheelbarrel: {
+    replace: 'wheelbarrow'
+  },
+  wonderlust: {
+    replace: 'wanderlust'
   }
 };
