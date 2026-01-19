@@ -230,6 +230,8 @@ body {
   border-bottom: 1px solid var(--color-border);
   background-color: var(--color-surface);
   color: var(--color-text-secondary);
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .daily-nav-btn {
@@ -244,6 +246,8 @@ body {
     background-color 0.12s ease,
     border-color 0.12s ease,
     color 0.12s ease;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .daily-nav-btn:hover {
@@ -420,6 +424,8 @@ body {
   scroll-behavior: smooth;
   backdrop-filter: blur(20px);
   position: relative;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .sidebar h2 {
@@ -430,6 +436,8 @@ body {
   padding-bottom: var(--spacing-md);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   color: var(--color-sidebar-text);
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .sidebar h2.daily-heading {
@@ -460,6 +468,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .nav-btn:hover {
@@ -1677,6 +1687,8 @@ body {
   width: 100%;
   min-height: 20px;
   padding: 4px var(--spacing-md);
+  -webkit-user-select: none;
+  user-select: none;
   border-top: 1px solid var(--color-border);
   display: flex;
   align-items: center;
@@ -1765,6 +1777,8 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .reading-stats {
