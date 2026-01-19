@@ -1,18 +1,18 @@
-import {
-  autocompletion,
-  type Completion,
-  type CompletionContext,
-  type CompletionResult
-} from '@codemirror/autocomplete';
-import { EditorSelection, type Extension } from '@codemirror/state';
+import type { Completion, CompletionContext, CompletionResult } from '@codemirror/autocomplete';
+import { EditorSelection } from '@codemirror/state';
 
-// Build an autocomplete source for wiki links based on known pages
-export function createWikiLinkAutocomplete(pages: string[]): Extension {
+/**
+ * Completion source for wiki links
+ * Provides completions when user types [[pagename
+ */
+export function wikiLinkCompletionSource(
+  pages: string[]
+): (context: CompletionContext) => CompletionResult | null {
   const normalizedPages = Array.from(new Set(pages.map((page) => page.replace(/\.md$/, '')))).sort(
     (a, b) => a.localeCompare(b)
   );
 
-  const completionSource = (context: CompletionContext): CompletionResult | null => {
+  return (context: CompletionContext): CompletionResult | null => {
     const match = context.matchBefore(/\[\[[^\]\n]*$/);
     if (!match) return null;
 
@@ -50,9 +50,4 @@ export function createWikiLinkAutocomplete(pages: string[]): Extension {
       filter: false
     };
   };
-
-  return autocompletion({
-    override: [completionSource],
-    activateOnTyping: true
-  });
 }

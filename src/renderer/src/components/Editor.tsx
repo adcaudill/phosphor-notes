@@ -27,7 +27,7 @@ import { pdfWidgetPlugin } from '../editor/extensions/pdfWidget';
 import { smartPaste } from '../editor/extensions/smartPaste';
 import { getURLAtPosition, urlExtensions } from '../editor/extensions/urlHandler';
 import { SearchPanel } from './SearchPanel';
-import { createWikiLinkAutocomplete } from '../editor/extensions/wikiLinkAutocomplete';
+import { createCombinedAutocompleteExtension } from '../editor/extensions/autocomplete';
 import {
   extractFrontmatter,
   reconstructDocument,
@@ -191,7 +191,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
           }), // Grammar and style checking
           ...(enableDimming ? [dimmingPlugin] : []), // Paragraph dimming (optional)
           createSearchExtension(), // Search functionality
-          createWikiLinkAutocomplete(wikiPageSuggestions), // Autocomplete for wiki links
+          createCombinedAutocompleteExtension(wikiPageSuggestions), // Autocomplete for wiki links and slash commands
           ...urlExtensions, // URL detection, styling, and tooltips
           smartPaste,
 
