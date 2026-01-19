@@ -798,6 +798,35 @@ body {
   gap: var(--spacing-xs);
 }
 
+/* Document information table (two-column) */
+.doc-info-table {
+  display: grid;
+  gap: var(--spacing-xs) var(--spacing-md);
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.doc-info-row {
+  display: contents;
+  /* let grid handle layout */
+}
+
+.doc-info-key {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-info-value {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  text-align: right;
+  min-width: 1ch;
+}
+
 .information-item {
   display: inline-flex;
   align-items: center;

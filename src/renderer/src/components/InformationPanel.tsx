@@ -1,5 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { calculateReadingStats, formatReadTime, formatWordCount } from '../utils/readingStats';
+import rs from 'text-readability';
 
 interface DocumentHeader {
   level: number; // 1-6 for h1-h6
@@ -132,6 +134,33 @@ function getMentionsPreview(content: string, currentBase: string, afterLines = 5
   return snippets.map((s) => s.trim()).join('\n\n...\n\n');
 }
 
+/**
+ * Strip common Markdown/Frontmatter constructs to produce plain text
+ * for readability calculations.
+ */
+function plainTextForReadability(doc: string): string {
+  // Remove frontmatter
+  const fm = doc.match(/^---\n([\s\S]*?)\n---\n/);
+  if (fm) doc = doc.slice(fm[0].length);
+
+  // Remove code fences
+  doc = doc.replace(/```[\s\S]*?```/g, ' ');
+  // Remove inline code
+  doc = doc.replace(/`[^`]*`/g, ' ');
+  // Remove images and links but keep alt/text
+  doc = doc.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1');
+  doc = doc.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
+  // Remove wiki-links [[Page|Text]] -> Text or [[Page]] -> Page
+  doc = doc.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_m, p1, p2) => p2 || p1);
+  // Remove headings, emphasis, and remaining markdown punctuation
+  doc = doc.replace(/^#{1,6}\s+/gm, ' ');
+  doc = doc.replace(/[*_]{1,3}/g, '');
+  // Remove HTML tags
+  doc = doc.replace(/<[^>]+>/g, ' ');
+  // Collapse whitespace
+  return doc.replace(/\s+/g, ' ').trim();
+}
+
 export const InformationPanel: React.FC<InformationPanelProps> = ({
   currentFile,
   content,
@@ -141,6 +170,22 @@ export const InformationPanel: React.FC<InformationPanelProps> = ({
   onHeaderClick
 }) => {
   const headers = useMemo(() => extractHeadersFromContent(content), [content]);
+
+  // Reading stats for the current document
+  const stats = useMemo(() => calculateReadingStats(content || ''), [content]);
+
+  // Reading-aloud estimate and readability metrics (derived via memo)
+  const { fleschEase, kincaidGrade } = useMemo(() => {
+    try {
+      const plain = plainTextForReadability(content || '');
+      return {
+        fleschEase: Number(rs.fleschReadingEase(plain)),
+        kincaidGrade: Number(rs.fleschKincaidGrade(plain))
+      };
+    } catch {
+      return { fleschEase: null, kincaidGrade: null };
+    }
+  }, [content]);
 
   // Tooltip state for previews of incoming files (simple: positioned next to link)
   const [tooltip, setTooltip] = useState<{
@@ -236,6 +281,14 @@ export const InformationPanel: React.FC<InformationPanelProps> = ({
   const hasConnections = totalConnections > 0;
   const hasHeaders = headers.length > 0;
 
+  // prepare reading-aloud estimate
+  const readAloudSeconds = Math.ceil((stats.wordCount / 130) * 60);
+  const readAloudStats = {
+    ...stats,
+    readTimeMinutes: Math.floor(readAloudSeconds / 60),
+    readTimeSeconds: readAloudSeconds % 60
+  };
+
   return (
     <div className="information-panel">
       {/* Document Outline Section */}
@@ -268,6 +321,41 @@ export const InformationPanel: React.FC<InformationPanelProps> = ({
           </div>
         </div>
       )}
+
+      {/* Document Information Section */}
+      <div className="information-section">
+        <div className="information-section-header">
+          <span className="information-section-title">Document Information</span>
+        </div>
+        <div className="information-content">
+          <div className="doc-info-table">
+            <div className="doc-info-row">
+              <div className="doc-info-key">Word Count</div>
+              <div className="doc-info-value">{formatWordCount(stats.wordCount)}</div>
+            </div>
+            <div className="doc-info-row">
+              <div className="doc-info-key">Reading Time</div>
+              <div className="doc-info-value">{formatReadTime(stats)}</div>
+            </div>
+            <div className="doc-info-row">
+              <div className="doc-info-key">Reading Time (Aloud)</div>
+              <div className="doc-info-value">{formatReadTime(readAloudStats)}</div>
+            </div>
+            <div className="doc-info-row">
+              <div className="doc-info-key">Flesch Reading Ease</div>
+              <div className="doc-info-value">
+                {fleschEase != null ? fleschEase.toFixed(1) : '—'}
+              </div>
+            </div>
+            <div className="doc-info-row">
+              <div className="doc-info-key">Flesch-Kincaid Grade</div>
+              <div className="doc-info-value">
+                {kincaidGrade != null ? kincaidGrade.toFixed(1) : '—'}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Document Relationships Section */}
       <div className="information-section">
