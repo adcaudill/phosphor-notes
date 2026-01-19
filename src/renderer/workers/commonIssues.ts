@@ -1,5 +1,6 @@
 // Source: https://github.com/adamhollett/retext-usage/blob/master/data/index.json
 // MIT License: Copyright (c) 2016 Adam Hollett <mailto:mail@adamhollett.com>
+// Adapted for phosphor-notes & extended substantially by Adam Caudill.
 export const commonIssues = {
   absorbtion: {
     replace: 'absorption'
