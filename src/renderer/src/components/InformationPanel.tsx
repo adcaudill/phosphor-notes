@@ -6,7 +6,9 @@ import {
   formatWordCount,
   calculateSentenceAvgLength,
   calculateSentenceLongCount,
-  calculateParagraphAvgLength
+  calculateParagraphAvgLength,
+  calculateTopWords,
+  calculatePercentComplexWords
 } from '../utils/readingStats';
 import rs from 'text-readability';
 
@@ -221,6 +223,25 @@ export const InformationPanel: React.FC<InformationPanelProps> = ({
     }
   }, [content]);
 
+  const percentComplexWords = useMemo(() => {
+    try {
+      const v = calculatePercentComplexWords(content || '');
+      return isFinite(Number(v)) ? Number(v) : 0;
+    } catch {
+      return 0;
+    }
+  }, [content]);
+
+  const topWords = useMemo(() => {
+    try {
+      const arr = calculateTopWords(content || '');
+      if (!Array.isArray(arr)) return [];
+      return arr.slice(0, 5);
+    } catch {
+      return [];
+    }
+  }, [content]);
+
   // Tooltip state for previews of incoming files (simple: positioned next to link)
   const [tooltip, setTooltip] = useState<{
     visible: boolean;
@@ -376,13 +397,19 @@ export const InformationPanel: React.FC<InformationPanelProps> = ({
               <div className="doc-info-value">{formatReadTime(readAloudStats)}</div>
             </div>
             <div className="doc-info-row">
+              <div className="doc-info-key">% Complex Words</div>
+              <div className="doc-info-value">
+                {percentComplexWords ? `${percentComplexWords.toFixed(1)}%` : '—'}
+              </div>
+            </div>
+            <div className="doc-info-row">
               <div className="doc-info-key">Avg. Sentence Length</div>
               <div className="doc-info-value">
                 {avgSentenceLength ? `${avgSentenceLength.toFixed(1)} words` : '—'}
               </div>
             </div>
             <div className="doc-info-row">
-              <div className="doc-info-key">Long Sentences (&gt;= 20 words)</div>
+              <div className="doc-info-key">Long Sentences (≥ 20 words)</div>
               <div className="doc-info-value">{longSentenceCount}</div>
             </div>
             <div className="doc-info-row">
@@ -401,6 +428,25 @@ export const InformationPanel: React.FC<InformationPanelProps> = ({
               <div className="doc-info-key">Flesch-Kincaid Grade</div>
               <div className="doc-info-value">
                 {kincaidGrade != null ? kincaidGrade.toFixed(1) : '—'}
+              </div>
+            </div>
+            <div className="doc-info-row">
+              <div className="doc-info-key">Top Words</div>
+              <div className="doc-info-value doc-info-top-words">
+                {topWords.length === 0
+                  ? '—'
+                  : topWords.map((entry, i) => {
+                      const word = typeof entry === 'string' ? entry : (entry?.word ?? '');
+                      const count = typeof entry === 'string' ? null : (entry?.count ?? null);
+                      return (
+                        <div key={`${word}-${i}`} className="doc-top-word">
+                          <span className="doc-top-word-word">{word}</span>
+                          <span className="doc-top-word-count">
+                            {count != null ? ` — ${count}` : ''}
+                          </span>
+                        </div>
+                      );
+                    })}
               </div>
             </div>
           </div>

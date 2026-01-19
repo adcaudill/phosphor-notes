@@ -5,6 +5,9 @@
  * for markdown content.
  */
 
+import { removeStopwords } from 'stopword';
+import { syllable } from 'syllable';
+
 export interface ReadingStats {
   wordCount: number;
   charCount: number;
@@ -19,8 +22,35 @@ function extractContent(doc: string): string {
   // Remove frontmatter if present
   const frontmatterMatch = doc.match(/^---\n([\s\S]*?)\n---\n/);
   if (frontmatterMatch) {
-    return doc.slice(frontmatterMatch[0].length);
+    doc = doc.slice(frontmatterMatch[0].length);
   }
+  // At this point `doc` contains the main content. We'll strip common
+  // Markdown constructs so downstream stats operate on plain text.
+
+  // Remove code fences (```...```) and their contents
+  doc = doc.replace(/```[\s\S]*?```/g, ' ');
+  // Remove inline code `...`
+  doc = doc.replace(/`[^`]*`/g, ' ');
+  // Replace images ![alt](url) with alt text
+  doc = doc.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1');
+  // Replace markdown links [text](url) with text
+  doc = doc.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
+  // Replace wiki-links [[Page|Text]] -> Text or [[Page]] -> Page
+  doc = doc.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_m, p1, p2) => p2 || p1);
+  // Remove emphasis markers (*, _, **, __, ~~)
+  doc = doc.replace(/\*\*|__|\*|_|~~/g, '');
+  // Remove HTML tags
+  doc = doc.replace(/<[^>]+>/g, ' ');
+  // Remove list markers ( -, *, +, numbered lists ) at line starts
+  doc = doc.replace(/^\s*[-*+]\s+/gm, ' ');
+  doc = doc.replace(/^\s*\d+\.\s+/gm, ' ');
+  // Remove blockquote markers
+  doc = doc.replace(/^>\s+/gm, ' ');
+  // Remove table separators |----
+  doc = doc.replace(/\|/g, ' ');
+  // Remove plaintext URLs (http(s)://... and www....)
+  doc = doc.replace(/\b(?:https?:\/\/|www\.)\S+/gi, ' ');
+
   return doc;
 }
 
@@ -112,6 +142,59 @@ export function calculateParagraphAvgLength(doc: string): number {
   }, 0);
 
   return totalWords / paragraphs.length;
+}
+
+/**
+ * Calculate top N most frequent words in the document
+ */
+export function calculateTopWords(
+  doc: string,
+  topN: number = 5
+): { word: string; count: number }[] {
+  const content = extractContent(doc).toLowerCase();
+  const words = content
+    .split(/\s+/)
+    .map((word) => word.replace(/[^\w']/g, '')) // Remove punctuation
+    .filter((word) => word.length > 0); // Filter out empty strings
+
+  const filteredWords = removeStopwords(words);
+
+  const wordCountMap: Record<string, number> = {};
+
+  for (const word of filteredWords) {
+    wordCountMap[word] = (wordCountMap[word] || 0) + 1;
+  }
+
+  const sortedWords = Object.entries(wordCountMap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, topN)
+    .map(([word, count]) => ({ word, count }));
+
+  return sortedWords;
+}
+
+/** C
+ * alculate percentage of complex words (3+ syllables)
+ */
+export function calculatePercentComplexWords(doc: string): number {
+  const content = extractContent(doc);
+  const words = content
+    .toLowerCase()
+    .split(/\s+/)
+    .map((word) => word.replace(/[^\w']/g, '')) // Remove punctuation
+    .filter((word) => word.length > 0); // Filter out empty strings
+
+  if (words.length === 0) return 0;
+
+  let complexWordCount = 0;
+
+  for (const word of words) {
+    if (syllable(word) >= 3) {
+      complexWordCount++;
+    }
+  }
+
+  return (complexWordCount / words.length) * 100;
 }
 
 /**

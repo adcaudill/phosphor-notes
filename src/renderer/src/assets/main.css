@@ -834,6 +834,35 @@ body {
   min-width: 1ch;
 }
 
+.doc-info-top-words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-end;
+}
+
+.doc-top-word {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.doc-top-word-word {
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.doc-top-word-count {
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-normal);
+  opacity: 0.9;
+}
+
 .information-item {
   display: inline-flex;
   align-items: center;
