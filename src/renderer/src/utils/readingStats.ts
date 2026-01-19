@@ -73,6 +73,20 @@ export function calculateSentenceAvgLength(doc: string): number {
   return totalWords / sentences.length;
 }
 
+export function calculateSentenceLongCount(doc: string): number {
+  const sentences = extractSentences(doc);
+  let longSentenceCount = 0;
+
+  for (const sentence of sentences) {
+    const wordCount = sentence.trim().split(/\s+/).length;
+    if (wordCount > 20) {
+      longSentenceCount++;
+    }
+  }
+
+  return longSentenceCount;
+}
+
 /**
  * Calculate reading statistics for document content
  *
