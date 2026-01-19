@@ -59,6 +59,15 @@ function extractSentences(doc: string): string[] {
 }
 
 /**
+ * Extract paragraphs from content, ignoring frontmatter
+ */
+function extractParagraphs(doc: string): string[] {
+  const content = extractContent(doc);
+  const paragraphs = content.split(/\n\s*\n/).map((p) => p.trim());
+  return paragraphs.filter((p) => p.length > 0);
+}
+
+/**
  * Calculate average sentence length in words
  */
 export function calculateSentenceAvgLength(doc: string): number {
@@ -73,6 +82,9 @@ export function calculateSentenceAvgLength(doc: string): number {
   return totalWords / sentences.length;
 }
 
+/**
+ * Calculate count of long sentences (>20 words)
+ */
 export function calculateSentenceLongCount(doc: string): number {
   const sentences = extractSentences(doc);
   let longSentenceCount = 0;
@@ -85,6 +97,21 @@ export function calculateSentenceLongCount(doc: string): number {
   }
 
   return longSentenceCount;
+}
+
+/**
+ * Calculate average paragraph length in words
+ */
+export function calculateParagraphAvgLength(doc: string): number {
+  const paragraphs = extractParagraphs(doc);
+  if (paragraphs.length === 0) return 0;
+
+  const totalWords = paragraphs.reduce((sum, paragraph) => {
+    const wordCount = paragraph.trim().split(/\s+/).length;
+    return sum + wordCount;
+  }, 0);
+
+  return totalWords / paragraphs.length;
 }
 
 /**

@@ -5,7 +5,8 @@ import {
   formatReadTime,
   formatWordCount,
   calculateSentenceAvgLength,
-  calculateSentenceLongCount
+  calculateSentenceLongCount,
+  calculateParagraphAvgLength
 } from '../utils/readingStats';
 import rs from 'text-readability';
 
@@ -211,6 +212,15 @@ export const InformationPanel: React.FC<InformationPanelProps> = ({
     }
   }, [content]);
 
+  const paragraphAvgLength = useMemo(() => {
+    try {
+      const v = calculateParagraphAvgLength(content || '');
+      return isFinite(v) ? v : 0;
+    } catch {
+      return 0;
+    }
+  }, [content]);
+
   // Tooltip state for previews of incoming files (simple: positioned next to link)
   const [tooltip, setTooltip] = useState<{
     visible: boolean;
@@ -374,6 +384,12 @@ export const InformationPanel: React.FC<InformationPanelProps> = ({
             <div className="doc-info-row">
               <div className="doc-info-key">Long Sentences (&gt;= 20 words)</div>
               <div className="doc-info-value">{longSentenceCount}</div>
+            </div>
+            <div className="doc-info-row">
+              <div className="doc-info-key">Avg. Paragraph Length</div>
+              <div className="doc-info-value">
+                {paragraphAvgLength ? `${paragraphAvgLength.toFixed(1)} words` : '—'}
+              </div>
             </div>
             <div className="doc-info-row">
               <div className="doc-info-key">Flesch Reading Ease</div>
