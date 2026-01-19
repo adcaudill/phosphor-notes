@@ -1333,5 +1333,8 @@ export const commonIssues = {
   },
   nee: {
     replace: 'née'
+  },
+  'free reign': {
+    replace: 'free rein'
   }
 };
