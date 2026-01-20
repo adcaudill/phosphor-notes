@@ -186,6 +186,17 @@ export async function updateMRU(vaultPath: string, filename: string): Promise<st
   return mruData.files;
 }
 
+// Remove a file from the MRU list
+export async function removeFromMRU(vaultPath: string, filename: string): Promise<string[]> {
+  const mruData = await loadMRU(vaultPath);
+  const index = mruData.files.indexOf(filename);
+  if (index > -1) {
+    mruData.files.splice(index, 1);
+    await saveMRU(vaultPath, mruData);
+  }
+  return mruData.files;
+}
+
 // Favorites management (stored in vault's .phosphor/favorites.json)
 interface FavoritesData {
   files: string[];

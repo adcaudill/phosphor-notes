@@ -13,9 +13,17 @@ import {
   updateGraphForFile,
   updateGraphForChangedFile
 } from './indexer';
+import { getBacklinks } from './graphBuilder';
 import { setupWatcher, stopWatcher, markInternalSave } from './watcher';
 import { deriveMasterKey, encryptBuffer, decryptBuffer, isEncrypted, generateSalt } from './crypto';
-import { initializeMRU, getMRUFiles, updateMRU, getFavorites, toggleFavorite } from './store';
+import {
+  initializeMRU,
+  getMRUFiles,
+  updateMRU,
+  removeFromMRU,
+  getFavorites,
+  toggleFavorite
+} from './store';
 import sodium from 'sodium-native';
 
 // Safe logging that ignores EPIPE errors during shutdown
@@ -831,6 +839,150 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
       return true;
     } catch (err) {
       safeError('Failed to delete note:', err);
+      return false;
+    }
+  });
+
+  // Move note: choose a destination folder within the vault and update backlinks
+  ipcMain.handle('note:move', async (_, filename: string) => {
+    if (!activeVaultPath || !mainWindow) throw new Error('No vault selected');
+
+    const normalized =
+      filename && filename.trim()
+        ? filename.trim().endsWith('.md')
+          ? filename.trim()
+          : `${filename.trim()}.md`
+        : '';
+    if (!normalized) throw new Error('Invalid filename');
+
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory', 'createDirectory'],
+      title: 'Select destination folder in vault',
+      defaultPath: activeVaultPath,
+      buttonLabel: 'Move Here'
+    });
+
+    if (result.canceled || result.filePaths.length === 0) return null;
+
+    const chosen = result.filePaths[0];
+    const resolvedVault = path.resolve(activeVaultPath);
+    const resolvedChosen = path.resolve(chosen);
+    if (!resolvedChosen.startsWith(resolvedVault + path.sep) && resolvedChosen !== resolvedVault) {
+      throw new Error('Destination must be inside the current vault');
+    }
+
+    const relativeDest = path.relative(resolvedVault, resolvedChosen).replace(/\\/g, '/');
+    const destPrefix = relativeDest ? `${relativeDest}/` : '';
+    const baseName = path.basename(normalized);
+    const newRelative = `${destPrefix}${baseName}`;
+
+    if (newRelative === normalized) return normalized;
+
+    const srcPath = validateAndResolvePath(activeVaultPath, normalized);
+    const targetPath = validateAndResolvePath(activeVaultPath, newRelative);
+
+    // Ensure target dir exists
+    await fsp.mkdir(path.dirname(targetPath), { recursive: true });
+
+    // Update backlinks using in-memory graph
+    try {
+      const graph = getLastGraph();
+      const backlinks = graph ? getBacklinks(graph, normalized) : [];
+
+      const escapeForRegex = (s: string): string => s.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+      const oldNoExt = normalized.replace(/\.md$/i, '');
+      const newNoExt = newRelative.replace(/\.md$/i, '');
+      const wikiRegex = new RegExp(
+        `\\[\\[\\s*(${escapeForRegex(oldNoExt)})(?:\\.md)?(\\|[^\\]]*)?\\s*\\]\\]`,
+        'g'
+      );
+
+      for (const back of backlinks) {
+        try {
+          const backPath = validateAndResolvePath(activeVaultPath, back);
+          const buffer = await fsp.readFile(backPath);
+          let contentStr: string;
+          if (activeMasterKey && isEncrypted(buffer)) {
+            try {
+              const decrypted = decryptBuffer(buffer, activeMasterKey);
+              contentStr = decrypted.toString('utf-8');
+            } catch {
+              contentStr = buffer.toString('utf-8');
+            }
+          } else {
+            contentStr = buffer.toString('utf-8');
+          }
+
+          const newContent = contentStr.replace(wikiRegex, (_m, _p1, p2) => {
+            const alias = p2 || '';
+            return `[[${newNoExt}${alias}]]`;
+          });
+
+          if (newContent !== contentStr) {
+            let outBuf: Buffer;
+            if (activeMasterKey) {
+              outBuf = encryptBuffer(Buffer.from(newContent, 'utf-8'), activeMasterKey);
+            } else {
+              outBuf = Buffer.from(newContent, 'utf-8');
+            }
+            await fsp.writeFile(backPath, outBuf);
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('vault:file-changed', back);
+            }
+            try {
+              await updateGraphForChangedFile(activeVaultPath, back, mainWindow);
+              await updateTasksForFile(activeVaultPath, back, mainWindow);
+            } catch (err) {
+              safeWarn('Failed to update graph/tasks for backlink after move', err);
+            }
+          }
+        } catch (err) {
+          safeWarn('Failed to update backlink file during move:', err);
+        }
+      }
+    } catch (err) {
+      safeWarn('Failed to update backlinks during move:', err);
+    }
+
+    // Perform move
+    try {
+      try {
+        await fsp.access(targetPath);
+        const overwrite = await dialog.showMessageBox(mainWindow, {
+          type: 'warning',
+          buttons: ['Overwrite', 'Cancel'],
+          defaultId: 1,
+          message: `${newRelative} already exists. Overwrite?`
+        });
+        if (overwrite.response !== 0) return false;
+      } catch {
+        // target doesn't exist
+      }
+
+      await fsp.rename(srcPath, targetPath);
+
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('vault:file-deleted', normalized);
+        mainWindow.webContents.send('vault:file-added', newRelative);
+      }
+
+      try {
+        await updateGraphForFile(activeVaultPath, newRelative, mainWindow);
+        await updateTasksForFile(activeVaultPath, newRelative, mainWindow);
+      } catch (err) {
+        safeWarn('Failed to update graph/tasks for moved file', err);
+      }
+
+      // Remove old file from MRU so user doesn't accidentally recreate it
+      try {
+        await removeFromMRU(activeVaultPath, normalized);
+      } catch (err) {
+        safeWarn('Failed to remove old file from MRU after move', err);
+      }
+
+      return newRelative;
+    } catch (err) {
+      safeError('Failed to move file:', err);
       return false;
     }
   });

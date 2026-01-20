@@ -900,6 +900,16 @@ function AppContent(): React.JSX.Element {
               setContent('');
               setFilesVersion((v) => v + 1);
             }}
+            onMove={async (newFilename: string) => {
+              try {
+                const newContent = await window.phosphor.readNote(newFilename);
+                setCurrentFile(newFilename);
+                setContent(newContent);
+                setFilesVersion((v) => v + 1);
+              } catch (err) {
+                console.error('Failed to open moved file:', err);
+              }
+            }}
           />
 
           <EncryptionModal

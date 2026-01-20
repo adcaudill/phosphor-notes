@@ -9,6 +9,7 @@ interface FrontmatterModalProps {
   content: string;
   onSave: (updatedContent: string) => void;
   onDelete?: (filename: string) => void;
+  onMove?: (newFilename: string) => void;
 }
 
 interface FormState {
@@ -67,7 +68,8 @@ export function FrontmatterModal({
   currentFile,
   content,
   onSave,
-  onDelete
+  onDelete,
+  onMove
 }: FrontmatterModalProps): React.JSX.Element {
   const [formState, dispatch] = useReducer(formReducer, {
     editedFields: {},
@@ -135,6 +137,22 @@ export function FrontmatterModal({
     if (currentFile && window.confirm(`Delete ${currentFile}?`)) {
       onDelete?.(currentFile);
       onClose();
+    }
+  };
+
+  const handleMove = async (): Promise<void> => {
+    if (!currentFile) return;
+    try {
+      // Ask main to move the file (shows folder picker)
+      // @ts-ignore - injected by preload
+      const result = await window.phosphor.moveNote(currentFile);
+      if (result && typeof result === 'string') {
+        onMove?.(result);
+        onClose();
+      }
+    } catch (err) {
+      console.error('Move failed', err);
+      alert('Move failed: ' + String(err));
     }
   };
 
@@ -236,9 +254,14 @@ export function FrontmatterModal({
               <div className="file-info">
                 <strong>Name:</strong> {currentFile}
               </div>
-              <button className="delete-file-btn" onClick={handleDelete}>
-                Delete File
-              </button>
+              <div className="file-action-buttons">
+                <button className="move-file-btn" onClick={handleMove}>
+                  Move File
+                </button>
+                <button className="delete-file-btn" onClick={handleDelete}>
+                  Delete File
+                </button>
+              </div>
             </div>
           </div>
         )}
