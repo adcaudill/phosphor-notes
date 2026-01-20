@@ -26,6 +26,7 @@ import { useSettings } from '../hooks/useSettings';
 import { pdfWidgetPlugin } from '../editor/extensions/pdfWidget';
 import { smartPaste } from '../editor/extensions/smartPaste';
 import { getURLAtPosition, urlExtensions } from '../editor/extensions/urlHandler';
+import { strikethroughExtension } from '../editor/extensions/strikethrough';
 import { SearchPanel } from './SearchPanel';
 import { createCombinedAutocompleteExtension } from '../editor/extensions/autocomplete';
 import {
@@ -195,6 +196,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
           createCombinedAutocompleteExtension(wikiPageSuggestions), // Autocomplete for wiki links and slash commands
           ...urlExtensions, // URL detection, styling, and tooltips
           smartPaste,
+          strikethroughExtension,
 
           // 2. Listener for changes (call latest handler via ref, reconstruct with frontmatter)
           EditorView.updateListener.of((update) => {
