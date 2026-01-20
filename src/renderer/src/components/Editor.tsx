@@ -2,7 +2,7 @@ import { useEffect, useRef, useMemo, useState, forwardRef, useImperativeHandle }
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, KeyBinding } from '@codemirror/view';
 import { foldGutter, foldKeymap } from '@codemirror/language';
-import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { syntaxHighlighting, HighlightStyle } from '@codemirror/language';
@@ -145,6 +145,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
 
       // Build the keymap based on journal mode
       const baseKeymap = [
+        indentWithTab,
         ...defaultKeymap,
         ...historyKeymap,
         {
