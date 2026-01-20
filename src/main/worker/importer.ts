@@ -373,11 +373,11 @@ function transformContent(
     // For journal files, convert the ISO date to long form (e.g., "September 1, 2021")
     titleForFrontmatter = convertISODateToLongForm(cleanTitle);
     frontmatterLines.push(`title: "${titleForFrontmatter}"`);
-    frontmatterLines.push(`type: outliner`);
+    frontmatterLines.push(`mode: outliner`);
     frontmatterLines.push(`date: ${cleanTitle}`);
   } else {
     frontmatterLines.push(`title: "${titleForFrontmatter}"`);
-    frontmatterLines.push(`type: outliner`);
+    frontmatterLines.push(`mode: outliner`);
   }
 
   // Add any other extracted properties
