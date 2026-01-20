@@ -6,6 +6,174 @@ import type { Selection } from 'd3-selection';
 import { zoom, zoomIdentity, type ZoomTransform } from 'd3-zoom';
 import '../styles/GraphView.css';
 
+/**
+ * Parse hex color to RGB
+ */
+function parseHexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const h = hex.replace('#', '').trim();
+  if (h.length === 3) {
+    return {
+      r: parseInt(h[0] + h[0], 16),
+      g: parseInt(h[1] + h[1], 16),
+      b: parseInt(h[2] + h[2], 16)
+    };
+  }
+  if (h.length === 6) {
+    return {
+      r: parseInt(h.slice(0, 2), 16),
+      g: parseInt(h.slice(2, 4), 16),
+      b: parseInt(h.slice(4, 6), 16)
+    };
+  }
+  return null;
+}
+
+/**
+ * Convert RGB to HSL
+ */
+function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: number } {
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+        break;
+      case g:
+        h = ((b - r) / d + 2) / 6;
+        break;
+      case b:
+        h = ((r - g) / d + 4) / 6;
+        break;
+    }
+  }
+  return { h, s, l };
+}
+
+/**
+ * Convert HSL to RGB
+ */
+function hslToRgb(h: number, s: number, l: number): { r: number; g: number; b: number } {
+  let r, g, b;
+  if (s === 0) {
+    r = g = b = l;
+  } else {
+    const hue2rgb = (p: number, q: number, t: number): number => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, h + 1 / 3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1 / 3);
+  }
+  return {
+    r: Math.round(r * 255),
+    g: Math.round(g * 255),
+    b: Math.round(b * 255)
+  };
+}
+
+/**
+ * Convert RGB to hex
+ */
+function rgbToHex(r: number, g: number, b: number): string {
+  return `#${[r, g, b].map((x) => x.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/**
+ * Simple hash function for deterministic string hashing
+ */
+function simpleHash(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash);
+}
+
+/**
+ * Extract namespace from node ID (first part before /, with file extension removed)
+ */
+function extractNamespace(nodeId: string): string {
+  // Remove file extension first
+  const withoutExt = nodeId.replace(/\.[^/.]+$/, '');
+  // Split on / and return first part
+  const parts = withoutExt.split('/');
+  return parts[0];
+}
+
+/**
+ * Build a map of node IDs to namespace-based colors
+ */
+function buildNamespaceColorMap(nodeIds: string[], baseColor: string): Map<string, string> {
+  const colorMap = new Map<string, string>();
+  const namespaceMap = new Map<string, number>();
+
+  // Count nodes per namespace
+  nodeIds.forEach((nodeId) => {
+    const namespace = extractNamespace(nodeId);
+    namespaceMap.set(namespace, (namespaceMap.get(namespace) || 0) + 1);
+  });
+
+  // Sort by count and take top 10
+  const topNamespaces = Array.from(namespaceMap.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([ns]) => ns);
+
+  // Parse base color to HSL
+  const baseRgb = parseHexToRgb(baseColor);
+  if (!baseRgb) {
+    // Fallback if parsing fails
+    nodeIds.forEach((nodeId) => {
+      colorMap.set(nodeId, baseColor);
+    });
+    return colorMap;
+  }
+
+  const baseHsl = rgbToHsl(baseRgb.r, baseRgb.g, baseRgb.b);
+
+  // Assign colors to all nodes based on their namespace
+  nodeIds.forEach((nodeId) => {
+    const namespace = extractNamespace(nodeId);
+    if (!topNamespaces.includes(namespace)) {
+      // Nodes in non-top-10 namespaces use base color
+      colorMap.set(nodeId, baseColor);
+      return;
+    }
+
+    // Generate deterministic hue offset for this namespace
+    const namespaceHash = simpleHash(namespace);
+    const offset = ((namespaceHash % 12) - 6) * 0.06; // Rotate hue by ±0.36 (60 degrees max)
+    let newHue = baseHsl.h + offset;
+    if (newHue < 0) newHue += 1;
+    if (newHue > 1) newHue -= 1;
+
+    const newRgb = hslToRgb(newHue, baseHsl.s, baseHsl.l);
+    const color = rgbToHex(newRgb.r, newRgb.g, newRgb.b);
+    colorMap.set(nodeId, color);
+  });
+
+  return colorMap;
+}
+
 interface GraphNode extends SimulationNodeDatum {
   id: string;
   x?: number;
@@ -101,25 +269,6 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
     const getVar = (name: string, fallback = ''): string =>
       (resolvedStyle.getPropertyValue(name) || fallback).trim();
 
-    const parseHex = (hex: string): { r: number; g: number; b: number } | null => {
-      const h = hex.replace('#', '').trim();
-      if (h.length === 3) {
-        return {
-          r: parseInt(h[0] + h[0], 16),
-          g: parseInt(h[1] + h[1], 16),
-          b: parseInt(h[2] + h[2], 16)
-        };
-      }
-      if (h.length === 6) {
-        return {
-          r: parseInt(h.slice(0, 2), 16),
-          g: parseInt(h.slice(2, 4), 16),
-          b: parseInt(h.slice(4, 6), 16)
-        };
-      }
-      return null;
-    };
-
     const toRgba = (color: string, alpha = 1): string => {
       const c = color.trim();
       if (!c) return `rgba(148,163,184,${alpha})`;
@@ -127,7 +276,7 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
       if (c.startsWith('rgb')) {
         return c.replace(/rgb\(/, 'rgba(').replace(/\)$/, `, ${alpha})`);
       }
-      const p = parseHex(c);
+      const p = parseHexToRgb(c);
       if (p) return `rgba(${p.r}, ${p.g}, ${p.b}, ${alpha})`;
       return `rgba(148,163,184,${alpha})`;
     };
@@ -140,6 +289,12 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
     const cssFontFamily =
       bodyStyle.fontFamily || '"Inter", "SF Pro Text", -apple-system, system-ui, sans-serif';
     const cssFontSize = getVar('--font-size-sm', '12px');
+
+    // Build namespace-based color map
+    const nodeColorMap = buildNamespaceColorMap(
+      nodes.map((n) => n.id),
+      cssPrimary
+    );
 
     let transform = transformRef.current;
     let isDragging = false;
@@ -181,30 +336,44 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
       });
       ctx.stroke();
 
-      ctx.beginPath();
-      ctx.fillStyle = cssPrimary;
-      ctx.strokeStyle = cssPrimaryRgb ? `rgba(${cssPrimaryRgb}, 0.35)` : toRgba(cssPrimary, 0.35);
       ctx.lineWidth = 2;
+      ctx.strokeStyle = cssPrimaryRgb ? `rgba(${cssPrimaryRgb}, 0.35)` : toRgba(cssPrimary, 0.35);
 
+      // Group nodes by color for batch rendering
+      const nodesByColor = new Map<string, GraphNode[]>();
       nodes.forEach((node) => {
         if (node.x === undefined || node.y === undefined) return;
 
         // Node culling - skip if node is off screen
         if (node.x < minX || node.x > maxX || node.y < minY || node.y > maxY) return;
 
-        const baseRadius = 6;
-        const maxRadiusIncrease = 10;
-        const scaledRadius =
-          baseRadius + ((node.degree || 0) / Math.max(maxDegree, 1)) * maxRadiusIncrease;
-
-        // moveTo creates a sub-path so circles aren't connected by lines
-        ctx.moveTo(node.x + scaledRadius, node.y);
-        ctx.arc(node.x, node.y, scaledRadius, 0, Math.PI * 2);
+        const nodeColor = nodeColorMap.get(node.id) || cssPrimary;
+        if (!nodesByColor.has(nodeColor)) {
+          nodesByColor.set(nodeColor, []);
+        }
+        nodesByColor.get(nodeColor)!.push(node);
       });
 
-      // Draw all nodes in one fill/stroke operation
-      ctx.fill();
-      ctx.stroke();
+      // Draw all nodes grouped by color (max ~10 groups)
+      nodesByColor.forEach((colorNodes, color) => {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+
+        colorNodes.forEach((node) => {
+          if (node.x === undefined || node.y === undefined) return;
+
+          const baseRadius = 6;
+          const maxRadiusIncrease = 10;
+          const scaledRadius =
+            baseRadius + ((node.degree || 0) / Math.max(maxDegree, 1)) * maxRadiusIncrease;
+
+          ctx.moveTo(node.x + scaledRadius, node.y);
+          ctx.arc(node.x, node.y, scaledRadius, 0, Math.PI * 2);
+        });
+
+        ctx.fill();
+        ctx.stroke();
+      });
 
       // We only loop for text if we are actually zoomed in close enough
       if (transform.k > 0.7) {
