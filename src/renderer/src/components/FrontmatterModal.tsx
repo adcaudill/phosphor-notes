@@ -1,4 +1,4 @@
-import React, { useReducer, useEffect, useRef } from 'react';
+import React, { useReducer, useEffect, useRef, useState } from 'react';
 import 'material-symbols';
 import { extractFrontmatter } from '../utils/frontmatterUtils';
 
@@ -10,6 +10,7 @@ interface FrontmatterModalProps {
   onSave: (updatedContent: string) => void;
   onDelete?: (filename: string) => void;
   onMove?: (newFilename: string) => void;
+  onRename?: (newFilename: string) => void;
 }
 
 interface FormState {
@@ -69,7 +70,8 @@ export function FrontmatterModal({
   content,
   onSave,
   onDelete,
-  onMove
+  onMove,
+  onRename
 }: FrontmatterModalProps): React.JSX.Element {
   const [formState, dispatch] = useReducer(formReducer, {
     editedFields: {},
@@ -153,6 +155,38 @@ export function FrontmatterModal({
     } catch (err) {
       console.error('Move failed', err);
       alert('Move failed: ' + String(err));
+    }
+  };
+
+  const [renameMode, setRenameMode] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+
+  const startRename = (): void => {
+    if (!currentFile) return;
+    setRenameValue(currentFile.replace(/\.md$/, ''));
+    setRenameMode(true);
+  };
+
+  const cancelRename = (): void => {
+    setRenameMode(false);
+    setRenameValue('');
+  };
+
+  const confirmRename = async (): Promise<void> => {
+    if (!currentFile) return;
+    const newName = renameValue?.trim();
+    if (!newName) return alert('Please provide a name');
+    try {
+      // @ts-ignore - injected by preload
+      const result = await window.phosphor.renameNote(currentFile, newName);
+      if (result && typeof result === 'string') {
+        onRename?.(result);
+        setRenameMode(false);
+        onClose();
+      }
+    } catch (err) {
+      console.error('Rename failed', err);
+      alert('Rename failed: ' + String(err));
     }
   };
 
@@ -258,6 +292,27 @@ export function FrontmatterModal({
                 <button className="move-file-btn" onClick={handleMove}>
                   Move File
                 </button>
+                {renameMode ? (
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input
+                      className="field-input"
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      placeholder="new/path/Name"
+                      autoFocus
+                    />
+                    <button className="move-file-btn" onClick={confirmRename}>
+                      Confirm
+                    </button>
+                    <button className="btn-secondary" onClick={cancelRename}>
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button className="move-file-btn" onClick={startRename} title="Rename file">
+                    Rename File
+                  </button>
+                )}
                 <button className="delete-file-btn" onClick={handleDelete}>
                   Delete File
                 </button>

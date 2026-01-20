@@ -987,6 +987,136 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
     }
   });
 
+  // Rename note: update links, rename file within vault
+  ipcMain.handle('note:rename', async (_, oldFilename: string, newFilename: string) => {
+    if (!activeVaultPath || !mainWindow) throw new Error('No vault selected');
+
+    const normalizedOld =
+      oldFilename && oldFilename.trim()
+        ? oldFilename.trim().endsWith('.md')
+          ? oldFilename.trim()
+          : `${oldFilename.trim()}.md`
+        : '';
+    const normalizedNew =
+      newFilename && newFilename.trim()
+        ? newFilename.trim().endsWith('.md')
+          ? newFilename.trim()
+          : `${newFilename.trim()}.md`
+        : '';
+    if (!normalizedOld || !normalizedNew) throw new Error('Invalid filename(s)');
+
+    if (normalizedOld === normalizedNew) return normalizedNew;
+
+    const srcPath = validateAndResolvePath(activeVaultPath, normalizedOld);
+    const targetPath = validateAndResolvePath(activeVaultPath, normalizedNew);
+
+    // Ensure target dir exists
+    await fsp.mkdir(path.dirname(targetPath), { recursive: true });
+
+    // Update backlinks using in-memory graph
+    try {
+      const graph = getLastGraph();
+      const backlinks = graph ? getBacklinks(graph, normalizedOld) : [];
+
+      const escapeForRegex = (s: string): string => s.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+      const oldNoExt = normalizedOld.replace(/\.md$/i, '');
+      const newNoExt = normalizedNew.replace(/\.md$/i, '');
+      const wikiRegex = new RegExp(
+        `\\[\\[\\s*(${escapeForRegex(oldNoExt)})(?:\\.md)?(\\|[^\\]]*)?\\s*\\]\\]`,
+        'g'
+      );
+
+      for (const back of backlinks) {
+        try {
+          const backPath = validateAndResolvePath(activeVaultPath, back);
+          const buffer = await fsp.readFile(backPath);
+          let contentStr: string;
+          if (activeMasterKey && isEncrypted(buffer)) {
+            try {
+              const decrypted = decryptBuffer(buffer, activeMasterKey);
+              contentStr = decrypted.toString('utf-8');
+            } catch {
+              contentStr = buffer.toString('utf-8');
+            }
+          } else {
+            contentStr = buffer.toString('utf-8');
+          }
+
+          const newContent = contentStr.replace(wikiRegex, (_m, _p1, p2) => {
+            const alias = p2 || '';
+            return `[[${newNoExt}${alias}]]`;
+          });
+
+          if (newContent !== contentStr) {
+            let outBuf: Buffer;
+            if (activeMasterKey) {
+              outBuf = encryptBuffer(Buffer.from(newContent, 'utf-8'), activeMasterKey);
+            } else {
+              outBuf = Buffer.from(newContent, 'utf-8');
+            }
+            await fsp.writeFile(backPath, outBuf);
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('vault:file-changed', back);
+            }
+            try {
+              await updateGraphForChangedFile(activeVaultPath, back, mainWindow);
+              await updateTasksForFile(activeVaultPath, back, mainWindow);
+            } catch (err) {
+              safeWarn('Failed to update graph/tasks for backlink after rename', err);
+            }
+          }
+        } catch (err) {
+          safeWarn('Failed to update backlink file during rename:', err);
+        }
+      }
+    } catch (err) {
+      safeWarn('Failed to update backlinks during rename:', err);
+    }
+
+    // Perform rename
+    try {
+      try {
+        await fsp.access(targetPath);
+        const overwrite = await dialog.showMessageBox(mainWindow, {
+          type: 'warning',
+          buttons: ['Overwrite', 'Cancel'],
+          defaultId: 1,
+          message: `${normalizedNew} already exists. Overwrite?`
+        });
+        if (overwrite.response !== 0) return false;
+      } catch {
+        // target doesn't exist
+      }
+
+      await fsp.rename(srcPath, targetPath);
+
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('vault:file-deleted', normalizedOld);
+        mainWindow.webContents.send('vault:file-added', normalizedNew);
+      }
+
+      try {
+        await updateGraphForFile(activeVaultPath, normalizedNew, mainWindow);
+        await updateTasksForFile(activeVaultPath, normalizedNew, mainWindow);
+      } catch (err) {
+        safeWarn('Failed to update graph/tasks for renamed file', err);
+      }
+
+      // Update MRU: remove old and add new
+      try {
+        await removeFromMRU(activeVaultPath, normalizedOld);
+        await updateMRU(activeVaultPath, normalizedNew);
+      } catch (err) {
+        safeWarn('Failed to update MRU after rename', err);
+      }
+
+      return normalizedNew;
+    } catch (err) {
+      safeError('Failed to rename file:', err);
+      return false;
+    }
+  });
+
   // ============ ENCRYPTION HANDLERS ============
 
   // Check if encryption is enabled for current vault

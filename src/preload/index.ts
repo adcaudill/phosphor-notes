@@ -154,6 +154,9 @@ const api = {
   deleteNote: (filename: string) => ipcRenderer.invoke('note:delete', filename),
   // Move note: opens a folder picker in main and moves the file within the vault
   moveNote: (filename: string) => ipcRenderer.invoke('note:move', filename),
+  // Rename note: provide a new filename (may include path) within the vault
+  renameNote: (oldFilename: string, newFilename: string) =>
+    ipcRenderer.invoke('note:rename', oldFilename, newFilename),
 
   // Import Logseq vault
   importLogseq: () => ipcRenderer.invoke('import:logseq'),
