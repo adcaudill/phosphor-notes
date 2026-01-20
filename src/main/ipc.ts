@@ -821,21 +821,39 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
 
     // Security: Validate path to prevent directory traversal while allowing nested paths
     const filePath = validateAndResolvePath(activeVaultPath, filename);
+    // Normalize filename for MRU and renderer notifications (ensure .md)
+    const normalized =
+      filename && filename.trim()
+        ? filename.trim().endsWith('.md')
+          ? filename.trim()
+          : `${filename.trim()}.md`
+        : '';
 
     try {
-      // Try to move to system Trash first (returns void Promise)
+      // Try to move to system Trash first; fall back to unlink if it fails
       try {
-        // Use shell.trashItem (async) which is present in Electron typings; it returns Promise<void>,
-        // so if it resolves without throwing we consider it a success.
         await shell.trashItem(filePath);
-        return true;
       } catch (e) {
-        // Non-fatal: fall back to unlink if trashing throws
         safeWarn('trashItem failed, falling back to unlink:', e);
+        await fsp.unlink(filePath);
       }
 
-      // Permanent delete as a fallback
-      await fsp.unlink(filePath);
+      // Notify renderer that the file was deleted
+      try {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('vault:file-deleted', normalized);
+        }
+      } catch (err) {
+        safeWarn('Failed to send vault:file-deleted after delete', err);
+      }
+
+      // Remove from MRU so it doesn't appear in recent lists
+      try {
+        await removeFromMRU(activeVaultPath, normalized);
+      } catch (err) {
+        safeWarn('Failed to remove deleted file from MRU', err);
+      }
+
       return true;
     } catch (err) {
       safeError('Failed to delete note:', err);
