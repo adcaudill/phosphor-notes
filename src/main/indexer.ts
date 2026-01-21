@@ -414,6 +414,11 @@ export async function updateTasksForFile(
   mainWindow: BrowserWindow
 ): Promise<void> {
   try {
+    // Only operate on markdown files
+    if (!filename.endsWith('.md')) {
+      safeDebug(`Skipping task update for non-markdown file: ${filename}`);
+      return;
+    }
     const filePath = join(vaultPath, filename);
     // Use shared reader so encrypted vaults are handled the same way as the worker
     const content = await readMarkdownFile(filePath, vaultPath);
@@ -513,6 +518,11 @@ export async function updateGraphForChangedFile(
   mainWindow: BrowserWindow
 ): Promise<void> {
   try {
+    // Only operate on markdown files
+    if (!filename.endsWith('.md')) {
+      safeDebug(`Skipping graph update for non-markdown file: ${filename}`);
+      return;
+    }
     // If we don't have a graph yet, skip (full indexing hasn't completed)
     if (!lastGraph) {
       safeDebug(`Skipping graph update for changed file ${filename}: graph not yet initialized`);
@@ -602,6 +612,11 @@ export async function updateGraphForFile(
   mainWindow: BrowserWindow
 ): Promise<void> {
   try {
+    // Only operate on markdown files
+    if (!filename.endsWith('.md')) {
+      safeDebug(`Skipping graph update for non-markdown file: ${filename}`);
+      return;
+    }
     // If we don't have a graph yet, skip (full indexing hasn't completed)
     if (!lastGraph) {
       safeDebug(`Skipping graph update for ${filename}: graph not yet initialized`);

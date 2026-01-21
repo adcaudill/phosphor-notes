@@ -97,7 +97,7 @@ export function setupWatcher(
         mainWindow.webContents.send('vault:file-changed', relativePath);
       }
       // Trigger targeted re-indexing for this specific file
-      if (onFileChangeCallback) {
+      if (onFileChangeCallback && relativePath.endsWith('.md')) {
         onFileChangeCallback(relativePath);
       }
     });
@@ -128,7 +128,7 @@ export function setupWatcher(
       mainWindow.webContents.send('vault:file-added', relativePath);
     }
     // Trigger graph update for the newly added file
-    if (onFileAddedCallback) {
+    if (onFileAddedCallback && relativePath.endsWith('.md')) {
       onFileAddedCallback(relativePath);
     }
   });
