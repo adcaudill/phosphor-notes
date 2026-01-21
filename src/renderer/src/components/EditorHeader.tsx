@@ -2,6 +2,7 @@ import React, { useState, useRef, forwardRef } from 'react';
 import DatePicker from 'react-datepicker';
 import type ReactDatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
+import { extractDateFromFilename } from '../utils/frontmatterUtils';
 
 type Props = {
   handleHeaderMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void;
@@ -213,6 +214,18 @@ export default function EditorHeader({
                 console.debug('[EditorHeader] suppressed onCalendarOpen');
                 dpRef.current?.setOpen(false);
                 return;
+              }
+              // Default the picker to the current daily note's date if available
+              try {
+                let defaultDate: Date | null = null;
+                if (currentFile) {
+                  defaultDate = extractDateFromFilename(currentFile);
+                }
+                if (!defaultDate) defaultDate = new Date();
+                setSelectedDate(defaultDate);
+              } catch (err) {
+                console.debug('Failed to compute default date for datepicker', err);
+                setSelectedDate(new Date());
               }
               setIsOpen(true);
             }}
