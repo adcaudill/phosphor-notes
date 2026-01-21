@@ -3,6 +3,7 @@ import { join, resolve } from 'path';
 import { BrowserWindow } from 'electron';
 import * as fs from 'fs';
 import { promises as fsp } from 'fs';
+import { isDailyNote, extractDateHierarchy } from './graphBuilder';
 import { getActiveMasterKey, isEncryptionEnabled } from './ipc';
 import { decryptBuffer } from './crypto';
 
@@ -508,6 +509,35 @@ function getImplicitPathLinks(filename: string): string[] {
 }
 
 /**
+ * Ensure temporal virtual nodes (month/year) exist and reference the daily note.
+ * Mutates `lastGraph` in-place.
+ */
+function attachDailyToTemporalNodes(filename: string): void {
+  try {
+    if (!lastGraph) return;
+    if (!isDailyNote(filename)) return;
+    const hierarchy = extractDateHierarchy(filename);
+    if (!hierarchy) return;
+
+    // Ensure month node links to this daily note
+    if (!lastGraph[hierarchy.month]) lastGraph[hierarchy.month] = [];
+    if (!lastGraph[hierarchy.month].includes(filename)) {
+      lastGraph[hierarchy.month].push(filename);
+      lastGraph[hierarchy.month].sort();
+    }
+
+    // Ensure year node links to the month node
+    if (!lastGraph[hierarchy.year]) lastGraph[hierarchy.year] = [];
+    if (!lastGraph[hierarchy.year].includes(hierarchy.month)) {
+      lastGraph[hierarchy.year].push(hierarchy.month);
+      lastGraph[hierarchy.year].sort();
+    }
+  } catch {
+    // Swallow errors to avoid breaking watcher flow
+  }
+}
+
+/**
  * Update graph for a changed file (efficient incremental update)
  * This is called when an existing file is modified to update its outgoing links
  * and handle any new wikilinks that were added
@@ -556,6 +586,9 @@ export async function updateGraphForChangedFile(
         lastGraph[target] = [];
       }
     }
+
+    // Attach daily note to month/year virtual nodes
+    attachDailyToTemporalNodes(filename);
 
     // Send updated graph to renderer
     if (!mainWindow.isDestroyed()) {
@@ -649,6 +682,9 @@ export async function updateGraphForFile(
         lastGraph[targetFile] = [];
       }
     }
+
+    // Attach daily note to month/year virtual nodes
+    attachDailyToTemporalNodes(filename);
 
     // Send updated graph to renderer
     if (!mainWindow.isDestroyed()) {
