@@ -4,6 +4,7 @@ import { BrowserWindow } from 'electron';
 import * as fs from 'fs';
 import { promises as fsp } from 'fs';
 import { isDailyNote, extractDateHierarchy } from './graphBuilder';
+import { extractWikilinks, getImplicitPathLinks } from '../shared/wikilinks';
 import { getActiveMasterKey, isEncryptionEnabled } from './ipc';
 import { decryptBuffer } from './crypto';
 
@@ -232,7 +233,32 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
     if (fs.existsSync(possibleSrc)) {
       try {
         safeLog('Indexer: compiled worker missing, using runtime TS fallback from', possibleSrc);
-        const tsCode = fs.readFileSync(possibleSrc, 'utf-8');
+        let tsCode = fs.readFileSync(possibleSrc, 'utf-8');
+        // Attempt to inline shared util so the eval worker can resolve it
+        try {
+          const sharedPath = resolve(process.cwd(), 'src', 'shared', 'wikilinks.ts');
+          if (fs.existsSync(sharedPath)) {
+            let sharedCode = fs.readFileSync(sharedPath, 'utf-8');
+            // Remove top-level export keywords so functions are available when wrapped
+            sharedCode = sharedCode.replace(
+              /(^|\n)export\s+(?=(async\s+function|function|const|let|var|class|interface|type|enum))/g,
+              '$1'
+            );
+            // Wrap the shared code in an IIFE and expose the known symbols
+            const wrapped = `(function(){\n${sharedCode}\nreturn { extractWikilinks: typeof extractWikilinks !== 'undefined' ? extractWikilinks : undefined, getImplicitPathLinks: typeof getImplicitPathLinks !== 'undefined' ? getImplicitPathLinks : undefined };\n})()`;
+
+            // Remove import line(s) that reference the shared util from the worker source
+            tsCode = tsCode.replace(/import\s+[^;]*shared\/wikilinks[^;]*;?\n?/g, '');
+
+            // Prepend the wrapped shared module and destructure the functions for the worker code
+            tsCode =
+              `const __phosphor_shared = ${wrapped};\nconst { extractWikilinks, getImplicitPathLinks } = __phosphor_shared;\n\n` +
+              tsCode;
+          }
+        } catch (inlineErr) {
+          safeError('Failed to inline shared util for runtime worker:', inlineErr);
+        }
+
         // Transpile with Typescript at runtime to CommonJS
         // Import lazily to avoid top-level dependency when not needed
         const ts = await import('typescript');
@@ -462,50 +488,6 @@ export async function updateTasksForFile(
   } catch (err) {
     safeError(`Failed to update tasks for file: ${filename}`, err);
   }
-}
-
-/**
- * Extract wikilinks from markdown content (same logic as worker)
- * Converts [[filename]] or [[filename.md]] format
- * Always returns filenames with .md extension
- */
-function extractWikilinks(content: string): string[] {
-  const wikiLinkRegex = /\[\[(.*?)\]\]/g;
-  const links: string[] = [];
-
-  let match;
-  while ((match = wikiLinkRegex.exec(content)) !== null) {
-    let link = match[1].trim();
-    if (!link) continue; // Skip empty matches
-
-    // Normalize: ensure .md extension
-    if (!link.endsWith('.md')) {
-      link += '.md';
-    }
-
-    links.push(link);
-  }
-
-  return links;
-}
-
-/**
- * Get implicit parent links for a nested filepath
- * e.g., "People/John.md" returns ["People.md"]
- */
-function getImplicitPathLinks(filename: string): string[] {
-  const implicitLinks: string[] = [];
-
-  if (filename.includes('/')) {
-    const parts = filename.split('/');
-    // Create links to each parent level, from shallowest to deepest
-    for (let i = 1; i < parts.length; i++) {
-      const parentPath = parts.slice(0, i).join('/') + '.md';
-      implicitLinks.push(parentPath);
-    }
-  }
-
-  return implicitLinks;
 }
 
 /**

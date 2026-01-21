@@ -1,4 +1,5 @@
 import { parentPort } from 'worker_threads';
+import { extractWikilinks, getImplicitPathLinks } from '../../shared/wikilinks';
 
 // MiniSearch can have import issues in worker context
 // Load it dynamically to handle both ESM and CommonJS contexts
@@ -39,67 +40,6 @@ interface SearchEngine {
 }
 
 let searchEngine: SearchEngine | null = null;
-
-/**
- * Extract wikilinks from markdown content
- * Converts [[filename]] or [[filename.md]] format
- * Always returns filenames with .md extension
- */
-function extractWikilinks(content: string): string[] {
-  const wikiLinkRegex = /\[\[(.*?)\]\]/g;
-  const links: string[] = [];
-
-  let match;
-  while ((match = wikiLinkRegex.exec(content)) !== null) {
-    let link = match[1].trim();
-    if (!link) continue; // Skip empty matches
-
-    // Remove alias or heading parts like 'file|alias' or 'file#heading'
-    link = link.split('|')[0].split('#')[0].trim();
-    if (!link) continue;
-
-    // Normalize relative path markers
-    if (link.startsWith('./')) link = link.slice(2);
-
-    // If link has an extension and it's not .md, treat it as an attachment and skip
-    const lastDot = link.lastIndexOf('.');
-    if (lastDot !== -1) {
-      const ext = link.substring(lastDot + 1).toLowerCase();
-      if (ext !== 'md') {
-        // Attachment (e.g., .png, .jpg, .pdf) - do not add to graph
-        continue;
-      }
-      // already ends with .md - keep as-is
-    } else {
-      // No extension - assume a markdown file and add .md
-      link += '.md';
-    }
-
-    links.push(link);
-  }
-
-  return links;
-}
-
-/**
- * Get implicit parent links for a nested filepath
- * e.g., "People/John.md" returns ["People.md"]
- * For deeply nested paths, returns parents from shallowest to deepest
- */
-function getImplicitPathLinks(filename: string): string[] {
-  const implicitLinks: string[] = [];
-
-  if (filename.includes('/')) {
-    const parts = filename.split('/');
-    // Create links to each parent level, from shallowest to deepest
-    for (let i = 1; i < parts.length; i++) {
-      const parentPath = parts.slice(0, i).join('/') + '.md';
-      implicitLinks.push(parentPath);
-    }
-  }
-
-  return implicitLinks;
-}
 
 /**
  * Extract tags from YAML frontmatter

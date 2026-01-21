@@ -3,6 +3,9 @@
  * Decoupled from worker thread for testability
  */
 
+import { extractWikilinks, getImplicitPathLinks } from '../shared/wikilinks';
+export { extractWikilinks };
+
 export type WikiGraph = Record<string, string[]>;
 
 /**
@@ -99,47 +102,6 @@ export function generateVirtualTemporalNodes(files: string[]): WikiGraph {
 }
 
 /**
- * Extract wikilinks from markdown content
- * Converts [[filename]], [[filename.md]], or [[path/to/file]] format
- * Always returns filenames with .md extension
- * For nested paths like [[People/John]], also creates implicit links to parent paths
- *
- * @param content - Markdown content to parse
- * @returns Array of linked filenames with .md extension (including implicit parent links)
- */
-export function extractWikilinks(content: string): string[] {
-  const wikiLinkRegex = /\[\[(.*?)\]\]/g;
-  const links: string[] = [];
-
-  let match;
-  while ((match = wikiLinkRegex.exec(content)) !== null) {
-    let link = match[1].trim();
-    if (!link) continue; // Skip empty matches
-
-    // Normalize: ensure .md extension
-    if (!link.endsWith('.md')) {
-      link += '.md';
-    }
-
-    // Add the explicit link (preserve duplicates as per original behavior)
-    links.push(link);
-
-    // For nested paths, also add implicit parent links
-    // e.g., [[People/John.md]] creates implicit links to [[People.md]]
-    if (link.includes('/')) {
-      const parts = link.split('/');
-      // Process each parent level
-      for (let i = 1; i < parts.length; i++) {
-        const parentPath = parts.slice(0, i).join('/') + '.md';
-        links.push(parentPath);
-      }
-    }
-  }
-
-  return links;
-}
-
-/**
  * Extract tags from YAML frontmatter
  * Supports multiple formats:
  * 1. tags: [tag1, tag2, tag3]
@@ -217,30 +179,6 @@ export function buildWikiGraph(fileContents: Record<string, string>, files?: str
   }
 
   return graph;
-}
-
-/**
- * Get implicit parent links for a nested filepath
- * e.g., "People/John.md" returns ["People.md"]
- * For deeply nested paths, returns parents from shallowest to deepest
- * e.g., "Projects/Work/Client/Document.md" returns ["Projects.md", "Projects/Work.md", "Projects/Work/Client.md"]
- *
- * @param filename - The nested filename path
- * @returns Array of implicit parent paths (shallowest to deepest)
- */
-function getImplicitPathLinks(filename: string): string[] {
-  const implicitLinks: string[] = [];
-
-  if (filename.includes('/')) {
-    const parts = filename.split('/');
-    // Create links to each parent level, from shallowest to deepest
-    for (let i = 1; i < parts.length; i++) {
-      const parentPath = parts.slice(0, i).join('/') + '.md';
-      implicitLinks.push(parentPath);
-    }
-  }
-
-  return implicitLinks;
 }
 
 /**
