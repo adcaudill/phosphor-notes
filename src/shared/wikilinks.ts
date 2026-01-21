@@ -28,15 +28,46 @@ export function extractWikilinks(content: string): string[] {
     // Normalize relative path markers
     if (link.startsWith('./')) link = link.slice(2);
 
-    // If link has an extension and it's not .md, treat it as an attachment and skip
+    // If link has an extension, decide if it's an attachment or a page name.
+    // Treat only a known set of media/document extensions as attachments and skip them.
+    // Otherwise assume it's a markdown page (e.g. "example.com" -> "example.com.md").
     const lastDot = link.lastIndexOf('.');
     if (lastDot !== -1) {
       const ext = link.substring(lastDot + 1).toLowerCase();
-      if (ext !== 'md') {
+      const attachmentExts = new Set([
+        'png',
+        'jpg',
+        'jpeg',
+        'gif',
+        'svg',
+        'webp',
+        'pdf',
+        'mp4',
+        'mp3',
+        'wav',
+        'ogg',
+        'zip',
+        'rar',
+        '7z',
+        'doc',
+        'docx',
+        'xls',
+        'xlsx',
+        'ppt',
+        'pptx',
+        'csv',
+        'txt'
+      ]);
+
+      if (ext === 'md') {
+        // already ends with .md - keep as-is
+      } else if (attachmentExts.has(ext)) {
         // Attachment (e.g., .png, .jpg, .pdf) - do not add to graph
         continue;
+      } else {
+        // Dot is part of the page name (e.g., example.com) - treat as markdown page
+        link += '.md';
       }
-      // already ends with .md - keep as-is
     } else {
       // No extension - assume a markdown file and add .md
       link += '.md';
