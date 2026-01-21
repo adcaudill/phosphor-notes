@@ -547,15 +547,41 @@ export async function updateGraphForChangedFile(
   filename: string,
   mainWindow: BrowserWindow
 ): Promise<void> {
+  return updateGraphForSingleFile(vaultPath, filename, mainWindow, 'changed');
+}
+
+/**
+ * Update graph for a single new file (efficient incremental update)
+ * This is called when a new file is created to avoid full re-indexing
+ */
+export async function updateGraphForFile(
+  vaultPath: string,
+  filename: string,
+  mainWindow: BrowserWindow
+): Promise<void> {
+  return updateGraphForSingleFile(vaultPath, filename, mainWindow, 'added');
+}
+
+/**
+ * Shared implementation for updating the graph for a single file.
+ * `action` is used only for debug messages ('changed' | 'added').
+ */
+async function updateGraphForSingleFile(
+  vaultPath: string,
+  filename: string,
+  mainWindow: BrowserWindow,
+  action: 'changed' | 'added'
+): Promise<void> {
   try {
     // Only operate on markdown files
     if (!filename.endsWith('.md')) {
       safeDebug(`Skipping graph update for non-markdown file: ${filename}`);
       return;
     }
+
     // If we don't have a graph yet, skip (full indexing hasn't completed)
     if (!lastGraph) {
-      safeDebug(`Skipping graph update for changed file ${filename}: graph not yet initialized`);
+      safeDebug(`Skipping graph update for ${action} file ${filename}: graph not yet initialized`);
       return;
     }
 
@@ -571,20 +597,17 @@ export async function updateGraphForChangedFile(
 
     const content = await readMarkdownFile(filePath, vaultPath);
 
-    // Extract wikilinks and implicit parent links from the changed file
+    // Extract wikilinks and implicit parent links from the file
     const wikilinks = extractWikilinks(content);
     const implicitLinks = getImplicitPathLinks(filename);
     const allOutgoingLinks = [...new Set([...wikilinks, ...implicitLinks])];
 
     // Update the graph with the file's current outgoing links
     lastGraph[filename] = allOutgoingLinks;
+
     // Ensure target nodes exist in the graph so the UI can display linked-to nodes.
-    // NOTE: we deliberately do NOT mutate other files' link lists here — the
-    // canonical representation is a forward graph (file -> outgoing links).
     for (const target of allOutgoingLinks) {
-      if (!lastGraph[target]) {
-        lastGraph[target] = [];
-      }
+      if (!lastGraph[target]) lastGraph[target] = [];
     }
 
     // Attach daily note to month/year virtual nodes
@@ -597,7 +620,7 @@ export async function updateGraphForChangedFile(
 
     try {
       safeDebug(
-        `Updated graph for changed file ${filename}: ${allOutgoingLinks.length} outgoing links`
+        `Updated graph for ${action} file ${filename}: ${allOutgoingLinks.length} outgoing links`
       );
     } catch {
       // Silently ignore errors
@@ -625,106 +648,14 @@ export async function updateGraphForChangedFile(
           }
           throw renameErr;
         }
-        safeDebug('Graph cache updated for changed file');
-      } catch (err) {
-        safeError('Failed to persist updated graph cache:', err);
-      }
-    })();
-  } catch (err) {
-    safeError(`Failed to update graph for changed file: ${filename}`, err);
-  }
-}
-
-/**
- * Update graph for a single new file (efficient incremental update)
- * This is called when a new file is created to avoid full re-indexing
- */
-export async function updateGraphForFile(
-  vaultPath: string,
-  filename: string,
-  mainWindow: BrowserWindow
-): Promise<void> {
-  try {
-    // Only operate on markdown files
-    if (!filename.endsWith('.md')) {
-      safeDebug(`Skipping graph update for non-markdown file: ${filename}`);
-      return;
-    }
-    // If we don't have a graph yet, skip (full indexing hasn't completed)
-    if (!lastGraph) {
-      safeDebug(`Skipping graph update for ${filename}: graph not yet initialized`);
-      return;
-    }
-
-    const filePath = join(vaultPath, filename);
-
-    // Check if file exists before reading
-    try {
-      await fsp.access(filePath);
-    } catch {
-      safeDebug(`Skipping graph update for ${filename}: file does not exist`);
-      return;
-    }
-
-    const content = await readMarkdownFile(filePath, vaultPath);
-
-    // Extract wikilinks and implicit parent links from the new file
-    const wikilinks = extractWikilinks(content);
-    const implicitLinks = getImplicitPathLinks(filename);
-    const allOutgoingLinks = [...new Set([...wikilinks, ...implicitLinks])];
-
-    // Update the graph with the new file's outgoing links
-    lastGraph[filename] = allOutgoingLinks;
-
-    // Ensure target nodes exist in the graph so the UI can display linked-to nodes.
-    for (const targetFile of allOutgoingLinks) {
-      if (!lastGraph[targetFile]) {
-        lastGraph[targetFile] = [];
-      }
-    }
-
-    // Attach daily note to month/year virtual nodes
-    attachDailyToTemporalNodes(filename);
-
-    // Send updated graph to renderer
-    if (!mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('phosphor:graph-update', lastGraph);
-    }
-
-    try {
-      safeDebug(`Updated graph for ${filename}: ${allOutgoingLinks.length} outgoing links`);
-    } catch {
-      // Silently ignore errors
-    }
-
-    // Persist the updated graph atomically
-    (async () => {
-      try {
-        const cacheDir = join(vaultPath, '.phosphor');
-        await fsp.mkdir(cacheDir, { recursive: true });
-        const uniqueTmpPath = join(
-          cacheDir,
-          `graph.json.tmp.${Date.now()}.${Math.random().toString(36).slice(2)}`
+        safeDebug(
+          action === 'changed' ? 'Graph cache updated for changed file' : 'Graph cache updated'
         );
-        const outPath = join(cacheDir, 'graph.json');
-        await fsp.writeFile(uniqueTmpPath, JSON.stringify(lastGraph), 'utf-8');
-        try {
-          await fsp.rename(uniqueTmpPath, outPath);
-        } catch (renameErr) {
-          // If rename fails, try to clean up the tmp file
-          try {
-            await fsp.unlink(uniqueTmpPath);
-          } catch {
-            // Silently ignore cleanup errors
-          }
-          throw renameErr;
-        }
-        safeDebug('Graph cache updated');
       } catch (err) {
         safeError('Failed to persist updated graph cache:', err);
       }
     })();
   } catch (err) {
-    safeError(`Failed to update graph for file: ${filename}`, err);
+    safeError(`Failed to update graph for ${action} file: ${filename}`, err);
   }
 }
