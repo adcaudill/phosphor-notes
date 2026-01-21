@@ -18,7 +18,9 @@ class ImageWidget extends WidgetType {
     wrapper.className = 'cm-image-widget-wrapper';
 
     const img = document.createElement('img');
-    img.src = `phosphor://${this.filename}`;
+    // Encode filenames and use an explicit path (leading slash) so special
+    // characters like `@` don't get parsed into the URL authority.
+    img.src = `phosphor:///${encodeURIComponent(this.filename)}`;
     img.className = 'cm-image-widget';
     img.alt = this.filename;
 

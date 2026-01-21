@@ -51,7 +51,9 @@ class PdfWidget extends WidgetType {
     const loadEmbed = (): void => {
       if (embedContainer.querySelector('embed')) return;
       const embed = document.createElement('embed');
-      embed.src = `phosphor://${this.filename}#toolbar=0&navpanes=0`;
+      // Encode filenames and use an explicit path so reserved characters
+      // don't get interpreted as URL authority parts.
+      embed.src = `phosphor:///${encodeURIComponent(this.filename)}#toolbar=0&navpanes=0`;
       embed.type = 'application/pdf';
       embed.width = '100%';
       embed.height = '500px';

@@ -59,10 +59,13 @@ function setupProtocol(): void {
       return new Response('No vault active', { status: 404 });
     }
 
-    // Strip the protocol and get the file path relative to vault
-    const filePath = request.url.slice('phosphor://'.length);
-    // Remove any query/hash fragments (used for PDF viewer params)
-    const sanitizedPath = filePath.split(/[?#]/)[0];
+    // Strip the protocol and get the file path relative to vault. Decode any
+    // percent-encoding the renderer may have added, and strip leading
+    // slashes so `path.join` treats it as a relative path into `_assets`.
+    const raw = request.url.slice('phosphor://'.length);
+    const decoded = decodeURIComponent(raw);
+    // Remove leading slashes and any query/hash fragments (used for PDF viewer params)
+    const sanitizedPath = decoded.replace(/^\/+/, '').split(/[?#]/)[0];
 
     // Security: Ensure the path is within the vault and _assets folder
     const fullPath = join(vaultPath, '_assets', sanitizedPath);
@@ -89,7 +92,7 @@ function setupProtocol(): void {
           const decrypted = decryptBuffer(buffer, masterKey);
           return new Response(new Uint8Array(decrypted), { headers });
         } catch (err) {
-          console.error('Failed to decrypt asset:', filePath, err);
+          console.error('Failed to decrypt asset:', sanitizedPath, err);
           return new Response('Decryption failed', { status: 500 });
         }
       }
@@ -97,7 +100,7 @@ function setupProtocol(): void {
       // File is not encrypted, return as-is
       return new Response(new Uint8Array(buffer), { headers });
     } catch (err) {
-      console.error('Failed to serve asset:', filePath, err);
+      console.error('Failed to serve asset:', sanitizedPath, err);
       return new Response('Not found', { status: 404 });
     }
   });
