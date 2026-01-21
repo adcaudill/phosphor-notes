@@ -77,7 +77,7 @@ export function handleRecurringTask(lineContent: string): {
   const metadata = parseTaskMetadata(lineContent);
 
   if (!metadata.recurrence || !metadata.dueDate) {
-    const toggledLine = lineContent.replace(/\[[ /]\]/, '[x]').replace(/\[x\]/, '[x]');
+    const toggledLine = lineContent.replace(/\[[ x/]\]/, '[x]');
     return { currentLine: toggledLine };
   }
 
@@ -85,11 +85,9 @@ export function handleRecurringTask(lineContent: string): {
   const nextDateStr = formatDate(nextDate);
   const currentDateStr = formatDate(metadata.dueDate);
 
-  const currentLine = lineContent.replace(/\[[ /]\]/, '[x]').replace(/\[x\]/, '[x]');
+  const currentLine = lineContent.replace(/\[[ x/]\]/, '[x]');
 
-  let nextLine = lineContent.replace(/\[[ x/]\]/, '[ ]').replace(currentDateStr, nextDateStr);
-
-  nextLine = nextLine.replace(/\[x\]/, '[ ]');
+  const nextLine = lineContent.replace(/\[[ x/]\]/, '[ ]').replace(currentDateStr, nextDateStr);
 
   return { currentLine, nextLine };
 }
