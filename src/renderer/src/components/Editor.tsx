@@ -69,6 +69,7 @@ interface EditorProps {
 
 export interface EditorHandle {
   scrollToLine: (lineNumber: number) => void;
+  replaceSelection: (text: string) => void;
 }
 
 export const Editor = forwardRef<EditorHandle, EditorProps>(
@@ -85,6 +86,8 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
     ref
   ) => {
     const { settings } = useSettings();
+    // Expose editor helpers to parent via ref (scroll and replaceSelection)
+
     useImperativeHandle(
       ref,
       () => ({
@@ -99,6 +102,14 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
           viewRef.current.dispatch({
             effects: EditorView.scrollIntoView(pos, { y: 'center' })
           });
+        },
+        replaceSelection: (text: string) => {
+          if (!viewRef.current) return;
+          try {
+            viewRef.current.dispatch(viewRef.current.state.replaceSelection(text));
+          } catch (err) {
+            console.error('Failed to replace selection in editor:', err);
+          }
         }
       }),
       []

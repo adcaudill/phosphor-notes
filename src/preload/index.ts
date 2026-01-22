@@ -59,8 +59,8 @@ const api = {
   },
 
   // Event subscription for menu events
-  onMenuEvent: (eventName: string, cb: () => void) => {
-    const handler = (): void => cb();
+  onMenuEvent: (eventName: string, cb: (...args: unknown[]) => void) => {
+    const handler = (_event: IpcRendererEvent, ...args: unknown[]): void => cb(...args);
     ipcRenderer.on(eventName, handler);
     return () => ipcRenderer.removeListener(eventName, handler);
   },

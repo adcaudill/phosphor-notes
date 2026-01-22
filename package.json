@@ -59,6 +59,7 @@
     "stopword": "^3.1.5",
     "syllable": "^5.0.1",
     "text-readability": "^1.1.1",
+    "thesaurus": "^0.0.1",
     "turndown": "^7.2.0",
     "turndown-plugin-gfm": "^1.0.2",
     "unified": "^11.0.5",

@@ -31,7 +31,7 @@ export interface PhosphorAPI {
   onFavoritesChange: (cb: (favorites: string[]) => void) => () => void;
   onGraphUpdate: (cb: (graph: Record<string, string[]>) => void) => () => void;
   onStatusUpdate: (cb: (status: { type: string; message: string }) => void) => () => void;
-  onMenuEvent: (eventName: string, cb: () => void) => () => void;
+  onMenuEvent: (eventName: string, cb: (...args: unknown[]) => void) => () => void;
   onFileChanged: (cb: (filename: string) => void) => () => void;
   onFileDeleted: (cb: (filename: string) => void) => () => void;
   onFileAdded: (cb: (filename: string) => void) => () => void;

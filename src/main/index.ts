@@ -177,7 +177,7 @@ function createWindow(settings?: UserSettings): BrowserWindow {
   });
 
   // Setup context menu with standard editing options
-  mainWindow.webContents.on('context-menu', (_event, params: Electron.ContextMenuParams) => {
+  mainWindow.webContents.on('context-menu', async (_event, params: Electron.ContextMenuParams) => {
     const template: Electron.MenuItemConstructorOptions[] = [];
 
     // Spell check options first (macOS convention)
@@ -222,7 +222,7 @@ function createWindow(settings?: UserSettings): BrowserWindow {
       template.push({ type: 'separator' });
     }
 
-    // Look Up and Translate (macOS)
+    // Look Up, Translate and Synonyms (macOS)
     if (process.platform === 'darwin' && params.selectionText) {
       template.push({
         label: `Look Up "${params.selectionText}"`,
@@ -237,6 +237,52 @@ function createWindow(settings?: UserSettings): BrowserWindow {
           mainWindow.webContents.send('translate:word', params.selectionText);
         }
       });
+
+      template.push({ type: 'separator' });
+    }
+
+    if (params.selectionText) {
+      // Synonyms submenu: dynamically load `thesaurus` and show up to 10 items.
+      try {
+        // Dynamically import `thesaurus` to avoid `require()` and keep startup fast.
+        const mod = await import('thesaurus').catch((e) => {
+          console.error('Failed to import thesaurus module:', e);
+          return null;
+        });
+        type ThesaurusType = { find?: (word: string) => string[] } | ((word: string) => string[]);
+        const thesaurus: ThesaurusType | null = mod
+          ? ((mod as unknown as { default?: ThesaurusType }).default ??
+            (mod as unknown as ThesaurusType))
+          : null;
+        let rawResults: string[] = [];
+        if (thesaurus) {
+          if (typeof (thesaurus as { find?: unknown }).find === 'function') {
+            rawResults =
+              (thesaurus as { find: (word: string) => string[] }).find(params.selectionText) || [];
+          } else if (typeof thesaurus === 'function') {
+            rawResults = (thesaurus as (word: string) => string[])(params.selectionText) || [];
+          }
+        }
+        const results = Array.isArray(rawResults) ? rawResults.slice(0, 10) : [];
+
+        const submenuItems: Electron.MenuItemConstructorOptions[] = results.map((syn) => ({
+          label: syn,
+          click: () => {
+            // Replace the current selection in the page with the chosen synonym
+            // Send a structured IPC event for the renderer to handle replacement
+            mainWindow.webContents.send('menu:replace-selection', syn);
+          }
+        }));
+
+        if (submenuItems.length === 0) {
+          submenuItems.push({ label: 'No synonyms', enabled: false });
+        }
+
+        template.push({ label: 'Synonyms', submenu: submenuItems });
+      } catch (err) {
+        console.error('Failed to load thesaurus for synonyms menu:', err);
+        template.push({ label: 'Synonyms', submenu: [{ label: 'Unavailable', enabled: false }] });
+      }
 
       template.push({ type: 'separator' });
     }

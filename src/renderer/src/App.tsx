@@ -291,6 +291,21 @@ function AppContent(): React.JSX.Element {
       }
     );
 
+    const unsubscribeReplaceSelection = window.phosphor.onMenuEvent?.(
+      'menu:replace-selection',
+      (...args: unknown[]) => {
+        try {
+          const text = args[0];
+          if (typeof text !== 'string') return;
+          if (editorRef.current && typeof editorRef.current.replaceSelection === 'function') {
+            editorRef.current.replaceSelection(text);
+          }
+        } catch (err) {
+          console.error('Failed to apply synonym replacement:', err);
+        }
+      }
+    );
+
     // File change watchers - external file modifications
     const unsubscribeFileChanged = window.phosphor.onFileChanged?.((filename: string) => {
       console.debug('[FileWatcher] File changed externally:', filename);
@@ -362,6 +377,7 @@ function AppContent(): React.JSX.Element {
       if (unsubscribeEnableEncryption) unsubscribeEnableEncryption();
       if (unsubscribeLockVault) unsubscribeLockVault();
       if (unsubscribeImportLogseq) unsubscribeImportLogseq();
+      if (unsubscribeReplaceSelection) unsubscribeReplaceSelection();
       if (statusTimerRef.current) window.clearTimeout(statusTimerRef.current);
     };
   }, []);
