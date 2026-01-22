@@ -213,7 +213,9 @@ function AppContent(): React.JSX.Element {
         }
       }
 
-      const newContent = '---\ntags: []\n---\n\n';
+      // Prefer generating a default frontmatter (includes title) so new notes
+      // created from the menu have a sensible `title` value.
+      const newContent = generateDefaultFrontmatter(filename) + '\n\n';
       await window.phosphor.saveNote(filename, newContent);
       setCurrentFile(filename);
       setContent(newContent);
@@ -708,10 +710,20 @@ function AppContent(): React.JSX.Element {
 
   const handleLinkClick = async (linkText: string): Promise<void> => {
     const filename = linkText.endsWith('.md') ? linkText : `${linkText}.md`;
+
     // readNote will create the file if missing (per main IPC behavior)
-    const content = await window.phosphor.readNote(filename);
+    let content = await window.phosphor.readNote(filename);
+
+    // If the file was just auto-created and is empty, populate with default
+    // frontmatter (title, etc.) so wikilink-created pages start with a title.
+    if (!content || content.trim() === '') {
+      content = generateDefaultFrontmatter(filename) + '\n\n';
+      await window.phosphor.saveNote(filename, content);
+    }
+
     setCurrentFile(filename);
     setContent(content);
+
     // Update navigation history so wikilink opens are recorded
     setFileHistory((prev) => {
       const last = prev[historyIndex] ?? null;
@@ -720,14 +732,17 @@ function AppContent(): React.JSX.Element {
       setHistoryIndex(newHist.length - 1);
       return newHist;
     });
+
     // Trigger a save to ensure it appears in sidebar immediately
     await window.phosphor.saveNote(filename, content);
+
     // Update MRU when wikilink is clicked
     try {
       await window.phosphor.updateMRU(filename);
     } catch (err) {
       console.debug('Failed to update MRU:', err);
     }
+
     // Bump filesVersion so Sidebar re-fetches
     setFilesVersion((v) => v + 1);
   };
