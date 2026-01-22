@@ -17,24 +17,28 @@ interface FormState {
   editedFields: Record<string, string>;
   newFieldName: string;
   newFieldValue: string;
+  useOutliner: boolean;
 }
 
 type FormAction =
-  | { type: 'INIT_FORM'; fields: Record<string, string> }
+  | { type: 'INIT_FORM'; fields: Record<string, string>; useOutliner?: boolean }
   | { type: 'CHANGE_FIELD'; key: string; value: string }
   | { type: 'CHANGE_NEW_FIELD_NAME'; value: string }
   | { type: 'CHANGE_NEW_FIELD_VALUE'; value: string }
   | { type: 'ADD_FIELD'; name: string; value: string }
   | { type: 'DELETE_FIELD'; key: string }
-  | { type: 'RESET' };
+  | { type: 'RESET' }
+  | { type: 'SET_OUTLINER'; value: boolean };
 
 function formReducer(state: FormState, action: FormAction): FormState {
   switch (action.type) {
     case 'INIT_FORM':
       return {
+        ...state,
         editedFields: action.fields,
         newFieldName: '',
-        newFieldValue: ''
+        newFieldValue: '',
+        useOutliner: action.useOutliner ?? false
       };
     case 'CHANGE_FIELD':
       return {
@@ -47,6 +51,7 @@ function formReducer(state: FormState, action: FormAction): FormState {
       return { ...state, newFieldValue: action.value };
     case 'ADD_FIELD':
       return {
+        ...state,
         editedFields: { ...state.editedFields, [action.name]: action.value },
         newFieldName: '',
         newFieldValue: ''
@@ -57,7 +62,9 @@ function formReducer(state: FormState, action: FormAction): FormState {
       return { ...state, editedFields: updated };
     }
     case 'RESET':
-      return { editedFields: {}, newFieldName: '', newFieldValue: '' };
+      return { editedFields: {}, newFieldName: '', newFieldValue: '', useOutliner: false };
+    case 'SET_OUTLINER':
+      return { ...state, useOutliner: action.value };
     default:
       return state;
   }
@@ -76,7 +83,8 @@ export function FrontmatterModal({
   const [formState, dispatch] = useReducer(formReducer, {
     editedFields: {},
     newFieldName: '',
-    newFieldValue: ''
+    newFieldValue: '',
+    useOutliner: false
   });
   const prevIsOpenRef = useRef(isOpen);
 
@@ -86,10 +94,15 @@ export function FrontmatterModal({
       const { frontmatter: fm } = extractFrontmatter(content);
       if (fm) {
         const fields: Record<string, string> = {};
+        let outliner = false;
         Object.entries(fm.content).forEach(([key, value]) => {
+          if (key === 'mode') {
+            outliner = String(value) === 'outliner';
+            return; // don't include mode in editable fields
+          }
           fields[key] = typeof value === 'string' ? value : JSON.stringify(value);
         });
-        dispatch({ type: 'INIT_FORM', fields });
+        dispatch({ type: 'INIT_FORM', fields, useOutliner: outliner });
       } else {
         dispatch({ type: 'RESET' });
       }
@@ -120,6 +133,8 @@ export function FrontmatterModal({
         [formState.newFieldName]: formState.newFieldValue
       };
     }
+    // always set the mode field based on the toggle
+    fieldsToSave = { ...fieldsToSave, mode: formState.useOutliner ? 'outliner' : 'freeform' };
 
     // Reconstruct frontmatter with edited fields
     const lines = ['---'];
@@ -202,9 +217,32 @@ export function FrontmatterModal({
           </button>
         </div>
 
-        {Object.keys(formState.editedFields).length === 0 ? (
-          <div className="modal-body">
-            <p>No frontmatter found. Add fields to create frontmatter.</p>
+        <div className="modal-body">
+          <div className="frontmatter-fields">
+            <h3>Metadata Fields</h3>
+            {Object.keys(formState.editedFields).length === 0 ? (
+              <p>No frontmatter found. Add fields to create frontmatter.</p>
+            ) : (
+              Object.entries(formState.editedFields).map(([key, value]) => (
+                <div key={key} className="field-row">
+                  <div className="field-label">{key}</div>
+                  <input
+                    type="text"
+                    value={value}
+                    onChange={(e) => handleFieldChange(key, e.target.value)}
+                    className="field-input"
+                  />
+                  <button
+                    className="field-delete-btn"
+                    onClick={() => handleDeleteField(key)}
+                    title="Delete field"
+                  >
+                    <span className="material-symbols-outlined">delete</span>
+                  </button>
+                </div>
+              ))
+            )}
+
             <div className="add-field">
               <h3>Add Field</h3>
               <div className="field-row">
@@ -232,94 +270,57 @@ export function FrontmatterModal({
               </div>
             </div>
           </div>
-        ) : (
-          <div className="modal-body">
-            <div className="frontmatter-fields">
-              <h3>Metadata Fields</h3>
-              {Object.entries(formState.editedFields).map(([key, value]) => (
-                <div key={key} className="field-row">
-                  <div className="field-label">{key}</div>
-                  <input
-                    type="text"
-                    value={value}
-                    onChange={(e) => handleFieldChange(key, e.target.value)}
-                    className="field-input"
-                  />
-                  <button
-                    className="field-delete-btn"
-                    onClick={() => handleDeleteField(key)}
-                    title="Delete field"
-                  >
-                    <span className="material-symbols-outlined">delete</span>
-                  </button>
-                </div>
-              ))}
 
-              <div className="add-field">
-                <h3>Add Field</h3>
-                <div className="field-row">
-                  <input
-                    type="text"
-                    placeholder="Field name"
-                    value={formState.newFieldName}
-                    onChange={(e) =>
-                      dispatch({ type: 'CHANGE_NEW_FIELD_NAME', value: e.target.value })
-                    }
-                    className="field-input"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Value"
-                    value={formState.newFieldValue}
-                    onChange={(e) =>
-                      dispatch({ type: 'CHANGE_NEW_FIELD_VALUE', value: e.target.value })
-                    }
-                    className="field-input"
-                  />
-                  <button className="field-add-btn" onClick={handleAddField}>
-                    +
-                  </button>
-                </div>
-              </div>
+          <div
+            className="mode-toggle"
+            style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input
+                type="checkbox"
+                checked={formState.useOutliner}
+                onChange={(e) => dispatch({ type: 'SET_OUTLINER', value: e.target.checked })}
+              />
+              <span>Use outliner mode?</span>
+            </label>
+          </div>
+
+          <div className="file-actions">
+            <h3>File</h3>
+            <div className="file-info">
+              <strong>Name:</strong> {currentFile}
             </div>
-
-            <div className="file-actions">
-              <h3>File</h3>
-              <div className="file-info">
-                <strong>Name:</strong> {currentFile}
-              </div>
-              <div className="file-action-buttons">
-                <button className="move-file-btn" onClick={handleMove}>
-                  Move File
-                </button>
-                {renameMode ? (
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <input
-                      className="field-input"
-                      value={renameValue}
-                      onChange={(e) => setRenameValue(e.target.value)}
-                      placeholder="new/path/Name"
-                      autoFocus
-                    />
-                    <button className="move-file-btn" onClick={confirmRename}>
-                      Confirm
-                    </button>
-                    <button className="btn-secondary" onClick={cancelRename}>
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <button className="move-file-btn" onClick={startRename} title="Rename file">
-                    Rename File
+            <div className="file-action-buttons">
+              <button className="move-file-btn" onClick={handleMove}>
+                Move File
+              </button>
+              {renameMode ? (
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input
+                    className="field-input"
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    placeholder="new/path/Name"
+                    autoFocus
+                  />
+                  <button className="move-file-btn" onClick={confirmRename}>
+                    Confirm
                   </button>
-                )}
-                <button className="delete-file-btn" onClick={handleDelete}>
-                  Delete File
+                  <button className="btn-secondary" onClick={cancelRename}>
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button className="move-file-btn" onClick={startRename} title="Rename file">
+                  Rename File
                 </button>
-              </div>
+              )}
+              <button className="delete-file-btn" onClick={handleDelete}>
+                Delete File
+              </button>
             </div>
           </div>
-        )}
+        </div>
 
         <div className="modal-footer">
           <button className="btn-secondary" onClick={onClose}>
