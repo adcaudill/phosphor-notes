@@ -26,7 +26,7 @@ export class PredictionEngine {
     this.minNextCount = opts.minNextCount ?? 2;
   }
 
-  predictCompletion(prefix: string): string | null {
+  predictCompletion(prefix: string, context?: string | null): string | null {
     if (!prefix || prefix.length < this.minPrefix) return null;
     const node = this.findNode(prefix.toLowerCase());
     if (!node || !node.top || node.top.length === 0) return null;
@@ -35,7 +35,7 @@ export class PredictionEngine {
     return best.w;
   }
 
-  predictNext(prevWord: string): string | null {
+  predictNext(prevWord: string, context?: string | null): string | null {
     if (!prevWord) return null;
     const candidates = this.snapshot.bigrams[prevWord.toLowerCase()];
     if (!candidates || candidates.length === 0) return null;

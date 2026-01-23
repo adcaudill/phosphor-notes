@@ -54,6 +54,15 @@ class GhostSuggestionWidget extends WidgetType {
   }
 }
 
+function getSentenceContext(view: EditorView, head: number): string {
+  const windowStart = Math.max(0, head - 500);
+  const text = view.state.doc.sliceString(windowStart, head);
+  // Look for the last sentence-ish boundary; fall back to window start.
+  const match = Array.from(text.matchAll(/([.!?]["')\]]?\s|\n{2,})/g)).pop();
+  const boundaryIdx = match ? match.index! + match[0].length : 0;
+  return text.slice(boundaryIdx).trim();
+}
+
 function computeSuggestion(
   view: EditorView,
   getEngine: () => PredictionEngine | null
@@ -68,6 +77,7 @@ function computeSuggestion(
   const line = view.state.doc.lineAt(head);
   const before = view.state.doc.sliceString(line.from, head);
   const after = view.state.doc.sliceString(head, head + 1);
+  const context = getSentenceContext(view, head);
 
   // If cursor is in the middle of a word, skip (avoid corrupting text)
   if (after && /[A-Za-z0-9']/.test(after)) return null;
@@ -78,7 +88,7 @@ function computeSuggestion(
     const parts = trimmed.split(/\s+/);
     const prevWord = parts[parts.length - 1] || '';
     if (prevWord) {
-      const next = engine.predictNext(prevWord);
+      const next = engine.predictNext(prevWord, context);
       if (next) {
         return { text: `${next} `, pos: head, kind: 'next' };
       }
@@ -91,7 +101,7 @@ function computeSuggestion(
   const prefix = match[1];
   if (!prefix) return null;
 
-  const completion = engine.predictCompletion(prefix);
+  const completion = engine.predictCompletion(prefix, context);
   if (!completion) return null;
   const suffix = completion.slice(prefix.length);
   if (!suffix) return null;
