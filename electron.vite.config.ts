@@ -11,6 +11,10 @@ export default defineConfig({
         '@renderer': resolve('src/renderer/src')
       }
     },
-    plugins: [react()]
+    plugins: [react()],
+    worker: {
+      // Use ESM workers to avoid iife-only limitation during code splitting
+      format: 'es'
+    }
   }
 });
