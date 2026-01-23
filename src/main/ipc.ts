@@ -8,6 +8,7 @@ import {
   stopIndexing,
   getLastGraph,
   getLastTasks,
+  getLastPredictionModelSerialized,
   performSearch,
   updateTasksForFile,
   updateGraphForFile,
@@ -471,6 +472,10 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
   // Return last in-memory graph if available (sent recently by indexer)
   ipcMain.handle('graph:get', async () => {
     return getLastGraph();
+  });
+
+  ipcMain.handle('prediction:get', async () => {
+    return getLastPredictionModelSerialized();
   });
 
   // Handle wikilink click - update graph for both source and target files

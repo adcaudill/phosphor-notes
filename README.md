@@ -25,6 +25,7 @@ Whether you are managing complex projects, journaling your daily life, or writin
 - **Focus Mode:** Toggle `Cmd+D` to fade away the UI, sidebar, and window chrome, leaving only your text.
 - **Typewriter Scrolling:** Keeps your active line vertically centered on the screen so you never have to crane your neck to look at the bottom of the monitor.
 - **Active Paragraph Dimming:** Automatically dims inactive paragraphs, helping you focus strictly on the sentence you are writing right now.
+- **Predictive Text & Completion:** An intelligent text prediction engine suggests word completions and next-word predictions based on your personal writing style and vocabulary.
 - **Live Stats:** Unobtrusive word count and reading time metrics.
 - **Grammar & Style Checking:** Real-time feedback on passive voice, sentence simplification, inclusive language, readability, profanities, and more - all customizable in preferences.
 - **Markdown Support:** Full support for GitHub-Flavored Markdown (GFM) including tables, task lists, code blocks with syntax highlighting, footnotes, block folding, admonitions / callouts, and more.

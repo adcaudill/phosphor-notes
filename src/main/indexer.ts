@@ -7,6 +7,7 @@ import { isDailyNote, extractDateHierarchy } from './graphBuilder';
 import { extractWikilinks, getImplicitPathLinks } from '../shared/wikilinks';
 import { getActiveMasterKey, isEncryptionEnabled } from './ipc';
 import { decryptBuffer } from './crypto';
+import { trainPredictionModel, type PredictionModelSnapshot } from '../shared/predictionModel';
 
 // Safe logging that ignores EPIPE errors during shutdown
 const safeLog = (...args: unknown[]): void => {
@@ -56,6 +57,51 @@ interface FileContent {
 let indexerWorker: Worker | null = null;
 let lastGraph: Record<string, string[]> | null = null;
 let lastTasks: Task[] | null = null;
+let lastPredictionModel: PredictionModelSnapshot | null = null;
+let lastPredictionModelSerialized: string | null = null;
+
+function buildPredictionModel(
+  fileContents: FileContent[],
+  mainWindow: BrowserWindow
+): PredictionModelSnapshot | null {
+  try {
+    const model = trainPredictionModel(
+      fileContents.map((f) => f.content),
+      {
+        maxTopPerPrefix: 3,
+        maxBigramPerWord: 5,
+        minBigramCount: 2,
+        minWordLength: 2
+      }
+    );
+
+    lastPredictionModelSerialized = JSON.stringify(model);
+    try {
+      const modelSize = lastPredictionModelSerialized.length;
+      safeLog(
+        '[Indexer] built prediction model in main. tokens:',
+        model.tokenCount,
+        'unique:',
+        model.uniqueTokens,
+        'bytes:',
+        modelSize
+      );
+    } catch {
+      // Swallow logging failures
+    }
+
+    lastPredictionModel = model;
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('phosphor:prediction-model', lastPredictionModelSerialized);
+    }
+    return model;
+  } catch (err) {
+    safeError('Failed to build prediction model in main:', err);
+    lastPredictionModel = null;
+    lastPredictionModelSerialized = null;
+    return null;
+  }
+}
 
 // Helper: recursively find all .md files
 async function getFilesRecursively(dir: string): Promise<string[]> {
@@ -122,8 +168,12 @@ async function tryStartWorkerFromFile(
   }
 
   indexerWorker.on('message', (msg: WorkerMessage) => {
+    safeDebug(`Indexer message (compiled path) type=${msg?.type ?? 'unknown'}`);
     if (msg?.type === 'graph-complete') {
-      const msgData = msg.data as { graph: Record<string, string[]>; tasks: Task[] };
+      const msgData = msg.data as {
+        graph: Record<string, string[]>;
+        tasks: Task[];
+      };
       const graph = msgData.graph;
       const tasks = msgData.tasks || [];
       safeLog('Graph indexing complete. Nodes:', Object.keys(graph).length, 'Tasks:', tasks.length);
@@ -172,6 +222,20 @@ async function tryStartWorkerFromFile(
           safeError('Failed to persist graph cache:', err);
         }
       })();
+    } else if (msg?.type === 'prediction-model') {
+      const model = msg.data as PredictionModelSnapshot | null;
+      lastPredictionModel = model;
+      try {
+        lastPredictionModelSerialized = model ? JSON.stringify(model) : null;
+      } catch (err) {
+        lastPredictionModelSerialized = null;
+        safeError('Failed to serialize prediction model (compiled path):', err);
+      }
+
+      safeLog('Prediction model received (compiled path). tokens:', model?.tokenCount ?? 0);
+      if (!mainWindow.isDestroyed() && lastPredictionModelSerialized) {
+        mainWindow.webContents.send('phosphor:prediction-model', lastPredictionModelSerialized);
+      }
     } else if (msg?.type === 'search-results') {
       try {
         console.debug('Received search results:', msg.data);
@@ -186,6 +250,10 @@ async function tryStartWorkerFromFile(
 
   indexerWorker.on('error', (err) => {
     console.error('Indexer worker error:', err);
+  });
+
+  indexerWorker.on('exit', (code) => {
+    safeLog('Indexer worker exited with code', code);
   });
 
   // Read all markdown files and decrypt if needed
@@ -204,6 +272,7 @@ async function tryStartWorkerFromFile(
     }
 
     safeLog('Sending', fileContents.length, 'files to indexer worker');
+    buildPredictionModel(fileContents, mainWindow);
     indexerWorker.postMessage(fileContents);
   } catch (err) {
     console.error('Failed to read vault files:', err);
@@ -219,6 +288,9 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
       indexerWorker.terminate();
       indexerWorker = null;
     }
+
+    lastPredictionModel = null;
+    lastPredictionModelSerialized = null;
 
     safeLog('Indexer: workerPath=', workerPath, 'exists?', fs.existsSync(workerPath));
     if (fs.existsSync(workerPath)) {
@@ -286,8 +358,12 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
         }
 
         indexerWorker.on('message', (msg: WorkerMessage) => {
+          safeDebug(`Indexer message (runtime path) type=${msg?.type ?? 'unknown'}`);
           if (msg?.type === 'graph-complete') {
-            const msgData = msg.data as { graph: Record<string, string[]>; tasks: Task[] };
+            const msgData = msg.data as {
+              graph: Record<string, string[]>;
+              tasks: Task[];
+            };
             const graph = msgData.graph;
             const tasks = msgData.tasks || [];
             safeLog(
@@ -341,6 +417,22 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
                 console.error('Failed to persist graph cache:', err);
               }
             })();
+          } else if (msg?.type === 'prediction-model') {
+            const model = msg.data as PredictionModelSnapshot | null;
+            lastPredictionModel = model;
+            try {
+              lastPredictionModelSerialized = model ? JSON.stringify(model) : null;
+            } catch (err) {
+              lastPredictionModelSerialized = null;
+              safeError('Failed to serialize prediction model (runtime path):', err);
+            }
+            safeLog('Prediction model received (runtime path). tokens:', model?.tokenCount ?? 0);
+            if (!mainWindow.isDestroyed() && lastPredictionModelSerialized) {
+              mainWindow.webContents.send(
+                'phosphor:prediction-model',
+                lastPredictionModelSerialized
+              );
+            }
           } else if (msg?.type === 'search-results') {
             searchResultsCallback?.(msg.data as unknown[]);
           } else if (msg?.type === 'graph-error') {
@@ -366,6 +458,7 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
           }
 
           safeLog('Sending', fileContents.length, 'files to indexer worker');
+          buildPredictionModel(fileContents, mainWindow);
           indexerWorker.postMessage(fileContents);
         } catch (err) {
           safeError('Failed to read vault files:', err);
@@ -397,6 +490,14 @@ export function stopIndexing(): void {
 
 export function getLastGraph(): Record<string, string[]> | null {
   return lastGraph;
+}
+
+export function getLastPredictionModel(): PredictionModelSnapshot | null {
+  return lastPredictionModel;
+}
+
+export function getLastPredictionModelSerialized(): string | null {
+  return lastPredictionModelSerialized;
 }
 
 export function getLastTasks(): Task[] | null {

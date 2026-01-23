@@ -1,4 +1,12 @@
-import { useEffect, useRef, useMemo, useState, forwardRef, useImperativeHandle } from 'react';
+import {
+  useEffect,
+  useRef,
+  useMemo,
+  useState,
+  forwardRef,
+  useImperativeHandle,
+  useCallback
+} from 'react';
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, KeyBinding } from '@codemirror/view';
 import { foldGutter, foldKeymap } from '@codemirror/language';
@@ -34,6 +42,9 @@ import {
   reconstructDocument,
   type Frontmatter
 } from '../utils/frontmatterUtils';
+import { createQuickTypeExtension } from '../editor/extensions/quickType';
+import { PredictionEngine } from '../utils/predictionEngine';
+import type { PredictionModelSnapshot } from '../../../shared/predictionModel';
 
 // Dark mode highlight style with proper color contrast
 const darkModeHighlightStyle = HighlightStyle.define([
@@ -65,6 +76,7 @@ interface EditorProps {
   onSearchOpen?: (isOpen: boolean) => void;
   currentFile?: string | null;
   wikiPageSuggestions?: string[];
+  predictionModel?: PredictionModelSnapshot | null;
 }
 
 export interface EditorHandle {
@@ -81,7 +93,8 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
       enableDimming = false,
       onSearchOpen,
       currentFile,
-      wikiPageSuggestions = []
+      wikiPageSuggestions = [],
+      predictionModel = null
     },
     ref
   ) => {
@@ -119,6 +132,8 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
     const onChangeRef = useRef(onChange);
     const onLinkClickRef = useRef(onLinkClick);
     const frontmatterRef = useRef<Frontmatter | null>(null);
+    const predictionEngineRef = useRef<PredictionEngine | null>(null);
+    const getPredictionEngine = useCallback(() => predictionEngineRef.current, []);
     const [showSearch, setShowSearch] = useState(false);
     const [searchAPI, setSearchAPI] = useState<ReturnType<typeof createSearchAPI> | null>(null);
 
@@ -151,6 +166,9 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
     useEffect(() => {
       onLinkClickRef.current = onLinkClick;
     }, [onLinkClick]);
+    useEffect(() => {
+      predictionEngineRef.current = predictionModel ? new PredictionEngine(predictionModel) : null;
+    }, [predictionModel]);
 
     useEffect(() => {
       if (!editorRef.current) return;
@@ -205,6 +223,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
           ...(enableDimming ? [dimmingPlugin] : []), // Paragraph dimming (optional)
           createSearchExtension(), // Search functionality
           createCombinedAutocompleteExtension(wikiPageSuggestions), // Autocomplete for wiki links and slash commands
+          createQuickTypeExtension(getPredictionEngine), // QuickType-style inline suggestions
           ...urlExtensions, // URL detection, styling, and tooltips
           smartPaste,
           strikethroughExtension,

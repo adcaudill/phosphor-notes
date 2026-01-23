@@ -299,6 +299,11 @@ parentPort?.on(
     }
 
     const fileContents = msg as Array<{ filename: string; content: string }>;
+    try {
+      console.log('[IndexerWorker] received batch:', fileContents.length);
+    } catch {
+      // ignore log errors
+    }
     const graph: Graph = {};
     const tasks: Task[] = [];
     initSearch();
@@ -349,7 +354,22 @@ parentPort?.on(
       const virtualNodes = generateVirtualTemporalNodes(fileContents.map((f) => f.filename));
       Object.assign(graph, virtualNodes);
 
-      parentPort?.postMessage({ type: 'graph-complete', data: { graph, tasks } });
+      try {
+        console.log('[IndexerWorker] completed graph. nodes:', Object.keys(graph).length);
+      } catch {
+        // ignore log errors
+      }
+
+      try {
+        parentPort?.postMessage({ type: 'graph-complete', data: { graph, tasks } });
+      } catch (err) {
+        try {
+          console.error('[IndexerWorker] failed to post graph-complete', err);
+          parentPort?.postMessage({ type: 'graph-error', error: String(err) });
+        } catch {
+          // swallow secondary failures
+        }
+      }
     } catch (err) {
       console.error('Indexer failed:', err);
       parentPort?.postMessage({ type: 'graph-error', error: String(err) });

@@ -16,6 +16,7 @@ import { GraphView } from './components/GraphView';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { useSettings } from './hooks/useSettings';
 import { extractFrontmatter, generateDefaultFrontmatter } from './utils/frontmatterUtils';
+import type { PredictionModelSnapshot } from '../../shared/predictionModel';
 
 /**
  * Extract title from markdown frontmatter, or fallback to filename
@@ -69,6 +70,7 @@ function AppContent(): React.JSX.Element {
   const [encryptionLoading, setEncryptionLoading] = useState(false); // Loading state for encryption operations
   const [isVaultEncrypted, setIsVaultEncrypted] = useState(false); // Whether current vault is encrypted
   const [isVaultUnlocked, setIsVaultUnlocked] = useState(false); // Whether vault is unlocked (only relevant if encrypted)
+  const [predictionModel, setPredictionModel] = useState<PredictionModelSnapshot | null>(null);
   const editorRef = useRef<EditorHandle>(null);
   const wikiPageSuggestions = useMemo(() => {
     const unique = new Set<string>();
@@ -77,6 +79,21 @@ function AppContent(): React.JSX.Element {
     });
     return Array.from(unique).sort((a, b) => a.localeCompare(b));
   }, [graph]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const model = await window.phosphor.getPredictionModel?.();
+        if (!cancelled && model) setPredictionModel(model);
+      } catch (err) {
+        console.debug('Failed to load prediction model snapshot', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Apply color palette and theme to the document
   useEffect(() => {
@@ -180,6 +197,10 @@ function AppContent(): React.JSX.Element {
       setStatus(s);
       if (statusTimerRef.current) window.clearTimeout(statusTimerRef.current);
       statusTimerRef.current = window.setTimeout(() => setStatus(null), 4000) as unknown as number;
+    });
+
+    const unsubscribePrediction = window.phosphor.onPredictionModel?.((model) => {
+      setPredictionModel(model);
     });
 
     // Handle Cmd+K / Ctrl+K to open command palette, Cmd+, to open settings
@@ -364,6 +385,7 @@ function AppContent(): React.JSX.Element {
       window.removeEventListener('keydown', handleKeyDown);
       if (unsubscribe) unsubscribe();
       if (unsubscribeStatus) unsubscribeStatus();
+      if (unsubscribePrediction) unsubscribePrediction();
       if (unsubscribeNewNote) unsubscribeNewNote();
       if (unsubscribeSave) unsubscribeSave();
       if (unsubscribeSearch) unsubscribeSearch();
@@ -852,6 +874,7 @@ function AppContent(): React.JSX.Element {
                       enableDimming={paragraphDimming}
                       currentFile={currentFile}
                       wikiPageSuggestions={wikiPageSuggestions}
+                      predictionModel={predictionModel}
                     />
                   </>
                 ) : (

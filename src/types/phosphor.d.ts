@@ -1,5 +1,7 @@
 // src/types/phosphor.d.ts
 
+import type { PredictionModelSnapshot } from '../shared/predictionModel';
+
 export interface Task {
   file: string;
   line: number;
@@ -22,6 +24,7 @@ export interface PhosphorAPI {
 
   getDailyNoteFilename: () => Promise<string>; // Returns 'YYYY-MM-DD.md'
   getCachedGraph: () => Promise<Record<string, string[]> | null>;
+  getPredictionModel: () => Promise<PredictionModelSnapshot | null>;
 
   listFiles: () => Promise<string[]>;
   getMRUFiles: () => Promise<string[]>;
@@ -30,6 +33,7 @@ export interface PhosphorAPI {
   toggleFavorite: (filename: string) => Promise<string[]>;
   onFavoritesChange: (cb: (favorites: string[]) => void) => () => void;
   onGraphUpdate: (cb: (graph: Record<string, string[]>) => void) => () => void;
+  onPredictionModel: (cb: (model: PredictionModelSnapshot) => void) => () => void;
   onStatusUpdate: (cb: (status: { type: string; message: string }) => void) => () => void;
   onMenuEvent: (eventName: string, cb: (...args: unknown[]) => void) => () => void;
   onFileChanged: (cb: (filename: string) => void) => () => void;

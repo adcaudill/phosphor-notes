@@ -1,5 +1,18 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 import type { Task, UserSettings } from '../types/phosphor';
+import type { PredictionModelSnapshot } from '../shared/predictionModel';
+
+const parsePredictionModel = (
+  data: PredictionModelSnapshot | string | null
+): PredictionModelSnapshot | null => {
+  if (!data) return null;
+  if (typeof data !== 'string') return data;
+  try {
+    return JSON.parse(data) as PredictionModelSnapshot;
+  } catch {
+    return null;
+  }
+};
 
 // Define the API implementation
 const api = {
@@ -36,6 +49,15 @@ const api = {
     const handler = (_event: IpcRendererEvent, data: Record<string, string[]>): void => cb(data);
     ipcRenderer.on('phosphor:graph-update', handler);
     return () => ipcRenderer.removeListener('phosphor:graph-update', handler);
+  },
+
+  onPredictionModel: (cb: (model: PredictionModelSnapshot) => void) => {
+    const handler = (_event: IpcRendererEvent, data: PredictionModelSnapshot | string): void => {
+      const parsed = parsePredictionModel(data);
+      if (parsed) cb(parsed);
+    };
+    ipcRenderer.on('phosphor:prediction-model', handler);
+    return () => ipcRenderer.removeListener('phosphor:prediction-model', handler);
   },
 
   // Event subscription for status updates
@@ -109,6 +131,14 @@ const api = {
   getCachedGraph: () => ipcRenderer.invoke('graph:load-cache'),
   // Get last graph in memory from main (if any)
   getLatestGraph: () => ipcRenderer.invoke('graph:get'),
+  // Get last prediction model snapshot (if any)
+  getPredictionModel: async (): Promise<PredictionModelSnapshot | null> => {
+    const data = (await ipcRenderer.invoke('prediction:get')) as
+      | PredictionModelSnapshot
+      | string
+      | null;
+    return parsePredictionModel(data);
+  },
   // Search vault
   search: (query: string) => ipcRenderer.invoke('vault:search', query),
 
