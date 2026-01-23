@@ -50,7 +50,7 @@ export function trainPredictionModel(
   let tokenCount = 0;
 
   for (const text of texts) {
-    const tokens = tokenize(text).filter((w) => w.length >= minWordLength);
+    const tokens = tokenizeText(text, { minWordLength });
     if (tokens.length === 0) continue;
     tokenCount += tokens.length;
 
@@ -173,10 +173,4 @@ function updateTopList(
 
   list.sort((a, b) => b.c - a.c || (a.w < b.w ? -1 : 1));
   return list.slice(0, maxTop);
-}
-
-function tokenize(text: string): string[] {
-  const matches = text.toLowerCase().match(/[a-z0-9'][a-z0-9'-]*/gi);
-  if (!matches) return [];
-  return matches.map((w) => (w.length > MAX_WORD_LENGTH ? w.slice(0, MAX_WORD_LENGTH) : w));
 }
