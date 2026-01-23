@@ -237,7 +237,8 @@ const getHarperLinter = async (): Promise<HarperLinter | null> => {
 
         await linter.setLintConfig({
           SpellCheck: false,
-          DefiniteArticle: false
+          DefiniteArticle: false,
+          UseTitleCase: false
         });
 
         await linter.setup();
