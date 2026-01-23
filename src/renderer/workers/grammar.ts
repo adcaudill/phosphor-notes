@@ -411,7 +411,12 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
     ]);
 
     const customDiagnostics = runCustomChecks(text, { checkCliches: settings.checkCliches });
-    const allDiagnostics = [...harperDiagnostics, ...retextDiagnostics, ...customDiagnostics];
+
+    // Prefer custom diagnostics when they overlap Harper on the same span
+    const occupiedSpans = new Set(customDiagnostics.map((d) => `${d.from}:${d.to}`));
+    const harperFiltered = harperDiagnostics.filter((d) => !occupiedSpans.has(`${d.from}:${d.to}`));
+
+    const allDiagnostics = [...customDiagnostics, ...harperFiltered, ...retextDiagnostics];
 
     self.postMessage(allDiagnostics);
   } catch (err) {
