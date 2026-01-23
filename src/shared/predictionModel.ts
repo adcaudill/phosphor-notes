@@ -30,6 +30,10 @@ const DEFAULT_MIN_BIGRAM_COUNT = 2;
 const DEFAULT_MIN_WORD_LENGTH = 2;
 const MAX_WORD_LENGTH = 64; // avoid pathological trie depth from extremely long tokens
 
+export interface TokenizeOptions {
+  minWordLength?: number;
+}
+
 export function trainPredictionModel(
   texts: string[],
   options: TrainOptions = {}
@@ -67,6 +71,53 @@ export function trainPredictionModel(
         nextMap.set(nextWord, (nextMap.get(nextWord) ?? 0) + 1);
       }
     }
+  }
+
+  const bigrams: Record<string, SerializedSuggestion[]> = {};
+  for (const [word, nextMap] of bigramCounts.entries()) {
+    const ranked = Array.from(nextMap.entries())
+      .map(([w, c]) => ({ w, c }))
+      .filter((entry) => entry.c >= minBigramCount)
+      .sort((a, b) => b.c - a.c || (a.w < b.w ? -1 : 1))
+      .slice(0, maxBigram);
+    if (ranked.length > 0) {
+      bigrams[word] = ranked;
+    }
+  }
+
+  return {
+    version: 1,
+    updatedAt: Date.now(),
+    tokenCount,
+    uniqueTokens: wordCounts.size,
+    trie: root,
+    bigrams
+  };
+}
+
+export function tokenizeText(text: string, opts: TokenizeOptions = {}): string[] {
+  const matches = text.toLowerCase().match(/[a-z0-9'][a-z0-9'-]*/gi);
+  if (!matches) return [];
+  const minLen = opts.minWordLength ?? 0;
+  return matches
+    .map((w) => (w.length > MAX_WORD_LENGTH ? w.slice(0, MAX_WORD_LENGTH) : w))
+    .filter((w) => w.length >= minLen);
+}
+
+export function buildSnapshotFromCounts(
+  wordCounts: Map<string, number>,
+  bigramCounts: Map<string, Map<string, number>>,
+  tokenCount: number,
+  options: TrainOptions = {}
+): PredictionModelSnapshot {
+  const maxTop = options.maxTopPerPrefix ?? DEFAULT_MAX_TOP;
+  const maxBigram = options.maxBigramPerWord ?? DEFAULT_MAX_BIGRAM;
+  const minBigramCount = options.minBigramCount ?? DEFAULT_MIN_BIGRAM_COUNT;
+
+  const root: SerializedTrieNode = {};
+
+  for (const [word, count] of wordCounts.entries()) {
+    insertIntoTrie(root, word, count, maxTop);
   }
 
   const bigrams: Record<string, SerializedSuggestion[]> = {};

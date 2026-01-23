@@ -10,6 +10,7 @@ import {
   getLastTasks,
   getLastPredictionModelSerialized,
   performSearch,
+  schedulePredictionModelUpdate,
   updateTasksForFile,
   updateGraphForFile,
   updateGraphForChangedFile
@@ -1419,10 +1420,16 @@ export async function openVaultPath(vaultPath: string, mainWindow: BrowserWindow
       (filename) => {
         // Update tasks for only the changed file (efficient incremental update)
         updateTasksForFile(vaultPath, filename, mainWindow);
+        schedulePredictionModelUpdate(vaultPath, filename, mainWindow);
       },
       (filename) => {
         // Update graph for newly added files (efficient incremental update)
         updateGraphForFile(vaultPath, filename, mainWindow);
+        schedulePredictionModelUpdate(vaultPath, filename, mainWindow);
+      },
+      (filename) => {
+        // Drop prediction stats for deleted files
+        schedulePredictionModelUpdate(vaultPath, filename, mainWindow);
       }
     );
   } catch (err) {

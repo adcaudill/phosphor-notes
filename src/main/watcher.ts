@@ -33,6 +33,7 @@ let lastSaveTime = 0; // Timestamp of last internal save
 const debounceTimers: Map<string, NodeJS.Timeout> = new Map();
 let onFileChangeCallback: ((filename: string) => void) | null = null; // Callback with filename
 let onFileAddedCallback: ((filename: string) => void) | null = null; // Callback for newly added files
+let onFileDeletedCallback: ((filename: string) => void) | null = null;
 
 const DEBOUNCE_MS = 300; // Wait 300ms after last change event before sending to UI
 const INTERNAL_SAVE_GRACE_MS = 500; // Ignore FS changes within 500ms of our own saves
@@ -45,11 +46,13 @@ export function setupWatcher(
   vaultPath: string,
   mainWindow: BrowserWindow,
   onFileChange?: (filename: string) => void,
-  onFileAdded?: (filename: string) => void
+  onFileAdded?: (filename: string) => void,
+  onFileDeleted?: (filename: string) => void
 ): void {
   // Store the callbacks for re-indexing
   onFileChangeCallback = onFileChange || null;
   onFileAddedCallback = onFileAdded || null;
+  onFileDeletedCallback = onFileDeleted || null;
 
   // Clean up any existing watcher
   if (watcher) {
@@ -113,6 +116,9 @@ export function setupWatcher(
     // Only send if window is still valid
     if (!mainWindow.isDestroyed()) {
       mainWindow.webContents.send('vault:file-deleted', relativePath);
+    }
+    if (onFileDeletedCallback && relativePath.endsWith('.md')) {
+      onFileDeletedCallback(relativePath);
     }
   });
 

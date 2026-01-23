@@ -7,7 +7,12 @@ import { isDailyNote, extractDateHierarchy } from './graphBuilder';
 import { extractWikilinks, getImplicitPathLinks } from '../shared/wikilinks';
 import { getActiveMasterKey, isEncryptionEnabled } from './ipc';
 import { decryptBuffer } from './crypto';
-import { trainPredictionModel, type PredictionModelSnapshot } from '../shared/predictionModel';
+import {
+  buildSnapshotFromCounts,
+  tokenizeText,
+  type PredictionModelSnapshot,
+  type TrainOptions
+} from '../shared/predictionModel';
 
 // Safe logging that ignores EPIPE errors during shutdown
 const safeLog = (...args: unknown[]): void => {
@@ -60,47 +65,197 @@ let lastTasks: Task[] | null = null;
 let lastPredictionModel: PredictionModelSnapshot | null = null;
 let lastPredictionModelSerialized: string | null = null;
 
-function buildPredictionModel(
-  fileContents: FileContent[],
-  mainWindow: BrowserWindow
-): PredictionModelSnapshot | null {
-  try {
-    const model = trainPredictionModel(
-      fileContents.map((f) => f.content),
-      {
-        maxTopPerPrefix: 3,
-        maxBigramPerWord: 5,
-        minBigramCount: 2,
-        minWordLength: 2
+interface FilePredictionStats {
+  tokenCount: number;
+  wordCounts: Map<string, number>;
+  bigramCounts: Map<string, Map<string, number>>;
+}
+
+const predictionOptions: TrainOptions = {
+  maxTopPerPrefix: 3,
+  maxBigramPerWord: 5,
+  minBigramCount: 2,
+  minWordLength: 2
+};
+
+const perFilePredictionStats = new Map<string, FilePredictionStats>();
+const globalWordCounts = new Map<string, number>();
+const globalBigramCounts = new Map<string, Map<string, number>>();
+let globalTokenCount = 0;
+
+const predictionUpdateTimers = new Map<string, NodeJS.Timeout>();
+const PREDICTION_UPDATE_DEBOUNCE_MS = 60_000;
+
+function addCounts(target: Map<string, number>, delta: Map<string, number>, sign: 1 | -1): void {
+  for (const [word, count] of delta.entries()) {
+    const next = (target.get(word) ?? 0) + sign * count;
+    if (next <= 0) {
+      target.delete(word);
+    } else {
+      target.set(word, next);
+    }
+  }
+}
+
+function addBigramCounts(
+  target: Map<string, Map<string, number>>,
+  delta: Map<string, Map<string, number>>,
+  sign: 1 | -1
+): void {
+  for (const [word, nextMap] of delta.entries()) {
+    let acc = target.get(word);
+    if (!acc) {
+      if (sign < 0) continue;
+      acc = new Map<string, number>();
+      target.set(word, acc);
+    }
+    for (const [next, count] of nextMap.entries()) {
+      const updated = (acc.get(next) ?? 0) + sign * count;
+      if (updated <= 0) {
+        acc.delete(next);
+      } else {
+        acc.set(next, updated);
       }
+    }
+    if (acc.size === 0) {
+      target.delete(word);
+    }
+  }
+}
+
+function computePredictionStats(text: string): FilePredictionStats {
+  const tokens = tokenizeText(text, { minWordLength: predictionOptions.minWordLength });
+  const wordCounts = new Map<string, number>();
+  const bigramCounts = new Map<string, Map<string, number>>();
+
+  for (let i = 0; i < tokens.length; i++) {
+    const word = tokens[i];
+    const nextWord = tokens[i + 1];
+    wordCounts.set(word, (wordCounts.get(word) ?? 0) + 1);
+    if (nextWord) {
+      let nextMap = bigramCounts.get(word);
+      if (!nextMap) {
+        nextMap = new Map<string, number>();
+        bigramCounts.set(word, nextMap);
+      }
+      nextMap.set(nextWord, (nextMap.get(nextWord) ?? 0) + 1);
+    }
+  }
+
+  return {
+    tokenCount: tokens.length,
+    wordCounts,
+    bigramCounts
+  };
+}
+
+function rebuildPredictionSnapshot(mainWindow: BrowserWindow): void {
+  try {
+    const model = buildSnapshotFromCounts(
+      globalWordCounts,
+      globalBigramCounts,
+      globalTokenCount,
+      predictionOptions
     );
 
     lastPredictionModelSerialized = JSON.stringify(model);
+    lastPredictionModel = model;
+
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('phosphor:prediction-model', lastPredictionModelSerialized);
+    }
+
     try {
-      const modelSize = lastPredictionModelSerialized.length;
       safeLog(
-        '[Indexer] built prediction model in main. tokens:',
+        '[Indexer] rebuilt prediction model. tokens:',
         model.tokenCount,
         'unique:',
         model.uniqueTokens,
         'bytes:',
-        modelSize
+        lastPredictionModelSerialized.length
       );
     } catch {
-      // Swallow logging failures
+      // ignore logging errors
     }
-
-    lastPredictionModel = model;
-    if (!mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('phosphor:prediction-model', lastPredictionModelSerialized);
-    }
-    return model;
   } catch (err) {
-    safeError('Failed to build prediction model in main:', err);
+    safeError('Failed to rebuild prediction model:', err);
     lastPredictionModel = null;
     lastPredictionModelSerialized = null;
-    return null;
   }
+}
+
+function applyFileStats(filename: string, stats: FilePredictionStats | null): void {
+  const existing = perFilePredictionStats.get(filename);
+  if (existing) {
+    globalTokenCount = Math.max(0, globalTokenCount - existing.tokenCount);
+    addCounts(globalWordCounts, existing.wordCounts, -1);
+    addBigramCounts(globalBigramCounts, existing.bigramCounts, -1);
+  }
+
+  if (stats) {
+    globalTokenCount += stats.tokenCount;
+    addCounts(globalWordCounts, stats.wordCounts, 1);
+    addBigramCounts(globalBigramCounts, stats.bigramCounts, 1);
+    perFilePredictionStats.set(filename, stats);
+  } else {
+    perFilePredictionStats.delete(filename);
+  }
+}
+
+async function updatePredictionModelForFile(
+  vaultPath: string,
+  filename: string,
+  mainWindow: BrowserWindow
+): Promise<void> {
+  try {
+    const filePath = join(vaultPath, filename);
+    const content = await readMarkdownFile(filePath, vaultPath);
+    const stats = computePredictionStats(content);
+    applyFileStats(filename, stats);
+    rebuildPredictionSnapshot(mainWindow);
+  } catch (err) {
+    const asNodeErr = err as NodeJS.ErrnoException;
+    if (asNodeErr?.code === 'ENOENT') {
+      applyFileStats(filename, null);
+      rebuildPredictionSnapshot(mainWindow);
+      return;
+    }
+    safeError(`Failed to update prediction model for file ${filename}:`, err);
+  }
+}
+
+export function schedulePredictionModelUpdate(
+  vaultPath: string,
+  filename: string,
+  mainWindow: BrowserWindow
+): void {
+  if (!filename.endsWith('.md')) return;
+  const existing = predictionUpdateTimers.get(filename);
+  if (existing) clearTimeout(existing);
+  const timer = setTimeout(() => {
+    predictionUpdateTimers.delete(filename);
+    void updatePredictionModelForFile(vaultPath, filename, mainWindow);
+  }, PREDICTION_UPDATE_DEBOUNCE_MS);
+  predictionUpdateTimers.set(filename, timer);
+}
+
+function seedPredictionModel(fileContents: FileContent[], mainWindow: BrowserWindow): void {
+  perFilePredictionStats.clear();
+  globalWordCounts.clear();
+  globalBigramCounts.clear();
+  globalTokenCount = 0;
+
+  for (const timer of predictionUpdateTimers.values()) {
+    clearTimeout(timer);
+  }
+  predictionUpdateTimers.clear();
+
+  for (const file of fileContents) {
+    const stats = computePredictionStats(file.content);
+    applyFileStats(file.filename, stats);
+  }
+
+  rebuildPredictionSnapshot(mainWindow);
 }
 
 // Helper: recursively find all .md files
@@ -272,7 +427,7 @@ async function tryStartWorkerFromFile(
     }
 
     safeLog('Sending', fileContents.length, 'files to indexer worker');
-    buildPredictionModel(fileContents, mainWindow);
+    seedPredictionModel(fileContents, mainWindow);
     indexerWorker.postMessage(fileContents);
   } catch (err) {
     console.error('Failed to read vault files:', err);
@@ -291,6 +446,14 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
 
     lastPredictionModel = null;
     lastPredictionModelSerialized = null;
+    perFilePredictionStats.clear();
+    globalWordCounts.clear();
+    globalBigramCounts.clear();
+    globalTokenCount = 0;
+    for (const timer of predictionUpdateTimers.values()) {
+      clearTimeout(timer);
+    }
+    predictionUpdateTimers.clear();
 
     safeLog('Indexer: workerPath=', workerPath, 'exists?', fs.existsSync(workerPath));
     if (fs.existsSync(workerPath)) {
@@ -458,7 +621,7 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
           }
 
           safeLog('Sending', fileContents.length, 'files to indexer worker');
-          buildPredictionModel(fileContents, mainWindow);
+          seedPredictionModel(fileContents, mainWindow);
           indexerWorker.postMessage(fileContents);
         } catch (err) {
           safeError('Failed to read vault files:', err);
