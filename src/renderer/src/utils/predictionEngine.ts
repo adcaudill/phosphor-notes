@@ -35,10 +35,18 @@ export class PredictionEngine {
     return best.w;
   }
 
-  predictNext(prevWord: string, context?: string | null): string | null {
+  predictNext(prevWord: string, prevPrev?: string | null, context?: string | null): string | null {
     if (!prevWord) return null;
-    const candidates = this.snapshot.bigrams[prevWord.toLowerCase()];
+
+    const trigramKey = prevPrev ? `${prevPrev.toLowerCase()} ${prevWord.toLowerCase()}` : null;
+    const trigramCandidates = trigramKey ? this.snapshot.trigrams[trigramKey] : undefined;
+    const candidates =
+      trigramCandidates && trigramCandidates.length > 0
+        ? trigramCandidates
+        : this.snapshot.bigrams[prevWord.toLowerCase()];
+
     if (!candidates || candidates.length === 0) return null;
+
     const best = this.pickBestNext(candidates);
     if (!best) return null;
     if (best.count < this.minNextCount) return null;

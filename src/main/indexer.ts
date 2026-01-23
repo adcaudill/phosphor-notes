@@ -69,6 +69,7 @@ interface FilePredictionStats {
   tokenCount: number;
   wordCounts: Map<string, number>;
   bigramCounts: Map<string, Map<string, number>>;
+  trigramCounts: Map<string, Map<string, number>>;
 }
 
 const predictionOptions: TrainOptions = {
@@ -81,6 +82,7 @@ const predictionOptions: TrainOptions = {
 const perFilePredictionStats = new Map<string, FilePredictionStats>();
 const globalWordCounts = new Map<string, number>();
 const globalBigramCounts = new Map<string, Map<string, number>>();
+const globalTrigramCounts = new Map<string, Map<string, number>>();
 let globalTokenCount = 0;
 
 const predictionUpdateTimers = new Map<string, NodeJS.Timeout>();
@@ -123,14 +125,18 @@ function addBigramCounts(
   }
 }
 
+const addTrigramCounts = addBigramCounts;
+
 function computePredictionStats(text: string): FilePredictionStats {
   const tokens = tokenizeText(text, { minWordLength: predictionOptions.minWordLength });
   const wordCounts = new Map<string, number>();
   const bigramCounts = new Map<string, Map<string, number>>();
+  const trigramCounts = new Map<string, Map<string, number>>();
 
   for (let i = 0; i < tokens.length; i++) {
     const word = tokens[i];
     const nextWord = tokens[i + 1];
+    const prevWord = tokens[i - 1];
     wordCounts.set(word, (wordCounts.get(word) ?? 0) + 1);
     if (nextWord) {
       let nextMap = bigramCounts.get(word);
@@ -140,12 +146,23 @@ function computePredictionStats(text: string): FilePredictionStats {
       }
       nextMap.set(nextWord, (nextMap.get(nextWord) ?? 0) + 1);
     }
+
+    if (prevWord && word && nextWord) {
+      const key = `${prevWord} ${word}`;
+      let nextMap = trigramCounts.get(key);
+      if (!nextMap) {
+        nextMap = new Map<string, number>();
+        trigramCounts.set(key, nextMap);
+      }
+      nextMap.set(nextWord, (nextMap.get(nextWord) ?? 0) + 1);
+    }
   }
 
   return {
     tokenCount: tokens.length,
     wordCounts,
-    bigramCounts
+    bigramCounts,
+    trigramCounts
   };
 }
 
@@ -154,6 +171,7 @@ function rebuildPredictionSnapshot(mainWindow: BrowserWindow): void {
     const model = buildSnapshotFromCounts(
       globalWordCounts,
       globalBigramCounts,
+      globalTrigramCounts,
       globalTokenCount,
       predictionOptions
     );
@@ -190,12 +208,14 @@ function applyFileStats(filename: string, stats: FilePredictionStats | null): vo
     globalTokenCount = Math.max(0, globalTokenCount - existing.tokenCount);
     addCounts(globalWordCounts, existing.wordCounts, -1);
     addBigramCounts(globalBigramCounts, existing.bigramCounts, -1);
+    addTrigramCounts(globalTrigramCounts, existing.trigramCounts, -1);
   }
 
   if (stats) {
     globalTokenCount += stats.tokenCount;
     addCounts(globalWordCounts, stats.wordCounts, 1);
     addBigramCounts(globalBigramCounts, stats.bigramCounts, 1);
+    addTrigramCounts(globalTrigramCounts, stats.trigramCounts, 1);
     perFilePredictionStats.set(filename, stats);
   } else {
     perFilePredictionStats.delete(filename);
@@ -243,6 +263,7 @@ function seedPredictionModel(fileContents: FileContent[], mainWindow: BrowserWin
   perFilePredictionStats.clear();
   globalWordCounts.clear();
   globalBigramCounts.clear();
+  globalTrigramCounts.clear();
   globalTokenCount = 0;
 
   for (const timer of predictionUpdateTimers.values()) {
@@ -449,6 +470,7 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
     perFilePredictionStats.clear();
     globalWordCounts.clear();
     globalBigramCounts.clear();
+    globalTrigramCounts.clear();
     globalTokenCount = 0;
     for (const timer of predictionUpdateTimers.values()) {
       clearTimeout(timer);

@@ -15,6 +15,7 @@ export interface PredictionModelSnapshot {
   uniqueTokens: number;
   trie: SerializedTrieNode;
   bigrams: Record<string, SerializedSuggestion[]>;
+  trigrams: Record<string, SerializedSuggestion[]>; // key: "word1 word2"
 }
 
 export interface TrainOptions {
@@ -46,6 +47,7 @@ export function trainPredictionModel(
   const root: SerializedTrieNode = {};
   const wordCounts = new Map<string, number>();
   const bigramCounts = new Map<string, Map<string, number>>();
+  const trigramCounts = new Map<string, Map<string, number>>();
 
   let tokenCount = 0;
 
@@ -57,6 +59,7 @@ export function trainPredictionModel(
     for (let i = 0; i < tokens.length; i++) {
       const word = tokens[i];
       const nextWord = tokens[i + 1];
+      const prev = tokens[i - 1];
 
       const newCount = (wordCounts.get(word) ?? 0) + 1;
       wordCounts.set(word, newCount);
@@ -67,6 +70,16 @@ export function trainPredictionModel(
         if (!nextMap) {
           nextMap = new Map<string, number>();
           bigramCounts.set(word, nextMap);
+        }
+        nextMap.set(nextWord, (nextMap.get(nextWord) ?? 0) + 1);
+      }
+
+      if (prev && word && nextWord) {
+        const key = `${prev} ${word}`;
+        let nextMap = trigramCounts.get(key);
+        if (!nextMap) {
+          nextMap = new Map<string, number>();
+          trigramCounts.set(key, nextMap);
         }
         nextMap.set(nextWord, (nextMap.get(nextWord) ?? 0) + 1);
       }
@@ -85,13 +98,26 @@ export function trainPredictionModel(
     }
   }
 
+  const trigrams: Record<string, SerializedSuggestion[]> = {};
+  for (const [key, nextMap] of trigramCounts.entries()) {
+    const ranked = Array.from(nextMap.entries())
+      .map(([w, c]) => ({ w, c }))
+      .filter((entry) => entry.c >= minBigramCount)
+      .sort((a, b) => b.c - a.c || (a.w < b.w ? -1 : 1))
+      .slice(0, maxBigram);
+    if (ranked.length > 0) {
+      trigrams[key] = ranked;
+    }
+  }
+
   return {
     version: 1,
     updatedAt: Date.now(),
     tokenCount,
     uniqueTokens: wordCounts.size,
     trie: root,
-    bigrams
+    bigrams,
+    trigrams
   };
 }
 
@@ -107,6 +133,7 @@ export function tokenizeText(text: string, opts: TokenizeOptions = {}): string[]
 export function buildSnapshotFromCounts(
   wordCounts: Map<string, number>,
   bigramCounts: Map<string, Map<string, number>>,
+  trigramCounts: Map<string, Map<string, number>>,
   tokenCount: number,
   options: TrainOptions = {}
 ): PredictionModelSnapshot {
@@ -132,13 +159,26 @@ export function buildSnapshotFromCounts(
     }
   }
 
+  const trigrams: Record<string, SerializedSuggestion[]> = {};
+  for (const [key, nextMap] of trigramCounts.entries()) {
+    const ranked = Array.from(nextMap.entries())
+      .map(([w, c]) => ({ w, c }))
+      .filter((entry) => entry.c >= minBigramCount)
+      .sort((a, b) => b.c - a.c || (a.w < b.w ? -1 : 1))
+      .slice(0, maxBigram);
+    if (ranked.length > 0) {
+      trigrams[key] = ranked;
+    }
+  }
+
   return {
     version: 1,
     updatedAt: Date.now(),
     tokenCount,
     uniqueTokens: wordCounts.size,
     trie: root,
-    bigrams
+    bigrams,
+    trigrams
   };
 }
 

@@ -87,8 +87,9 @@ function computeSuggestion(
     const trimmed = before.trim();
     const parts = trimmed.split(/\s+/);
     const prevWord = parts[parts.length - 1] || '';
+    const prevPrevWord = parts[parts.length - 2] || '';
     if (prevWord) {
-      const next = engine.predictNext(prevWord, context);
+      const next = engine.predictNext(prevWord, prevPrevWord || null, context);
       if (next) {
         return { text: `${next} `, pos: head, kind: 'next' };
       }
