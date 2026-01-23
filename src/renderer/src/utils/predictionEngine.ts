@@ -37,15 +37,18 @@ export class PredictionEngine {
     const { prevWord, prevPrev } = this.extractPrevWords(contextTokens, lowerPrefix);
 
     const total = node.top.reduce((acc, curr) => acc + (curr.c || 0), 0);
-    let best = node.top[0];
+    let best: (typeof node.top)[0] | null = null;
     let bestScore = -1;
 
     for (const cand of node.top) {
       if (!cand.w.startsWith(lowerPrefix)) continue;
       if (cand.w === lowerPrefix) continue;
+      if (cand.w === `${lowerPrefix}s` || cand.w === `${lowerPrefix}es`) continue;
+
       const baseProb = total > 0 ? (cand.c || 0) / total : 0;
       const weight = this.computePosWeight(cand.w, prevWord, prevPrev, contextTokens);
       const score = baseProb * weight;
+
       if (score > bestScore) {
         bestScore = score;
         best = cand;
@@ -53,6 +56,14 @@ export class PredictionEngine {
     }
 
     if (!best || best.w === lowerPrefix) return null;
+
+    const suffixLen = best.w.length - lowerPrefix.length;
+    if (suffixLen <= 2) return null; // skip trivial completions (1–2 chars)
+    if (suffixLen > 32) return null; // avoid absurdly long completions
+    if (best.w.length < 3) return null; // avoid very short completions
+
+    if (bestScore < this.minNextProb) return null;
+
     return best.w;
   }
 
@@ -70,9 +81,11 @@ export class PredictionEngine {
 
     const contextTokens = this.tokenizeContext(context);
     const best = this.pickBestNext(candidates, prevWord, prevPrev ?? null, contextTokens);
+
     if (!best) return null;
     if (best.count < this.minNextCount) return null;
     if (best.prob < this.minNextProb) return null;
+
     return best.word;
   }
 

@@ -22,12 +22,16 @@ export interface TrainOptions {
   maxTopPerPrefix?: number;
   maxBigramPerWord?: number;
   minBigramCount?: number;
+  maxTrigramPerKey?: number;
+  minTrigramCount?: number;
   minWordLength?: number;
 }
 
 const DEFAULT_MAX_TOP = 3;
 const DEFAULT_MAX_BIGRAM = 5;
 const DEFAULT_MIN_BIGRAM_COUNT = 2;
+const DEFAULT_MAX_TRIGRAM = 15;
+const DEFAULT_MIN_TRIGRAM_COUNT = 1;
 const DEFAULT_MIN_WORD_LENGTH = 2;
 const MAX_WORD_LENGTH = 64; // avoid pathological trie depth from extremely long tokens
 
@@ -42,6 +46,8 @@ export function trainPredictionModel(
   const maxTop = options.maxTopPerPrefix ?? DEFAULT_MAX_TOP;
   const maxBigram = options.maxBigramPerWord ?? DEFAULT_MAX_BIGRAM;
   const minBigramCount = options.minBigramCount ?? DEFAULT_MIN_BIGRAM_COUNT;
+  const maxTrigram = options.maxTrigramPerKey ?? DEFAULT_MAX_TRIGRAM;
+  const minTrigramCount = options.minTrigramCount ?? DEFAULT_MIN_TRIGRAM_COUNT;
   const minWordLength = options.minWordLength ?? DEFAULT_MIN_WORD_LENGTH;
 
   const root: SerializedTrieNode = {};
@@ -102,9 +108,9 @@ export function trainPredictionModel(
   for (const [key, nextMap] of trigramCounts.entries()) {
     const ranked = Array.from(nextMap.entries())
       .map(([w, c]) => ({ w, c }))
-      .filter((entry) => entry.c >= minBigramCount)
+      .filter((entry) => entry.c >= minTrigramCount)
       .sort((a, b) => b.c - a.c || (a.w < b.w ? -1 : 1))
-      .slice(0, maxBigram);
+      .slice(0, maxTrigram);
     if (ranked.length > 0) {
       trigrams[key] = ranked;
     }
@@ -140,6 +146,8 @@ export function buildSnapshotFromCounts(
   const maxTop = options.maxTopPerPrefix ?? DEFAULT_MAX_TOP;
   const maxBigram = options.maxBigramPerWord ?? DEFAULT_MAX_BIGRAM;
   const minBigramCount = options.minBigramCount ?? DEFAULT_MIN_BIGRAM_COUNT;
+  const maxTrigram = options.maxTrigramPerKey ?? DEFAULT_MAX_TRIGRAM;
+  const minTrigramCount = options.minTrigramCount ?? DEFAULT_MIN_TRIGRAM_COUNT;
 
   const root: SerializedTrieNode = {};
 
@@ -163,9 +171,9 @@ export function buildSnapshotFromCounts(
   for (const [key, nextMap] of trigramCounts.entries()) {
     const ranked = Array.from(nextMap.entries())
       .map(([w, c]) => ({ w, c }))
-      .filter((entry) => entry.c >= minBigramCount)
+      .filter((entry) => entry.c >= minTrigramCount)
       .sort((a, b) => b.c - a.c || (a.w < b.w ? -1 : 1))
-      .slice(0, maxBigram);
+      .slice(0, maxTrigram);
     if (ranked.length > 0) {
       trigrams[key] = ranked;
     }

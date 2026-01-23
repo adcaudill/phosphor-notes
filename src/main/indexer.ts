@@ -76,6 +76,8 @@ const predictionOptions: TrainOptions = {
   maxTopPerPrefix: 3,
   maxBigramPerWord: 5,
   minBigramCount: 2,
+  maxTrigramPerKey: 15,
+  minTrigramCount: 1,
   minWordLength: 2
 };
 
