@@ -62,7 +62,7 @@ export class PredictionEngine {
     if (suffixLen > 32) return null; // avoid absurdly long completions
     if (best.w.length < 3) return null; // avoid very short completions
 
-    if (bestScore < this.minNextProb) return null;
+    if (bestScore < 0.1) return null;
 
     return best.w;
   }
