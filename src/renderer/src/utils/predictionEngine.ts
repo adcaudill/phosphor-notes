@@ -158,12 +158,23 @@ export class PredictionEngine {
     contextTokens: string[]
   ): 'verb' | 'noun' | 'adj' | 'adv' | null {
     const w = (prevWord || '').toLowerCase();
-    const w2 = (prevPrev || '').toLowerCase();
-    const lastToken = contextTokens[contextTokens.length - 1] || '';
-    const beforeLast = contextTokens[contextTokens.length - 2] || '';
-    const prior = w2 || (beforeLast !== w ? beforeLast : '');
+    const prior = (prevPrev || '').toLowerCase();
 
-    const determiners = new Set(['a', 'an', 'the', 'this', 'that', 'these', 'those']);
+    const determiners = new Set([
+      'a',
+      'an',
+      'the',
+      'this',
+      'that',
+      'these',
+      'those',
+      'my',
+      'your',
+      'his',
+      'her',
+      'our',
+      'their'
+    ]);
     const copulas = new Set(['is', 'are', 'was', 'were', 'be', 'am', 'been']);
     const modals = new Set([
       'can',
@@ -176,8 +187,6 @@ export class PredictionEngine {
       'might',
       'must'
     ]);
-    const pronouns = new Set(['i', 'you', 'we', 'they', 'he', 'she', 'it']);
-    const adverbCue = new Set(['very', 'quite', 'so', 'too', 'really']);
     const prepositions = new Set([
       'of',
       'in',
@@ -190,29 +199,70 @@ export class PredictionEngine {
       'from',
       'to'
     ]);
+    const volitionVerbs = new Set(['want', 'hope', 'plan', 'expect', 'try', 'like', 'love']);
 
-    if (w === 'to') return 'verb';
-    if (prepositions.has(w)) return 'noun';
-    if (determiners.has(w)) return 'noun';
-    if (modals.has(w)) return 'verb';
-    if (pronouns.has(w)) return 'verb';
-    if (copulas.has(w)) return 'adj';
-    if (adverbCue.has(w)) return 'adj';
+    // Edge Case: "To" Logic
+    if (w === 'to') {
+      // "Want to [go]" (Verb) vs "Walk to [School]" (Noun)
+      if (volitionVerbs.has(prior)) return 'verb';
+      return 'noun';
+    }
 
+    if (determiners.has(w)) return 'noun'; // "The [Cat]" (or Adj, but Noun is the head)
+    if (modals.has(w)) return 'verb'; // "Can [Go]"
+    if (prepositions.has(w)) return 'noun'; // "In [Space]"
+    if (copulas.has(w)) return 'adj'; // "Is [Red]"
+
+    // Deep context scan (Noun Phrase Detection)
+    // Scan backwards from n-2 to find the start of the phrase (Determiner).
+    const limit = Math.max(0, contextTokens.length - 6);
+    let seenAdjectives = false;
+    let seenAdverb = false;
+
+    // Start loop at length-2 because length-1 is 'prevWord' (w) which we already checked
+    for (let i = contextTokens.length - 2; i >= limit; i--) {
+      const token = contextTokens[i];
+
+      // STOPPERS: These break a Noun Phrase chain
+      if (['that', 'which', 'who', ',', '.', ';'].includes(token)) break;
+      // If we hit a Verb (that isn't a copula), the Noun Phrase definitely stopped before this
+      if (this.wordHasTag(token, 'VB') && !copulas.has(token)) break;
+
+      // SIGNAL: We hit the start of a Noun Phrase
+      if (determiners.has(token)) {
+        // Logic: We are inside a Noun Phrase (Determiner ... Cursor).
+
+        // If the word immediately before cursor is an Adjective, a Noun is heavily expected.
+        // Ex: "The red [Ball]"
+        if (this.wordHasTag(w, 'JJ')) return 'noun';
+
+        // If we saw Adverbs/Adjectives in the chain, we are building up to a Noun.
+        // Ex: "The very red [Car]"
+        if (seenAdjectives || seenAdverb) return 'noun';
+
+        // If we have seen nothing but the Determiner and the current word,
+        // it's ambiguous, but 'noun' remains the safest prediction for completion weighting.
+        return 'noun';
+      }
+
+      // Track what we see as we walk backwards
+      if (this.wordHasTag(token, 'JJ')) seenAdjectives = true;
+      if (this.wordHasTag(token, 'RB')) seenAdverb = true;
+    }
+
+    // Two-Word Heuristics
     if (prior) {
-      if (determiners.has(prior)) return 'noun';
-      if (modals.has(prior)) return 'verb';
-      if (copulas.has(prior)) return 'adj';
+      // "Very [Adj] [Noun]" pattern
+      // Ex: "Very fast [Car]"
+      if (this.wordHasTag(prior, 'RB') && this.wordHasTag(w, 'JJ')) return 'noun';
+
+      // "More [Noun] [Noun]" or "More [Adj] [Noun]"
+      if (prior === 'more' || prior === 'most') return 'noun';
     }
 
-    if (lastToken && lastToken !== w) {
-      if (this.wordHasTag(lastToken, 'JJ')) return 'noun';
-      if (this.wordHasTag(lastToken, 'RB')) return 'adj';
-      if (this.wordHasTag(lastToken, 'VB')) return 'noun';
-    }
-
-    // If previous two words look like adj + noun, next may be adv/verb; keep neutral.
-    if (w2 && this.wordHasTag(w2, 'JJ') && this.wordHasTag(w, 'NN')) return null;
+    // Single-Word Heuristics
+    if (this.wordHasTag(w, 'JJ')) return 'noun'; // "Red [Ball]"
+    if (this.wordHasTag(w, 'NN')) return 'verb'; // "The dog [ran]"
 
     return null;
   }
