@@ -32,99 +32,10 @@ const DEFAULT_MAX_BIGRAM = 5;
 const DEFAULT_MIN_BIGRAM_COUNT = 2;
 const DEFAULT_MAX_TRIGRAM = 15;
 const DEFAULT_MIN_TRIGRAM_COUNT = 1;
-const DEFAULT_MIN_WORD_LENGTH = 2;
 const MAX_WORD_LENGTH = 64; // avoid pathological trie depth from extremely long tokens
 
 export interface TokenizeOptions {
   minWordLength?: number;
-}
-
-export function trainPredictionModel(
-  texts: string[],
-  options: TrainOptions = {}
-): PredictionModelSnapshot {
-  const maxTop = options.maxTopPerPrefix ?? DEFAULT_MAX_TOP;
-  const maxBigram = options.maxBigramPerWord ?? DEFAULT_MAX_BIGRAM;
-  const minBigramCount = options.minBigramCount ?? DEFAULT_MIN_BIGRAM_COUNT;
-  const maxTrigram = options.maxTrigramPerKey ?? DEFAULT_MAX_TRIGRAM;
-  const minTrigramCount = options.minTrigramCount ?? DEFAULT_MIN_TRIGRAM_COUNT;
-  const minWordLength = options.minWordLength ?? DEFAULT_MIN_WORD_LENGTH;
-
-  const root: SerializedTrieNode = {};
-  const wordCounts = new Map<string, number>();
-  const bigramCounts = new Map<string, Map<string, number>>();
-  const trigramCounts = new Map<string, Map<string, number>>();
-
-  let tokenCount = 0;
-
-  for (const text of texts) {
-    const tokens = tokenizeText(text, { minWordLength });
-    if (tokens.length === 0) continue;
-    tokenCount += tokens.length;
-
-    for (let i = 0; i < tokens.length; i++) {
-      const word = tokens[i];
-      const nextWord = tokens[i + 1];
-      const prev = tokens[i - 1];
-
-      const newCount = (wordCounts.get(word) ?? 0) + 1;
-      wordCounts.set(word, newCount);
-      insertIntoTrie(root, word, newCount, maxTop);
-
-      if (nextWord) {
-        let nextMap = bigramCounts.get(word);
-        if (!nextMap) {
-          nextMap = new Map<string, number>();
-          bigramCounts.set(word, nextMap);
-        }
-        nextMap.set(nextWord, (nextMap.get(nextWord) ?? 0) + 1);
-      }
-
-      if (prev && word && nextWord) {
-        const key = `${prev} ${word}`;
-        let nextMap = trigramCounts.get(key);
-        if (!nextMap) {
-          nextMap = new Map<string, number>();
-          trigramCounts.set(key, nextMap);
-        }
-        nextMap.set(nextWord, (nextMap.get(nextWord) ?? 0) + 1);
-      }
-    }
-  }
-
-  const bigrams: Record<string, SerializedSuggestion[]> = {};
-  for (const [word, nextMap] of bigramCounts.entries()) {
-    const ranked = Array.from(nextMap.entries())
-      .map(([w, c]) => ({ w, c }))
-      .filter((entry) => entry.c >= minBigramCount)
-      .sort((a, b) => b.c - a.c || (a.w < b.w ? -1 : 1))
-      .slice(0, maxBigram);
-    if (ranked.length > 0) {
-      bigrams[word] = ranked;
-    }
-  }
-
-  const trigrams: Record<string, SerializedSuggestion[]> = {};
-  for (const [key, nextMap] of trigramCounts.entries()) {
-    const ranked = Array.from(nextMap.entries())
-      .map(([w, c]) => ({ w, c }))
-      .filter((entry) => entry.c >= minTrigramCount)
-      .sort((a, b) => b.c - a.c || (a.w < b.w ? -1 : 1))
-      .slice(0, maxTrigram);
-    if (ranked.length > 0) {
-      trigrams[key] = ranked;
-    }
-  }
-
-  return {
-    version: 1,
-    updatedAt: Date.now(),
-    tokenCount,
-    uniqueTokens: wordCounts.size,
-    trie: root,
-    bigrams,
-    trigrams
-  };
 }
 
 export function tokenizeText(text: string, opts: TokenizeOptions = {}): string[] {
