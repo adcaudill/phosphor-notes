@@ -13,7 +13,8 @@ import {
   schedulePredictionModelUpdate,
   updateTasksForFile,
   updateGraphForFile,
-  updateGraphForChangedFile
+  updateGraphForChangedFile,
+  resetIndexState
 } from './indexer';
 import { getBacklinks } from './graphBuilder';
 import { setupWatcher, stopWatcher, markInternalSave } from './watcher';
@@ -1403,6 +1404,23 @@ export async function openVaultPath(vaultPath: string, mainWindow: BrowserWindow
     safeWarn('Error stopping previous indexer/watcher (continuing):', err);
   }
 
+  // Clear any encryption master key and reset in-memory indexer state
+  try {
+    lockVault();
+  } catch (err) {
+    safeWarn('Failed to clear master key during vault switch:', err);
+  }
+
+  try {
+    resetIndexState(mainWindow);
+    // Also clear favorites in renderer so UI doesn't show previous vault's list
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('phosphor:favorites-updated', []);
+    }
+  } catch (err) {
+    safeWarn('Failed to reset in-memory indexer state during vault switch:', err);
+  }
+
   activeVaultPath = vaultPath;
 
   // Initialize MRU for this vault
@@ -1473,6 +1491,8 @@ export async function openVaultPath(vaultPath: string, mainWindow: BrowserWindow
           type: 'vault-opened',
           message: `Opened vault ${path.basename(activeVaultPath)}`
         });
+        // Inform renderer that a new vault was opened so it can reload UI state
+        mainWindow.webContents.send('phosphor:vault-opened', path.basename(activeVaultPath));
       }
     } catch (e) {
       safeWarn('Could not send vault-opened status', e);

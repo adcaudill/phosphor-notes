@@ -80,6 +80,13 @@ const api = {
     return () => ipcRenderer.removeListener('phosphor:import-progress', handler);
   },
 
+  // Fired when main opens/switches vaults
+  onVaultOpened: (cb: (vaultName: string) => void) => {
+    const handler = (_event: IpcRendererEvent, data: string): void => cb(data);
+    ipcRenderer.on('phosphor:vault-opened', handler);
+    return () => ipcRenderer.removeListener('phosphor:vault-opened', handler);
+  },
+
   // Event subscription for menu events
   onMenuEvent: (eventName: string, cb: (...args: unknown[]) => void) => {
     const handler = (_event: IpcRendererEvent, ...args: unknown[]): void => cb(...args);

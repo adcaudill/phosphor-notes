@@ -203,6 +203,35 @@ function AppContent(): React.JSX.Element {
       setPredictionModel(model);
     });
 
+    const unsubscribeVaultOpened = window.phosphor.onVaultOpened?.(async (vaultName: string) => {
+      if (vaultName) setVaultName(vaultName);
+      try {
+        const isEncrypted = await window.phosphor.isEncryptionEnabled?.();
+        setIsVaultEncrypted(!!isEncrypted);
+
+        if (isEncrypted) {
+          const isUnlocked = await window.phosphor.isVaultUnlocked?.();
+          setIsVaultUnlocked(!!isUnlocked);
+          if (!isUnlocked) {
+            setEncryptionMode('unlock');
+            setEncryptionModalOpen(true);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to check encryption status:', err);
+      }
+
+      // Load the vault content now that main opened it
+      try {
+        await loadVaultContent();
+        // Refresh sidebar MRU/favorites
+        setFilesVersion((v) => v + 1);
+      } catch (err) {
+        console.error('Failed to reload vault after switch:', err);
+      }
+    });
+
     // Handle Cmd+K / Ctrl+K to open command palette, Cmd+, to open settings
     const handleKeyDown = (e: KeyboardEvent): void => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -386,6 +415,7 @@ function AppContent(): React.JSX.Element {
       if (unsubscribe) unsubscribe();
       if (unsubscribeStatus) unsubscribeStatus();
       if (unsubscribePrediction) unsubscribePrediction();
+      if (unsubscribeVaultOpened) unsubscribeVaultOpened();
       if (unsubscribeNewNote) unsubscribeNewNote();
       if (unsubscribeSave) unsubscribeSave();
       if (unsubscribeSearch) unsubscribeSearch();

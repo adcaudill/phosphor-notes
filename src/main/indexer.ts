@@ -675,6 +675,38 @@ export function stopIndexing(): void {
   }
 }
 
+/**
+ * Reset all in-memory indexer state (used when switching vaults)
+ */
+export function resetIndexState(mainWindow?: BrowserWindow): void {
+  lastGraph = null;
+  lastTasks = null;
+  lastPredictionModel = null;
+  lastPredictionModelSerialized = null;
+
+  perFilePredictionStats.clear();
+  globalWordCounts.clear();
+  globalBigramCounts.clear();
+  globalTrigramCounts.clear();
+  globalTokenCount = 0;
+
+  for (const timer of predictionUpdateTimers.values()) {
+    clearTimeout(timer);
+  }
+  predictionUpdateTimers.clear();
+
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      // Send empty graph/tasks/prediction to renderer so UI clears quickly
+      mainWindow.webContents.send('phosphor:graph-update', {});
+      mainWindow.webContents.send('phosphor:tasks-update', []);
+      mainWindow.webContents.send('phosphor:prediction-model', null);
+    }
+  } catch (err) {
+    safeError('Failed to notify renderer of reset index state:', err);
+  }
+}
+
 export function getLastGraph(): Record<string, string[]> | null {
   return lastGraph;
 }

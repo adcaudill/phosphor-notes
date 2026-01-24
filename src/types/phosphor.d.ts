@@ -60,6 +60,8 @@ export interface PhosphorAPI {
   onImportProgress: (
     cb: (progress: { current: number; total: number; currentFile: string }) => void
   ) => () => void;
+  // Fired when main opens or switches vaults. Provides the vault folder name.
+  onVaultOpened: (cb: (vaultName: string) => void) => () => void;
 
   // Tasks
   getTaskIndex: () => Promise<Task[]>;
