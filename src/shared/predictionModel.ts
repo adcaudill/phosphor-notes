@@ -27,11 +27,11 @@ export interface TrainOptions {
   minWordLength?: number;
 }
 
-const DEFAULT_MAX_TOP = 3;
-const DEFAULT_MAX_BIGRAM = 5;
+const DEFAULT_MAX_TOP = 10;
+const DEFAULT_MAX_BIGRAM = 10;
 const DEFAULT_MIN_BIGRAM_COUNT = 2;
 const DEFAULT_MAX_TRIGRAM = 15;
-const DEFAULT_MIN_TRIGRAM_COUNT = 1;
+const DEFAULT_MIN_TRIGRAM_COUNT = 2;
 const MAX_WORD_LENGTH = 64; // avoid pathological trie depth from extremely long tokens
 
 export interface TokenizeOptions {

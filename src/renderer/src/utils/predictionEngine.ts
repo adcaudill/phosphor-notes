@@ -60,9 +60,6 @@ export class PredictionEngine {
     const suffixLen = best.w.length - lowerPrefix.length;
     if (suffixLen <= 2) return null; // skip trivial completions (1–2 chars)
     if (suffixLen > 32) return null; // avoid absurdly long completions
-    if (best.w.length < 3) return null; // avoid very short completions
-
-    if (bestScore < 0.1) return null;
 
     return best.w;
   }

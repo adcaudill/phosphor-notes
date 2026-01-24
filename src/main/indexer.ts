@@ -73,11 +73,11 @@ interface FilePredictionStats {
 }
 
 const predictionOptions: TrainOptions = {
-  maxTopPerPrefix: 3,
-  maxBigramPerWord: 5,
+  maxTopPerPrefix: 10,
+  maxBigramPerWord: 10,
   minBigramCount: 2,
   maxTrigramPerKey: 15,
-  minTrigramCount: 1,
+  minTrigramCount: 2,
   minWordLength: 2
 };
 
