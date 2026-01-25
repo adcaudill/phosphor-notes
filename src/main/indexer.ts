@@ -551,16 +551,28 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
               graph: Record<string, string[]>;
               tasks: Task[];
             };
+
             const graph = msgData.graph;
             const tasks = msgData.tasks || [];
+
+            // count edges for logging
+            let edgeCount = 0;
+            for (const targets of Object.values(graph)) {
+              edgeCount += targets.length;
+            }
+
             safeLog(
               'Graph indexing complete. Nodes:',
               Object.keys(graph).length,
+              'Edges:',
+              edgeCount,
               'Tasks:',
               tasks.length
             );
+
             lastGraph = graph as Record<string, string[]>;
             lastTasks = tasks;
+
             // Only send if window is still valid
             if (!mainWindow.isDestroyed()) {
               mainWindow.webContents.send('phosphor:graph-update', graph);
@@ -576,17 +588,23 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
             } catch (err) {
               console.warn('Failed to send status to renderer:', err);
             }
+
             // Persist the graph atomically into the vault
             (async () => {
               try {
                 if (!vaultPath) return;
+
                 const cacheDir = join(vaultPath, '.phosphor');
+
                 await fsp.mkdir(cacheDir, { recursive: true });
+
                 const uniqueTmpPath = join(
                   cacheDir,
                   `graph.json.tmp.${Date.now()}.${Math.random().toString(36).slice(2)}`
                 );
+
                 const outPath = join(cacheDir, 'graph.json');
+
                 await fsp.writeFile(uniqueTmpPath, JSON.stringify(graph), 'utf-8');
                 try {
                   await fsp.rename(uniqueTmpPath, outPath);
@@ -599,6 +617,7 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
                   }
                   throw renameErr;
                 }
+
                 console.log('Graph cache saved to', outPath);
               } catch (err) {
                 console.error('Failed to persist graph cache:', err);
@@ -606,14 +625,17 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
             })();
           } else if (msg?.type === 'prediction-model') {
             const model = msg.data as PredictionModelSnapshot | null;
+
             lastPredictionModel = model;
             try {
               lastPredictionModelSerialized = model ? JSON.stringify(model) : null;
             } catch (err) {
               lastPredictionModelSerialized = null;
+
               safeError('Failed to serialize prediction model (runtime path):', err);
             }
             safeLog('Prediction model received (runtime path). tokens:', model?.tokenCount ?? 0);
+
             if (!mainWindow.isDestroyed() && lastPredictionModelSerialized) {
               mainWindow.webContents.send(
                 'phosphor:prediction-model',
