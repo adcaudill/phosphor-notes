@@ -76,7 +76,7 @@
     "@types/turndown": "^5.0.5",
     "@vitejs/plugin-react": "^5.1.1",
     "@vitest/coverage-v8": "^4.0.17",
-    "@vitest/ui": "^4.0.0",
+    "@vitest/ui": "^4.0.18",
     "electron": "^39.2.6",
     "electron-builder": "^26.5.0",
     "electron-vite": "^5.0.0",
