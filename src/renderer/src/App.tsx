@@ -265,8 +265,10 @@ function AppContent(): React.JSX.Element {
 
       // Prefer generating a default frontmatter (includes title) so new notes
       // created from the menu have a sensible `title` value.
-      const newContent = generateDefaultFrontmatter(filename) + '\n\n';
+      const newContent = generateDefaultFrontmatter(filename, settings.defaultJournalMode) + '\n\n';
+
       await window.phosphor.saveNote(filename, newContent);
+
       setCurrentFile(filename);
       setContent(newContent);
       skipSaveRef.current = false;
@@ -769,7 +771,7 @@ function AppContent(): React.JSX.Element {
     // If the file was just auto-created and is empty, populate with default
     // frontmatter (title, etc.) so wikilink-created pages start with a title.
     if (!content || content.trim() === '') {
-      content = generateDefaultFrontmatter(filename) + '\n\n';
+      content = generateDefaultFrontmatter(filename, settings.defaultJournalMode) + '\n\n';
       await window.phosphor.saveNote(filename, content);
     }
 
