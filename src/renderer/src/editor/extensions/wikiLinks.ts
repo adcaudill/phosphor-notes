@@ -32,7 +32,7 @@ export const wikiLinkPlugin = ViewPlugin.fromClass(
       this.decorations = wikiLinkDecorator.createDeco(view);
     }
 
-    update(update: ViewUpdate) {
+    update(update: ViewUpdate): void {
       this.decorations = wikiLinkDecorator.updateDeco(update, this.decorations);
     }
   },
