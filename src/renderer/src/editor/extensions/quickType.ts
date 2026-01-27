@@ -7,6 +7,7 @@ import {
   WidgetType,
   keymap
 } from '@codemirror/view';
+import { completionStatus } from '@codemirror/autocomplete';
 import { EditorSelection, Prec, StateEffect, StateField, type Extension } from '@codemirror/state';
 import type { PredictionEngine } from '../../utils/predictionEngine';
 
@@ -67,6 +68,16 @@ function computeSuggestion(
   view: EditorView,
   getEngine: () => PredictionEngine | null
 ): Suggestion | null {
+  // If CodeMirror's autocompletion is active (wiki links, slash commands),
+  // prefer that and don't show quick-type suggestions.
+  if (completionStatus(view.state) === 'active') return null;
+
+  // Also check for the autocomplete tooltip element in the DOM. In some
+  // configurations the status may not reflect the visible tooltip immediately,
+  // so prefer a DOM check to ensure autocomplete takes visual priority.
+  if (view.dom && view.dom.querySelector && view.dom.querySelector('.cm-tooltip-autocomplete'))
+    return null;
+
   const sel = view.state.selection.main;
   if (!sel.empty) return null;
 
