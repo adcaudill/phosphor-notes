@@ -9,10 +9,19 @@ export interface DocumentParts {
 }
 
 /**
+ * Normalize various Unicode dash characters to ASCII hyphen-minus
+ * so filenames like "2017–04-26" (en dash) are treated like "2017-04-26".
+ */
+function normalizeDashes(input: string): string {
+  return input.replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]/g, '-');
+}
+
+/**
  * Check if a filename matches the daily note pattern (YYYY-MM-DD.md)
  */
 export function isDailyNote(filename: string): boolean {
-  const match = filename.match(/(\d{4})-(\d{2})-(\d{2})\.md$/);
+  const normalized = normalizeDashes(filename);
+  const match = normalized.match(/(\d{4})-(\d{2})-(\d{2})\.md$/);
   return !!match;
 }
 
@@ -20,7 +29,8 @@ export function isDailyNote(filename: string): boolean {
  * Extract date parts from a daily note filename
  */
 export function extractDateFromFilename(filename: string): Date | null {
-  const match = filename.match(/(\d{4})-(\d{2})-(\d{2})\.md$/);
+  const normalized = normalizeDashes(filename);
+  const match = normalized.match(/(\d{4})-(\d{2})-(\d{2})\.md$/);
   if (!match) return null;
 
   const [, year, month, day] = match;
