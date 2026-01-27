@@ -132,10 +132,10 @@ function buildNamespaceColorMap(nodeIds: string[], baseColor: string): Map<strin
     namespaceMap.set(namespace, (namespaceMap.get(namespace) || 0) + 1);
   });
 
-  // Sort by count and take top 10
+  // Sort by count and take top 20
   const topNamespaces = Array.from(namespaceMap.entries())
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
+    .slice(0, 20)
     .map(([ns]) => ns);
 
   // Parse base color to HSL
@@ -154,7 +154,7 @@ function buildNamespaceColorMap(nodeIds: string[], baseColor: string): Map<strin
   nodeIds.forEach((nodeId) => {
     const namespace = extractNamespace(nodeId);
     if (!topNamespaces.includes(namespace)) {
-      // Nodes in non-top-10 namespaces use base color
+      // Nodes in non-top-20 namespaces use base color
       colorMap.set(nodeId, baseColor);
       return;
     }
@@ -354,7 +354,7 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
         nodesByColor.get(nodeColor)!.push(node);
       });
 
-      // Draw all nodes grouped by color (max ~10 groups)
+      // Draw all nodes grouped by color (max ~20 groups)
       nodesByColor.forEach((colorNodes, color) => {
         ctx.fillStyle = color;
         ctx.beginPath();
@@ -363,7 +363,7 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
           if (node.x === undefined || node.y === undefined) return;
 
           const baseRadius = 6;
-          const maxRadiusIncrease = 10;
+          const maxRadiusIncrease = 40;
           const scaledRadius =
             baseRadius + ((node.degree || 0) / Math.max(maxDegree, 1)) * maxRadiusIncrease;
 
@@ -411,7 +411,7 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
         forceCollide<GraphNode>()
           .radius((d) => {
             const baseRadius = 6;
-            const maxRadiusIncrease = 50;
+            const maxRadiusIncrease = 40;
             const calculatedRadius =
               baseRadius + ((d.degree || 0) / Math.max(maxDegree, 1)) * maxRadiusIncrease + 8;
             return calculatedRadius * 3; // multiplied to give more space & avoid overlap
@@ -473,7 +473,7 @@ export const GraphView: React.FC<GraphViewProps> = ({ graph, onFileSelect }) => 
     const findNodeAt = (x: number, y: number): GraphNode | undefined => {
       const hitRadius = 10;
       const baseRadius = 6;
-      const maxRadiusIncrease = 50;
+      const maxRadiusIncrease = 40;
       return nodes.find((node) => {
         if (node.x === undefined || node.y === undefined) return false;
         const scaledRadius =
