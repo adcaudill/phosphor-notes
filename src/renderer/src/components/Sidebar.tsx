@@ -110,75 +110,55 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <div className="sidebar">
-      <div className="sidebar-drag-area" />
-      <div className="sidebar-nav">
-        <button
-          className={`nav-btn ${viewMode === 'editor' ? 'active' : ''}`}
-          onClick={onEditorClick}
-          title="Editor view"
-        >
-          <span className="material-symbols-outlined">edit_note</span>
-        </button>
-        <button
-          className={`nav-btn ${viewMode === 'tasks' ? 'active' : ''}`}
-          onClick={onTasksClick}
-          title="Tasks view"
-        >
-          <span className="material-symbols-outlined">task</span>
-        </button>
-        <button
-          className={`nav-btn ${viewMode === 'graph' ? 'active' : ''}`}
-          onClick={onGraphClick}
-          title="Graph view"
-        >
-          <span className="material-symbols-outlined">graph_3</span>
-        </button>
-      </div>
-      <h2
-        className="daily-heading vcenter-text"
-        role="button"
-        tabIndex={0}
-        onClick={openDaily}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            openDaily();
-          }
-        }}
-        title="Open today's daily note"
-      >
-        <span className="material-symbols-outlined">calendar_today</span>
-        Daily
-      </h2>
-      <h2 className="vcenter-text">
-        <span className="material-symbols-outlined">bookmarks</span>Favorites
-      </h2>
-      <ul>
-        {favorites.map((file) => (
-          <li
-            key={file}
-            className={file === activeFile ? 'active' : ''}
-            onClick={() => {
-              if (!isClickDisabled) {
-                performFadeTransition(file);
-              }
-            }}
-            style={{
-              pointerEvents: isClickDisabled ? 'none' : 'auto'
-            }}
+      <div className="sidebar-top">
+        <div className="sidebar-drag-area" />
+        <div className="sidebar-nav">
+          <button
+            className={`nav-btn ${viewMode === 'editor' ? 'active' : ''}`}
+            onClick={onEditorClick}
+            title="Editor view"
           >
-            {file}
-            {file === activeFile && isDirty && <span className="dirty-indicator">•</span>}
-          </li>
-        ))}
-      </ul>
-      <h2 className="vcenter-text">
-        <span className="material-symbols-outlined">history</span>Recent
-      </h2>
-      <ul className={isFading ? 'fade-out' : ''}>
-        {files
-          .filter((file) => !favorites.includes(file))
-          .map((file) => (
+            <span className="material-symbols-outlined">edit_note</span>
+          </button>
+          <button
+            className={`nav-btn ${viewMode === 'tasks' ? 'active' : ''}`}
+            onClick={onTasksClick}
+            title="Tasks view"
+          >
+            <span className="material-symbols-outlined">task</span>
+          </button>
+          <button
+            className={`nav-btn ${viewMode === 'graph' ? 'active' : ''}`}
+            onClick={onGraphClick}
+            title="Graph view"
+          >
+            <span className="material-symbols-outlined">graph_3</span>
+          </button>
+        </div>
+        <h2
+          className="daily-heading vcenter-text"
+          role="button"
+          tabIndex={0}
+          onClick={openDaily}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              openDaily();
+            }
+          }}
+          title="Open today's daily note"
+        >
+          <span className="material-symbols-outlined">calendar_today</span>
+          Daily
+        </h2>
+      </div>
+
+      <div className="sidebar-body">
+        <h2 className="vcenter-text">
+          <span className="material-symbols-outlined">bookmarks</span>Favorites
+        </h2>
+        <ul>
+          {favorites.map((file) => (
             <li
               key={file}
               className={file === activeFile ? 'active' : ''}
@@ -188,16 +168,41 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 }
               }}
               style={{
-                pointerEvents: isClickDisabled ? 'none' : 'auto',
-                opacity: isFading ? 0.5 : 1,
-                transition: 'opacity 300ms ease-in-out'
+                pointerEvents: isClickDisabled ? 'none' : 'auto'
               }}
             >
               {file}
               {file === activeFile && isDirty && <span className="dirty-indicator">•</span>}
             </li>
           ))}
-      </ul>
+        </ul>
+        <h2 className="vcenter-text">
+          <span className="material-symbols-outlined">history</span>Recent
+        </h2>
+        <ul className={isFading ? 'fade-out' : ''}>
+          {files
+            .filter((file) => !favorites.includes(file))
+            .map((file) => (
+              <li
+                key={file}
+                className={file === activeFile ? 'active' : ''}
+                onClick={() => {
+                  if (!isClickDisabled) {
+                    performFadeTransition(file);
+                  }
+                }}
+                style={{
+                  pointerEvents: isClickDisabled ? 'none' : 'auto',
+                  opacity: isFading ? 0.5 : 1,
+                  transition: 'opacity 300ms ease-in-out'
+                }}
+              >
+                {file}
+                {file === activeFile && isDirty && <span className="dirty-indicator">•</span>}
+              </li>
+            ))}
+        </ul>
+      </div>
     </div>
   );
 };

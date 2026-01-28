@@ -8,7 +8,9 @@
   background-color: var(--color-sidebar-bg);
   color: var(--color-sidebar-text);
   padding: var(--spacing-lg);
-  overflow-y: auto;
+  /* Sidebar container should not scroll; we make the body inner-scrollable */
+  height: 100%;
+  overflow: visible;
   border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
@@ -19,6 +21,25 @@
   position: relative;
   -webkit-user-select: none;
   user-select: none;
+}
+
+/* Top area (drag area, nav, daily button) should remain fixed */
+.sidebar-top {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  z-index: 1;
+}
+
+/* The body contains the scrollable lists */
+.sidebar-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  padding-bottom: var(--spacing-lg);
 }
 
 .sidebar h2 {
@@ -146,4 +167,11 @@
 .sidebar li,
 .sidebar li * {
   -webkit-app-region: no-drag;
+}
+
+/* Hide scrollbars in the scrollable sidebar body */
+.sidebar-body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  background: transparent;
 }
