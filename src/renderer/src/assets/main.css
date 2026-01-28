@@ -1023,9 +1023,10 @@ body {
    ============================================ */
 
 .cm-image-widget-wrapper {
-  display: block;
-  margin: var(--spacing-md) 0;
-  width: 100%;
+  display: inline-flex;
+  margin: var(--spacing-sm) 0;
+  max-width: 100%;
+  vertical-align: top;
 }
 
 .cm-image-widget {

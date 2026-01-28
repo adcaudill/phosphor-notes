@@ -297,8 +297,25 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
               const insertAsset = async (file: File): Promise<void> => {
                 const buffer = await file.arrayBuffer();
                 const filename = await window.phosphor.saveAsset(buffer, file.name);
-                const text = `![[${filename}]]`;
-                view.dispatch(view.state.replaceSelection(text));
+
+                // In outliner mode, if the cursor is on an empty bullet, place the
+                // asset in that bullet and automatically create the next bullet
+                // so the user lands on a clean line.
+                const state = view.state;
+                const cursor = state.selection.main.from;
+                const line = state.doc.lineAt(cursor);
+                const bulletMatch = line.text.trimEnd().match(/^([\s]*)-\s*(\[(?: |x|X)\]\s*)?$/);
+                const indent = bulletMatch?.[1] ?? line.text.match(/^(\s*)/)?.[1] ?? '';
+                const hasCheckbox = Boolean(bulletMatch?.[2]);
+                const isEmptyBullet = Boolean(bulletMatch);
+
+                let text = `![[${filename}]]`;
+                if (isOutlinerMode && isEmptyBullet) {
+                  const nextBullet = `${indent}- ${hasCheckbox ? '[ ] ' : ''}`;
+                  text = `${text}\n${nextBullet}`;
+                }
+
+                view.dispatch(state.replaceSelection(text));
               };
 
               for (const item of items) {
