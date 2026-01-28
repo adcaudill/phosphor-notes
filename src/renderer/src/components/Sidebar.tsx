@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import 'material-symbols';
+import '../styles/Sidebar.css';
 
 interface SidebarProps {
   onFileSelect: (filename: string) => void;
