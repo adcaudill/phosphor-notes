@@ -1026,6 +1026,7 @@ body {
   display: inline-flex;
   margin: var(--spacing-sm) 0;
   max-width: 100%;
+  width: 99%;
   vertical-align: top;
 }
 
