@@ -149,9 +149,11 @@ const api = {
   // Search vault
   search: (query: string) => ipcRenderer.invoke('vault:search', query),
 
-  // Notify main when a wikilink is clicked (for graph updates)
-  notifyWikilinkClicked: (sourceFile: string, targetFile: string) =>
-    ipcRenderer.invoke('graph:wikilink-clicked', sourceFile, targetFile),
+  // Update graph for a file (called when leaving a file to index its current state)
+  updateGraphForFile: (filename: string) => ipcRenderer.invoke('graph:update-file', filename),
+
+  // Update tasks for a file (called when leaving a file to index its current state)
+  updateTasksForFile: (filename: string) => ipcRenderer.invoke('tasks:update-file', filename),
 
   // URL opening - opens URLs in the default browser
   openURL: (url: string) => ipcRenderer.invoke('url:open', url),

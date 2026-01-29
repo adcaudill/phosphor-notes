@@ -44,7 +44,8 @@ export interface PhosphorAPI {
   search: (
     query: string
   ) => Promise<Array<{ id: string; title: string; filename: string; snippet?: string }>>;
-  notifyWikilinkClicked: (sourceFile: string, targetFile: string) => Promise<void>;
+  updateGraphForFile: (filename: string) => Promise<void>;
+  updateTasksForFile: (filename: string) => Promise<void>;
   deleteNote: (filename: string) => Promise<boolean>;
   openURL: (url: string) => Promise<void>;
 

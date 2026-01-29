@@ -460,9 +460,30 @@ function AppContent(): React.JSX.Element {
     }
   };
 
+  /**
+   * Update graph and tasks for the current file before switching away from it.
+   * This is the single centralized place where we ensure the graph is updated
+   * whenever the user leaves a file, regardless of how they navigate.
+   */
+  const updateCurrentFileBeforeSwitching = async (): Promise<void> => {
+    if (!currentFile) return;
+    try {
+      // Update graph for the file we're about to leave
+      await window.phosphor.updateGraphForFile(currentFile);
+      // Update tasks for the file we're about to leave
+      await window.phosphor.updateTasksForFile(currentFile);
+    } catch (err) {
+      console.error('Failed to update graph/tasks before switching files:', err);
+    }
+  };
+
   const handleFileSelect = async (filename: string): Promise<void> => {
     try {
       console.debug('handleFileSelect invoked for', filename);
+
+      // Update graph and tasks for the file we're leaving before switching
+      await updateCurrentFileBeforeSwitching();
+
       let noteContent = await window.phosphor.readNote(filename);
 
       // Ensure frontmatter exists and capture mode/content
@@ -526,6 +547,9 @@ function AppContent(): React.JSX.Element {
     if (idx < 0 || idx >= fileHistory.length) return;
     const filename = fileHistory[idx];
     try {
+      // Update graph and tasks for the file we're leaving before switching
+      await updateCurrentFileBeforeSwitching();
+
       skipSaveRef.current = true;
       const noteContent = await window.phosphor.readNote(filename);
       setContent(noteContent);

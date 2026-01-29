@@ -480,8 +480,8 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
     return getLastPredictionModelSerialized();
   });
 
-  // Handle wikilink click - update graph for both source and target files
-  ipcMain.handle('graph:wikilink-clicked', async (_, sourceFile: string, targetFile: string) => {
+  // Handle graph update for a file (called when leaving a file to update its outgoing links)
+  ipcMain.handle('graph:update-file', async (_, filename: string) => {
     if (!activeVaultPath || !mainWindow) {
       return;
     }
@@ -492,25 +492,45 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
       return trimmed.endsWith('.md') ? trimmed : `${trimmed}.md`;
     };
 
-    const normalizedSource = normalize(sourceFile);
-    const normalizedTarget = normalize(targetFile);
+    const normalizedFilename = normalize(filename);
 
-    if (!normalizedSource) {
-      safeWarn('Wikilink click received with empty source filename');
+    if (!normalizedFilename) {
+      safeWarn('Graph update requested with empty filename');
       return;
     }
 
     try {
-      // Refresh tasks and graph for the file the user just edited
-      await updateTasksForFile(activeVaultPath, normalizedSource, mainWindow);
-      await updateGraphForChangedFile(activeVaultPath, normalizedSource, mainWindow);
-
-      // If the target exists (or will exist), make sure its backlinks are recorded
-      if (normalizedTarget) {
-        await updateGraphForFile(activeVaultPath, normalizedTarget, mainWindow);
-      }
+      // Update graph for the file being left (captures its current outgoing links)
+      await updateGraphForChangedFile(activeVaultPath, normalizedFilename, mainWindow);
     } catch (err) {
-      safeError('Failed to update graph for wikilink:', err);
+      safeError('Failed to update graph for file:', err);
+    }
+  });
+
+  // Handle task update for a file (called when leaving a file to update its task index)
+  ipcMain.handle('tasks:update-file', async (_, filename: string) => {
+    if (!activeVaultPath || !mainWindow) {
+      return;
+    }
+
+    const normalize = (name: string): string => {
+      const trimmed = (name || '').trim();
+      if (!trimmed) return '';
+      return trimmed.endsWith('.md') ? trimmed : `${trimmed}.md`;
+    };
+
+    const normalizedFilename = normalize(filename);
+
+    if (!normalizedFilename) {
+      safeWarn('Task update requested with empty filename');
+      return;
+    }
+
+    try {
+      // Update tasks for the file being left (captures its current task list)
+      await updateTasksForFile(activeVaultPath, normalizedFilename, mainWindow);
+    } catch (err) {
+      safeError('Failed to update tasks for file:', err);
     }
   });
 

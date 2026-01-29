@@ -378,12 +378,6 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
                   console.debug('Wiki link clicked:', linkTarget);
                   if (linkTarget && typeof onLinkClickRef.current === 'function') {
                     event.preventDefault();
-                    // Notify main process to update graph for both the current file and the target file
-                    if (currentFile) {
-                      window.phosphor
-                        .notifyWikilinkClicked(currentFile, linkTarget)
-                        .catch((err) => console.error('Failed to notify wikilink click:', err));
-                    }
                     onLinkClickRef.current(linkTarget);
                     return true;
                   }
