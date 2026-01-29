@@ -702,10 +702,20 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
       const assetsPath = path.join(activeVaultPath, '_assets');
       await fsp.mkdir(assetsPath, { recursive: true });
 
-      // Generate filename: timestamp + sanitized original name
+      // Generate filename: <sanitised-original>.<timestamp>.<ext>
+      const parsedOriginal = path.parse(path.basename(originalName || ''));
+      let baseName = parsedOriginal.name || '';
+      // Normalize: replace spaces with hyphens, remove unsafe chars, lowercase, limit length
+      baseName = baseName
+        .replace(/\s+/g, '-')
+        .replace(/[^a-zA-Z0-9-_]/g, '')
+        .toLowerCase();
+      if (baseName.length > 64) baseName = baseName.slice(0, 64);
+      if (!baseName) baseName = 'asset';
+
       const timestamp = Date.now();
-      const ext = path.extname(originalName);
-      const safeName = `${timestamp}${ext}`;
+      const ext = path.extname(originalName) || '';
+      const safeName = `${baseName}.${timestamp}${ext}`;
       const filePath = path.join(assetsPath, safeName);
 
       // Write the buffer to file
