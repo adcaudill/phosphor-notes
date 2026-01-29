@@ -477,19 +477,37 @@ function AppContent(): React.JSX.Element {
     }
   };
 
-  const handleFileSelect = async (filename: string): Promise<void> => {
-    try {
-      console.debug('handleFileSelect invoked for', filename);
+  /**
+   * Load a file by filename with options
+   */
+  interface LoadFileOptions {
+    /** Normalize frontmatter if missing (default: true) */
+    ensureFrontmatter?: boolean;
+    /** Add to history; false = just switch without history (default: true) */
+    addToHistory?: boolean;
+    /** Specific history index to jump to; overrides addToHistory (default: undefined) */
+    historyIndex?: number;
+    /** Skip sending save notifications during load (default: true) */
+    skipSave?: boolean;
+  }
 
-      // Update graph and tasks for the file we're leaving before switching
-      await updateCurrentFileBeforeSwitching();
+  const loadFile = async (filename: string, options: LoadFileOptions = {}): Promise<void> => {
+    const {
+      ensureFrontmatter = true,
+      addToHistory = true,
+      historyIndex: targetHistoryIndex = undefined,
+      skipSave = true
+    } = options;
 
-      let noteContent = await window.phosphor.readNote(filename);
+    // Update graph and tasks for the file we're leaving before switching
+    await updateCurrentFileBeforeSwitching();
 
-      // Ensure frontmatter exists and capture mode/content
+    let noteContent = await window.phosphor.readNote(filename);
+
+    // Optionally ensure frontmatter exists and seed outliner mode
+    if (ensureFrontmatter) {
       let { frontmatter, content: contentOnly } = extractFrontmatter(noteContent);
       if (!frontmatter) {
-        console.debug('File missing frontmatter, adding default:', filename);
         const defaultFrontmatter = generateDefaultFrontmatter(
           filename,
           settings.defaultJournalMode
@@ -510,12 +528,25 @@ function AppContent(): React.JSX.Element {
         noteContent = `${frontmatter?.raw ?? ''}\n- `;
         await window.phosphor.saveNote(filename, noteContent);
       }
+    }
 
-      // Prevent the programmatic content load from triggering a save
+    // Prevent the programmatic content load from triggering a save
+    if (skipSave) {
       skipSaveRef.current = true;
-      setContent(noteContent);
-      setCurrentFile(filename);
-      // Update navigation history - avoid duplicate consecutive entries
+    }
+
+    // Update state
+    setContent(noteContent);
+    setCurrentFile(filename);
+    setConflict(null); // Clear conflict if switching files
+    setIsDirty(false); // New file is not dirty
+
+    // Update navigation history
+    if (targetHistoryIndex !== undefined) {
+      // Jump to specific history index (used by history navigation)
+      setHistoryIndex(targetHistoryIndex);
+    } else if (addToHistory) {
+      // Add to history, avoiding duplicate consecutive entries
       setFileHistory((prev) => {
         const last = prev[historyIndex] ?? null;
         if (last === filename) return prev;
@@ -523,20 +554,30 @@ function AppContent(): React.JSX.Element {
         setHistoryIndex(newHist.length - 1);
         return newHist;
       });
-      setConflict(null); // Clear conflict if switching files
-      setIsDirty(false); // New file is not dirty
-      // Update MRU for the opened file so there's a single place
-      try {
-        await window.phosphor.updateMRU(filename);
-      } catch (err) {
-        console.debug('Failed to update MRU:', err);
-      }
-      // Bump filesVersion so Sidebar re-fetches MRU
-      setFilesVersion((v) => v + 1);
-      // Allow saves after the debounce window
+    }
+
+    // Update MRU for the opened file
+    try {
+      await window.phosphor.updateMRU(filename);
+    } catch (err) {
+      console.debug('Failed to update MRU:', err);
+    }
+
+    // Bump filesVersion so Sidebar re-fetches MRU and state
+    setFilesVersion((v) => v + 1);
+
+    // Allow saves after the debounce window
+    if (skipSave) {
       setTimeout(() => {
         skipSaveRef.current = false;
       }, 600);
+    }
+  };
+
+  const handleFileSelect = async (filename: string): Promise<void> => {
+    try {
+      console.debug('handleFileSelect invoked for', filename);
+      await loadFile(filename, { ensureFrontmatter: true, addToHistory: true });
     } catch (err) {
       console.error('Failed to read note', filename, err);
     }
@@ -547,21 +588,11 @@ function AppContent(): React.JSX.Element {
     if (idx < 0 || idx >= fileHistory.length) return;
     const filename = fileHistory[idx];
     try {
-      // Update graph and tasks for the file we're leaving before switching
-      await updateCurrentFileBeforeSwitching();
-
-      skipSaveRef.current = true;
-      const noteContent = await window.phosphor.readNote(filename);
-      setContent(noteContent);
-      setCurrentFile(filename);
-      setConflict(null);
-      setIsDirty(false);
-      setHistoryIndex(idx);
-      // Bump filesVersion so Sidebar re-fetches MRU
-      setFilesVersion((v) => v + 1);
-      setTimeout(() => {
-        skipSaveRef.current = false;
-      }, 600);
+      await loadFile(filename, {
+        ensureFrontmatter: false,
+        addToHistory: false,
+        historyIndex: idx
+      });
     } catch (err) {
       console.error('Failed to load history file', filename, err);
     }
@@ -788,44 +819,8 @@ function AppContent(): React.JSX.Element {
 
   const handleLinkClick = async (linkText: string): Promise<void> => {
     const filename = linkText.endsWith('.md') ? linkText : `${linkText}.md`;
-
-    // Update graph and tasks for the file we're leaving before switching
-    await updateCurrentFileBeforeSwitching();
-
-    // readNote will create the file if missing (per main IPC behavior)
-    let content = await window.phosphor.readNote(filename);
-
-    // If the file was just auto-created and is empty, populate with default
-    // frontmatter (title, etc.) so wikilink-created pages start with a title.
-    if (!content || content.trim() === '') {
-      content = generateDefaultFrontmatter(filename, settings.defaultJournalMode) + '\n\n';
-      await window.phosphor.saveNote(filename, content);
-    }
-
-    setCurrentFile(filename);
-    setContent(content);
-
-    // Update navigation history so wikilink opens are recorded
-    setFileHistory((prev) => {
-      const last = prev[historyIndex] ?? null;
-      if (last === filename) return prev;
-      const newHist = prev.slice(0, historyIndex + 1).concat(filename);
-      setHistoryIndex(newHist.length - 1);
-      return newHist;
-    });
-
-    // Trigger a save to ensure it appears in sidebar immediately
-    await window.phosphor.saveNote(filename, content);
-
-    // Update MRU when wikilink is clicked
-    try {
-      await window.phosphor.updateMRU(filename);
-    } catch (err) {
-      console.debug('Failed to update MRU:', err);
-    }
-
-    // Bump filesVersion so Sidebar re-fetches
-    setFilesVersion((v) => v + 1);
+    // Load file, ensuring it has default frontmatter if newly created, and add to history
+    await loadFile(filename, { ensureFrontmatter: true, addToHistory: true });
   };
 
   /**
