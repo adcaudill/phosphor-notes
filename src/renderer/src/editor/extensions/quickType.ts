@@ -90,8 +90,9 @@ function computeSuggestion(
   const after = view.state.doc.sliceString(head, head + 1);
   const context = getSentenceContext(view, head);
 
-  // If cursor is in the middle of a word, skip (avoid corrupting text)
-  if (after && /[A-Za-z0-9']/.test(after)) return null;
+  // If there's any non-whitespace text immediately after the cursor,
+  // avoid offering an in-word completion to prevent corrupting existing text.
+  if (after && /\S/.test(after)) return null;
 
   // Next-word prediction when the last typed char is whitespace
   if (/\s$/.test(before)) {
