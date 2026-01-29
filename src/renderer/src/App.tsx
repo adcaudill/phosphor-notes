@@ -789,6 +789,9 @@ function AppContent(): React.JSX.Element {
   const handleLinkClick = async (linkText: string): Promise<void> => {
     const filename = linkText.endsWith('.md') ? linkText : `${linkText}.md`;
 
+    // Update graph and tasks for the file we're leaving before switching
+    await updateCurrentFileBeforeSwitching();
+
     // readNote will create the file if missing (per main IPC behavior)
     let content = await window.phosphor.readNote(filename);
 
