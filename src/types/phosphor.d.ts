@@ -80,6 +80,9 @@ export interface PhosphorAPI {
   // App Info
   getVersions: () => Promise<{ electron?: string; chrome?: string; node?: string; app?: string }>;
 
+  // Menu actions
+  triggerMenuAction: (action: string) => void;
+
   // Speech
   speak: (text: string) => void;
   stopSpeaking: () => void;

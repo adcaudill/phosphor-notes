@@ -27,7 +27,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [favorites, setFavorites] = useState<string[]>([]);
   const [isFading, setIsFading] = useState(false);
   const [isClickDisabled, setIsClickDisabled] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const fadeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const fetchMRUFiles = async (): Promise<void> => {
@@ -63,6 +65,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }
     };
   }, []);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent): void => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    if (isMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+    return undefined;
+  }, [isMenuOpen]);
 
   const openDaily = async (): Promise<void> => {
     try {
@@ -108,14 +127,46 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }, 100);
   };
 
+  const handleMenuClick = (action: string): void => {
+    window.phosphor.triggerMenuAction(action);
+    setIsMenuOpen(false);
+  };
+
   return (
     <div className="sidebar">
       <div className="sidebar-top">
         <div className="sidebar-drag-area" />
-        <div className="sidebar-nav-wrapper">
-          <button className="hamburger-btn" title="Menu">
+        <div className="sidebar-nav-wrapper" ref={menuRef}>
+          <button className="hamburger-btn" title="Menu" onClick={() => setIsMenuOpen(!isMenuOpen)}>
             <span className="material-symbols-outlined">menu</span>
           </button>
+          {isMenuOpen && (
+            <div className="hamburger-menu">
+              <button className="menu-item" onClick={() => handleMenuClick('menu:preferences')}>
+                <span className="material-symbols-outlined">settings</span>
+                Preferences
+              </button>
+              <button className="menu-item" onClick={() => handleMenuClick('menu:open-vault')}>
+                <span className="material-symbols-outlined">folder_open</span>
+                Open Vault
+              </button>
+              <button
+                className="menu-item"
+                onClick={() => handleMenuClick('menu:enable-encryption')}
+              >
+                <span className="material-symbols-outlined">lock</span>
+                Enable Encryption
+              </button>
+              <button className="menu-item" onClick={() => handleMenuClick('menu:lock-vault')}>
+                <span className="material-symbols-outlined">lock_clock</span>
+                Lock Vault
+              </button>
+              <button className="menu-item" onClick={() => handleMenuClick('menu:import-logseq')}>
+                <span className="material-symbols-outlined">upload</span>
+                Import Logseq
+              </button>
+            </div>
+          )}
           <div className="sidebar-nav">
             <button
               className={`nav-btn ${viewMode === 'editor' ? 'active' : ''}`}

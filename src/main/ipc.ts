@@ -568,6 +568,13 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
     }
   });
 
+  // Menu action trigger handler - converts menu trigger actions to webContents.send calls
+  ipcMain.on('menu:trigger-action', (_, action: string) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(action);
+    }
+  });
+
   // 2. Read Note
   ipcMain.handle('note:read', async (_, filename: string) => {
     if (!activeVaultPath) throw new Error('No vault selected');

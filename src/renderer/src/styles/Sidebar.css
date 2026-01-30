@@ -67,7 +67,7 @@
   flex-direction: column;
   gap: 4px;
   padding-bottom: var(--spacing-md);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--color-border);
   position: relative;
 }
 
@@ -90,10 +90,57 @@
   right: 0;
   width: 28px;
   height: 28px;
+  z-index: 20;
+  -webkit-app-region: no-drag;
 }
 
 .hamburger-btn:hover {
   background-color: var(--color-sidebar-hover);
+}
+
+.hamburger-menu {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  background-color: var(--color-sidebar-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  -webkit-app-region: no-drag;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  color: var(--color-sidebar-text);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  text-align: left;
+  transition: all 0.15s ease;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.menu-item:hover {
+  background-color: var(--color-sidebar-hover);
+}
+
+.menu-item:active {
+  background-color: rgba(var(--color-primary-rgb), 0.2);
+}
+
+.menu-item span {
+  font-size: 18px;
+  flex-shrink: 0;
 }
 
 .sidebar-nav {
@@ -157,7 +204,7 @@
   background-color: var(--color-primary);
   color: white;
   font-weight: var(--font-weight-medium);
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+  box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), 0.1);
 }
 
 .dirty-indicator {

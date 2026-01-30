@@ -203,6 +203,9 @@ const api = {
   // Get app versions
   getVersions: () => ipcRenderer.invoke('app:get-versions'),
 
+  // Trigger menu actions from UI
+  triggerMenuAction: (action: string) => ipcRenderer.send('menu:trigger-action', action),
+
   // Speech API
   speak: (text: string) => {
     const utterance = new SpeechSynthesisUtterance(text);
