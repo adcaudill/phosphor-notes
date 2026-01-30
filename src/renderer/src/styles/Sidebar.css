@@ -143,6 +143,12 @@
   flex-shrink: 0;
 }
 
+.menu-separator {
+  height: 1px;
+  background-color: var(--color-border);
+  margin: 4px 0;
+}
+
 .sidebar-nav {
   display: flex;
   gap: var(--spacing-sm);

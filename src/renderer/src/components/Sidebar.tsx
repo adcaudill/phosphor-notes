@@ -146,6 +146,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span className="material-symbols-outlined">settings</span>
                 Preferences
               </button>
+              <div className="menu-separator" />
               <button className="menu-item" onClick={() => handleMenuClick('menu:open-vault')}>
                 <span className="material-symbols-outlined">folder_open</span>
                 Open Vault
@@ -164,6 +165,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button className="menu-item" onClick={() => handleMenuClick('menu:import-logseq')}>
                 <span className="material-symbols-outlined">upload</span>
                 Import Logseq
+              </button>
+              <div className="menu-separator" />
+              <button className="menu-item" onClick={() => handleMenuClick('menu:about')}>
+                <span className="material-symbols-outlined">info</span>
+                About
               </button>
             </div>
           )}
