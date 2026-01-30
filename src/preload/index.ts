@@ -138,6 +138,8 @@ const api = {
   getCachedGraph: () => ipcRenderer.invoke('graph:load-cache'),
   // Get last graph in memory from main (if any)
   getLatestGraph: () => ipcRenderer.invoke('graph:get'),
+  // Get graph statistics
+  getGraphStats: () => ipcRenderer.invoke('graph:stats'),
   // Get last prediction model snapshot (if any)
   getPredictionModel: async (): Promise<PredictionModelSnapshot | null> => {
     const data = (await ipcRenderer.invoke('prediction:get')) as

@@ -39,6 +39,9 @@ describe('ipc encryption flows', () => {
     const ipcMainMock = {
       handle: (channel: string, fn: Function) => {
         handlers[channel] = fn;
+      },
+      on: (_channel: string, _fn: Function) => {
+        // No-op for event listeners in tests
       }
     } as any;
 

@@ -8,6 +8,7 @@ import { InformationPanel } from './components/InformationPanel';
 import { CommandPalette } from './components/CommandPalette';
 import { SettingsModal } from './components/SettingsModal';
 import { FrontmatterModal } from './components/FrontmatterModal';
+import { GraphStatsModal } from './components/GraphStatsModal';
 import DailyNav from './components/DailyNav';
 import { TasksView } from './components/TasksView';
 import { EncryptionModal } from './components/EncryptionModal';
@@ -70,6 +71,7 @@ function AppContent(): React.JSX.Element {
   const [encryptionLoading, setEncryptionLoading] = useState(false); // Loading state for encryption operations
   const [isVaultEncrypted, setIsVaultEncrypted] = useState(false); // Whether current vault is encrypted
   const [isVaultUnlocked, setIsVaultUnlocked] = useState(false); // Whether vault is unlocked (only relevant if encrypted)
+  const [graphStatsModalOpen, setGraphStatsModalOpen] = useState(false); // Toggle for graph stats modal
   const [predictionModel, setPredictionModel] = useState<PredictionModelSnapshot | null>(null);
   const editorRef = useRef<EditorHandle>(null);
   const wikiPageSuggestions = useMemo(() => {
@@ -360,6 +362,10 @@ function AppContent(): React.JSX.Element {
       }
     );
 
+    const unsubscribeGraphStats = window.phosphor.onMenuEvent?.('menu:graph-stats', () => {
+      setGraphStatsModalOpen(true);
+    });
+
     // File change watchers - external file modifications
     const unsubscribeFileChanged = window.phosphor.onFileChanged?.((filename: string) => {
       console.debug('[FileWatcher] File changed externally:', filename);
@@ -434,6 +440,7 @@ function AppContent(): React.JSX.Element {
       if (unsubscribeLockVault) unsubscribeLockVault();
       if (unsubscribeImportLogseq) unsubscribeImportLogseq();
       if (unsubscribeReplaceSelection) unsubscribeReplaceSelection();
+      if (unsubscribeGraphStats) unsubscribeGraphStats();
       if (statusTimerRef.current) window.clearTimeout(statusTimerRef.current);
     };
   }, []);
@@ -1040,6 +1047,11 @@ function AppContent(): React.JSX.Element {
           />
 
           <AboutModal isOpen={aboutModalOpen} onClose={() => setAboutModalOpen(false)} />
+
+          <GraphStatsModal
+            isOpen={graphStatsModalOpen}
+            onClose={() => setGraphStatsModalOpen(false)}
+          />
         </>
       ) : (
         <div className="welcome-screen">

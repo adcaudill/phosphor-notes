@@ -125,6 +125,13 @@ export function createMenu(mainWindow: BrowserWindow | null): void {
       },
       { type: 'separator' },
       {
+        label: 'Graph Information',
+        click: () => {
+          mainWindow?.webContents.send('menu:graph-stats');
+        }
+      },
+      { type: 'separator' },
+      {
         label: 'Toggle Developer Tools',
         accelerator: 'Cmd+Option+I',
         role: 'toggleDevTools'

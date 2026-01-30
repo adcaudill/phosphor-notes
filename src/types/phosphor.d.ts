@@ -25,6 +25,14 @@ export interface PhosphorAPI {
   getDailyNoteFilename: () => Promise<string>; // Returns 'YYYY-MM-DD.md'
   getCachedGraph: () => Promise<Record<string, string[]> | null>;
   getPredictionModel: () => Promise<PredictionModelSnapshot | null>;
+  getGraphStats: () => Promise<{
+    totalFiles: number;
+    totalLinks: number;
+    avgLinksPerFile: number;
+    isolatedFiles: number;
+    cycles: number;
+    mostLinked: { file: string; backlinks: number }[];
+  }>;
 
   listFiles: () => Promise<string[]>;
   getMRUFiles: () => Promise<string[]>;

@@ -16,7 +16,7 @@ import {
   updateGraphForChangedFile,
   resetIndexState
 } from './indexer';
-import { getBacklinks } from './graphBuilder';
+import { getBacklinks, getGraphStats } from './graphBuilder';
 import { setupWatcher, stopWatcher, markInternalSave } from './watcher';
 import { deriveMasterKey, encryptBuffer, decryptBuffer, isEncrypted, generateSalt } from './crypto';
 import {
@@ -474,6 +474,22 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
   // Return last in-memory graph if available (sent recently by indexer)
   ipcMain.handle('graph:get', async () => {
     return getLastGraph();
+  });
+
+  // Return graph statistics
+  ipcMain.handle('graph:stats', async () => {
+    const graph = getLastGraph();
+    if (!graph) {
+      return {
+        totalFiles: 0,
+        totalLinks: 0,
+        avgLinksPerFile: 0,
+        isolatedFiles: 0,
+        cycles: 0,
+        mostLinked: []
+      };
+    }
+    return getGraphStats(graph);
   });
 
   ipcMain.handle('prediction:get', async () => {

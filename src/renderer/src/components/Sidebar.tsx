@@ -167,6 +167,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 Import Logseq
               </button>
               <div className="menu-separator" />
+              <button className="menu-item" onClick={() => handleMenuClick('menu:graph-stats')}>
+                <span className="material-symbols-outlined">analytics</span>
+                Graph Information
+              </button>
               <button className="menu-item" onClick={() => handleMenuClick('menu:about')}>
                 <span className="material-symbols-outlined">info</span>
                 About
