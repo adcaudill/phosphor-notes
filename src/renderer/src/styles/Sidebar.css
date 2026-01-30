@@ -62,11 +62,43 @@
   color: var(--color-primary);
 }
 
+.sidebar-nav-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+}
+
+.hamburger-btn {
+  padding: 2px;
+  background-color: transparent;
+  border: none;
+  color: var(--color-sidebar-text);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 20px;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-user-select: none;
+  user-select: none;
+  position: absolute;
+  top: -32px;
+  right: 0;
+  width: 28px;
+  height: 28px;
+}
+
+.hamburger-btn:hover {
+  background-color: var(--color-sidebar-hover);
+}
+
 .sidebar-nav {
   display: flex;
   gap: var(--spacing-sm);
-  padding-bottom: var(--spacing-md);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .nav-btn {
