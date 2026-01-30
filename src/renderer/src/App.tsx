@@ -14,6 +14,7 @@ import { TasksView } from './components/TasksView';
 import { EncryptionModal } from './components/EncryptionModal';
 import { AboutModal } from './components/AboutModal';
 import { GraphView } from './components/GraphView';
+import Konami from './components/Konami';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { useSettings } from './hooks/useSettings';
 import { extractFrontmatter, generateDefaultFrontmatter } from './utils/frontmatterUtils';
@@ -73,6 +74,20 @@ function AppContent(): React.JSX.Element {
   const [isVaultUnlocked, setIsVaultUnlocked] = useState(false); // Whether vault is unlocked (only relevant if encrypted)
   const [graphStatsModalOpen, setGraphStatsModalOpen] = useState(false); // Toggle for graph stats modal
   const [predictionModel, setPredictionModel] = useState<PredictionModelSnapshot | null>(null);
+  const [konamisCodeOpen, setKonamiCodeOpen] = useState(false); // Toggle for Konami code easter egg
+  const konamiSequenceRef = useRef<string[]>([]); // Track Konami code sequence
+  const konamiSequence = [
+    'ArrowUp',
+    'ArrowUp',
+    'ArrowDown',
+    'ArrowDown',
+    'ArrowLeft',
+    'ArrowRight',
+    'ArrowLeft',
+    'ArrowRight',
+    'b',
+    'a'
+  ];
   const editorRef = useRef<EditorHandle>(null);
   const wikiPageSuggestions = useMemo(() => {
     const unique = new Set<string>();
@@ -95,6 +110,36 @@ function AppContent(): React.JSX.Element {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // Konami code detection
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      const key =
+        e.key === 'ArrowUp' ||
+        e.key === 'ArrowDown' ||
+        e.key === 'ArrowLeft' ||
+        e.key === 'ArrowRight'
+          ? e.key
+          : e.key.toLowerCase();
+      konamiSequenceRef.current.push(key);
+
+      // Keep only the last 10 keys
+      if (konamiSequenceRef.current.length > konamiSequence.length) {
+        konamiSequenceRef.current.shift();
+      }
+
+      // Check if the sequence matches
+      if (konamiSequenceRef.current.length === konamiSequence.length) {
+        if (konamiSequenceRef.current.every((k, i) => k === konamiSequence[i])) {
+          setKonamiCodeOpen(true);
+          konamiSequenceRef.current = [];
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   // Apply color palette and theme to the document
@@ -1052,6 +1097,8 @@ function AppContent(): React.JSX.Element {
             isOpen={graphStatsModalOpen}
             onClose={() => setGraphStatsModalOpen(false)}
           />
+
+          <Konami isOpen={konamisCodeOpen} onClose={() => setKonamiCodeOpen(false)} />
         </>
       ) : (
         <div className="welcome-screen">
