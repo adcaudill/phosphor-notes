@@ -72,7 +72,8 @@ function filterThisMonth(tasks: Task[]): Task[] {
     if (!t.dueDate) return false;
 
     const dueDate = new Date(t.dueDate);
-    return dueDate.getFullYear() === todayYear && dueDate.getMonth() === todayMonth;
+    // Compare using UTC getters to avoid local timezone discrepancies
+    return dueDate.getUTCFullYear() === todayYear && dueDate.getUTCMonth() === todayMonth;
   });
 }
 
@@ -313,23 +314,31 @@ describe('Task Date Filtering', () => {
     });
 
     it('should include all days of current month', () => {
-      // Use tasks that are definitely in current month
+      // Choose a second date that is guaranteed to be in the same month as today.
+      const todayStr = getTodayString();
+      const tentative = new Date();
+      tentative.setDate(tentative.getDate() + 2);
+      const tentativeStr = getDateString(tentative);
+      const secondDate =
+        tentativeStr.slice(0, 7) === todayStr.slice(0, 7) ? tentativeStr : getDateMinusDay(2);
+
       const tasks: Task[] = [
         {
           file: 'test.md',
           line: 1,
           status: 'todo',
           text: 'Current month task 1',
-          dueDate: getTodayString()
+          dueDate: todayStr
         },
         {
           file: 'test.md',
           line: 2,
           status: 'todo',
           text: 'Current month task 2',
-          dueDate: getDatePlusDay(2)
+          dueDate: secondDate
         }
       ];
+
       const thisMonth = filterThisMonth(tasks);
       expect(thisMonth.length).toBeGreaterThanOrEqual(2);
     });
