@@ -49,14 +49,14 @@ describe('reconstructDocument', () => {
   it('does not duplicate frontmatter when already present', () => {
     const raw = `---\ntitle: T\n---`;
     const content = raw + '\nBody';
-    const fm = { raw, content: { title: 'T' } } as any;
+    const fm: { raw: string; content: Record<string, unknown> } = { raw, content: { title: 'T' } };
     expect(reconstructDocument(fm, content)).toBe(content);
   });
 
   it('prepends frontmatter.raw when missing from content', () => {
     const raw = `---\ntitle: T\n---`;
     const content = 'Body';
-    const fm = { raw, content: { title: 'T' } } as any;
+    const fm: { raw: string; content: Record<string, unknown> } = { raw, content: { title: 'T' } };
     expect(reconstructDocument(fm, content)).toBe(raw + '\n' + content);
   });
 });
