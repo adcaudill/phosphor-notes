@@ -180,23 +180,44 @@ export const outlinerShiftTab = (view: EditorView): boolean => {
 
 /**
  * Handler for Backspace/Delete in outliner mode
- * If the current line is a task (has a checkbox like `- [ ] `) and the
- * cursor is inside that checkbox area, remove the checkbox but keep the
- * bullet marker (`- `).
+ * 1. If the cursor is inside a checkbox area (like `- [ ] `), remove the checkbox
+ *    but keep the bullet marker (`- `).
+ * 2. If the cursor is at or just after the bullet marker (`-`), delete the entire
+ *    line and place the cursor at the end of the previous line.
  */
 export const outlinerDelete = (view: EditorView): boolean => {
-  // First pass: detect if any cursor is inside a checkbox area
+  // First pass: detect if any cursor needs special handling
   let shouldHandle = false;
+  let handleType: 'checkbox' | 'bullet' = 'checkbox';
+
   for (const range of view.state.selection.ranges) {
     if (!range.empty) continue;
     const line = view.state.doc.lineAt(range.head);
-    const match = line.text.match(/^(\s*)-\s*(\[(?: |x|X)\]\s)/);
-    if (match) {
-      const indentLen = match[1].length;
+
+    // Check if cursor is inside a checkbox area
+    const checkboxMatch = line.text.match(/^(\s*)-\s*(\[(?: |x|X)\]\s)/);
+    if (checkboxMatch) {
+      const indentLen = checkboxMatch[1].length;
       const checkboxStart = line.from + indentLen + 2; // after '- '
-      const checkboxEnd = checkboxStart + match[2].length;
+      const checkboxEnd = checkboxStart + checkboxMatch[2].length;
       if (range.head >= checkboxStart && range.head <= checkboxEnd) {
         shouldHandle = true;
+        handleType = 'checkbox';
+        break;
+      }
+    }
+
+    // Check if cursor is at or just after the bullet marker
+    const bulletMatch = line.text.match(/^(\s*)-\s/);
+    if (bulletMatch) {
+      const indentLen = bulletMatch[1].length;
+      const bulletStart = line.from + indentLen;
+      const bulletEnd = line.from + indentLen + 2; // '- '
+
+      // If cursor is at the dash or within the bullet marker area
+      if (range.head >= bulletStart && range.head <= bulletEnd) {
+        shouldHandle = true;
+        handleType = 'bullet';
         break;
       }
     }
@@ -208,17 +229,45 @@ export const outlinerDelete = (view: EditorView): boolean => {
   const transaction = view.state.changeByRange((range) => {
     if (!range.empty) return { changes: [], range };
     const line = view.state.doc.lineAt(range.head);
-    const match = line.text.match(/^(\s*)-\s*(\[(?: |x|X)\]\s)/);
-    if (match) {
-      const indentLen = match[1].length;
-      const checkboxStart = line.from + indentLen + 2;
-      const checkboxEnd = checkboxStart + match[2].length;
-      if (range.head >= checkboxStart && range.head <= checkboxEnd) {
-        const change: ChangeSpec = { from: checkboxStart, to: checkboxEnd, insert: '' };
-        const cursor = EditorSelection.cursor(checkboxStart);
-        return { changes: change, range: cursor };
+
+    if (handleType === 'checkbox') {
+      const checkboxMatch = line.text.match(/^(\s*)-\s*(\[(?: |x|X)\]\s)/);
+      if (checkboxMatch) {
+        const indentLen = checkboxMatch[1].length;
+        const checkboxStart = line.from + indentLen + 2;
+        const checkboxEnd = checkboxStart + checkboxMatch[2].length;
+        if (range.head >= checkboxStart && range.head <= checkboxEnd) {
+          const change: ChangeSpec = { from: checkboxStart, to: checkboxEnd, insert: '' };
+          const cursor = EditorSelection.cursor(checkboxStart);
+          return { changes: change, range: cursor };
+        }
+      }
+    } else if (handleType === 'bullet') {
+      const bulletMatch = line.text.match(/^(\s*)-\s/);
+      if (bulletMatch) {
+        const indentLen = bulletMatch[1].length;
+        const bulletStart = line.from + indentLen;
+        const bulletEnd = line.from + indentLen + 2;
+
+        if (range.head >= bulletStart && range.head <= bulletEnd) {
+          // If this is the first line, just clear it
+          if (line.number === 1) {
+            const change: ChangeSpec = { from: line.from, to: line.to, insert: '' };
+            const cursor = EditorSelection.cursor(line.from);
+            return { changes: change, range: cursor };
+          }
+
+          // Delete the bullet marker and indentation, but preserve line content
+          // by merging it with the previous line
+          const prevLine = view.state.doc.line(line.number - 1);
+          const contentStart = line.from + indentLen + 2; // Position after '- '
+          const change: ChangeSpec = { from: prevLine.to, to: contentStart };
+          const cursor = EditorSelection.cursor(prevLine.to);
+          return { changes: change, range: cursor };
+        }
       }
     }
+
     return { changes: [], range };
   });
 
