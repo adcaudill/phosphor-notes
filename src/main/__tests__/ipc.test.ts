@@ -24,7 +24,7 @@ describe('ipc encryption flows', () => {
       stopIndexing: vi.fn(),
       getLastGraph: vi.fn(() => null),
       getLastTasks: vi.fn(() => []),
-      performSearch: vi.fn((_q: any, cb: any) => cb([])),
+      performSearch: vi.fn((_q: unknown, cb: (res: unknown[]) => void) => cb([])),
       updateTasksForFile: vi.fn()
     }));
 
@@ -35,15 +35,28 @@ describe('ipc encryption flows', () => {
     }));
 
     // ipcMain mock to capture handlers
-    const handlers: Record<string, Function> = {};
-    const ipcMainMock = {
-      handle: (channel: string, fn: Function) => {
+    const handlers: Record<
+      string,
+      (event: unknown, ...args: unknown[]) => Promise<unknown> | unknown
+    > = {};
+    const ipcMainMock: {
+      handle: (
+        channel: string,
+        fn: (event: unknown, ...args: unknown[]) => Promise<unknown> | unknown
+      ) => void;
+      on: (..._args: unknown[]) => void;
+    } = {
+      handle: (
+        channel: string,
+        fn: (event: unknown, ...args: unknown[]) => Promise<unknown> | unknown
+      ) => {
         handlers[channel] = fn;
       },
-      on: (_channel: string, _fn: Function) => {
+      on: (..._args: unknown[]) => {
         // No-op for event listeners in tests
+        void _args;
       }
-    } as any;
+    };
 
     // mock electron (must be before importing ipc module)
     vi.doMock('electron', () => ({
@@ -53,15 +66,21 @@ describe('ipc encryption flows', () => {
       app: { getPath: () => userDataDir, getVersion: () => '1.2.3' }
     }));
 
-    const mainWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } } as any;
+    const mainWindow: {
+      isDestroyed: () => boolean;
+      webContents: { send: (...args: unknown[]) => unknown };
+    } = {
+      isDestroyed: () => false,
+      webContents: { send: vi.fn() as unknown as (...args: unknown[]) => unknown }
+    };
 
     const ipc = await import('../ipc');
 
-    // register handlers
-    ipc.setupIPC(mainWindow);
+    // register handlers (cast mock to BrowserWindow to satisfy typing)
+    ipc.setupIPC(mainWindow as unknown as import('electron').BrowserWindow);
 
     // open the vault path (sets activeVaultPath)
-    await ipc.openVaultPath(vaultDir, mainWindow);
+    await ipc.openVaultPath(vaultDir, mainWindow as unknown as import('electron').BrowserWindow);
 
     // Call encryption:create handler
     const createHandler = handlers['encryption:create'];

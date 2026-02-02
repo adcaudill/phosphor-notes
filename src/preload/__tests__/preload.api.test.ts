@@ -1,16 +1,16 @@
 import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest';
 
 describe('preload API', () => {
-  let origContextIsolated: any;
+  let origContextIsolated: boolean | undefined;
 
   beforeEach(() => {
     vi.resetModules();
-    origContextIsolated = (process as any).contextIsolated;
+    origContextIsolated = (process as unknown as { contextIsolated?: boolean }).contextIsolated;
   });
 
   afterEach(() => {
     // restore process.contextIsolated to original value
-    // @ts-ignore
+    // @ts-ignore Restore original value
     process.contextIsolated = origContextIsolated;
     vi.restoreAllMocks();
     vi.resetModules();
@@ -35,13 +35,22 @@ describe('preload API', () => {
     }));
 
     // set contextIsolated true before import
-    // @ts-ignore
+    // @ts-ignore Restore original value
     process.contextIsolated = true;
 
     await import('../../preload/index');
 
-    expect((exposed as any).phosphor).toBeDefined();
-    const api = (exposed as any).phosphor as any;
+    // typed API to avoid using `any`
+    type PhosphorAPI = {
+      selectVault: () => Promise<unknown>;
+      getCurrentVault: () => Promise<unknown>;
+    };
+
+    expect(
+      (exposed as Record<string, unknown> & { phosphor?: PhosphorAPI }).phosphor
+    ).toBeDefined();
+    const api = (exposed as Record<string, unknown> & { phosphor?: PhosphorAPI })
+      .phosphor as PhosphorAPI;
 
     // call a couple of methods and ensure ipcRenderer.invoke gets called
     await api.selectVault();
@@ -60,19 +69,24 @@ describe('preload API', () => {
     }));
 
     // simulate non-isolated context
-    // @ts-ignore
+    // @ts-ignore Restore original value
     process.contextIsolated = false;
 
     // ensure global window exists for the module to attach to; use vi.stubGlobal so it's auto-restored
-    vi.stubGlobal('window', {} as any);
+    vi.stubGlobal('window', {} as unknown as Window);
 
     await import('../../preload/index');
 
-    const api = (global as any).window.phosphor as any;
+    type PhosphorWindow = Window & {
+      phosphor?: {
+        getDailyNoteFilename: () => Promise<string>;
+      };
+    };
+    const api = (globalThis as unknown as { window: PhosphorWindow }).window.phosphor;
     expect(api).toBeDefined();
 
     // call a simple method
-    const filename = await api.getDailyNoteFilename();
+    const filename = await api!.getDailyNoteFilename();
     expect(typeof filename).toBe('string');
   });
 });

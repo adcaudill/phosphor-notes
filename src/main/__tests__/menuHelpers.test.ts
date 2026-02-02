@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { BrowserWindow } from 'electron';
 
 describe('menuHelpers', () => {
   beforeEach(() => {
@@ -6,7 +7,7 @@ describe('menuHelpers', () => {
   });
 
   it('calls openVaultPath when user selects a folder', async () => {
-    const fakeWindow = {} as any;
+    const fakeWindow = {} as unknown as BrowserWindow;
 
     // Mock electron dialog (use doMock to avoid hoisting issues)
     const showMock = vi.fn().mockResolvedValue({ canceled: false, filePaths: ['/tmp/my-vault'] });
@@ -17,14 +18,14 @@ describe('menuHelpers', () => {
     vi.doMock('../ipc', () => ({ openVaultPath: openVaultMock }));
 
     const mod = await import('../menuHelpers');
-    await mod.openVaultFromMenu(fakeWindow as any);
+    await mod.openVaultFromMenu(fakeWindow);
 
     expect(showMock).toHaveBeenCalled();
     expect(openVaultMock).toHaveBeenCalledWith('/tmp/my-vault', fakeWindow);
   });
 
   it('does not call openVaultPath when dialog is canceled', async () => {
-    const fakeWindow = {} as any;
+    const fakeWindow = {} as unknown as BrowserWindow;
 
     const showMock = vi.fn().mockResolvedValue({ canceled: true, filePaths: [] });
     vi.doMock('electron', () => ({ dialog: { showOpenDialog: showMock } }));
@@ -33,7 +34,7 @@ describe('menuHelpers', () => {
     vi.doMock('../ipc', () => ({ openVaultPath: openVaultMock }));
 
     const mod = await import('../menuHelpers');
-    await mod.openVaultFromMenu(fakeWindow as any);
+    await mod.openVaultFromMenu(fakeWindow);
 
     expect(showMock).toHaveBeenCalled();
     expect(openVaultMock).not.toHaveBeenCalled();

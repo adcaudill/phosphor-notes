@@ -31,7 +31,15 @@ function mockFs({
   readFile,
   writeFile,
   mkdir
-}: { readFile?: any; writeFile?: any; mkdir?: any } = {}) {
+}: {
+  readFile?: ReturnType<typeof vi.fn>;
+  writeFile?: ReturnType<typeof vi.fn>;
+  mkdir?: ReturnType<typeof vi.fn>;
+} = {}): {
+  readFile: ReturnType<typeof vi.fn>;
+  writeFile: ReturnType<typeof vi.fn>;
+  mkdir: ReturnType<typeof vi.fn>;
+} {
   const rf = readFile ?? vi.fn().mockRejectedValue(new Error('ENOENT'));
   const wf = writeFile ?? vi.fn();
   const md = mkdir ?? vi.fn();
@@ -62,7 +70,9 @@ afterAll(async () => {
   // cleanup temp dir once tests finish
   try {
     await fs.promises.rm(tmpDir, { recursive: true, force: true });
-  } catch {}
+  } catch (err) {
+    void err;
+  }
 });
 
 describe('store settings persistence and IPC handlers', () => {

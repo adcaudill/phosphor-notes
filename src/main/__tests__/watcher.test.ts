@@ -1,9 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as path from 'path';
+import type { BrowserWindow } from 'electron';
 
 describe('watcher', () => {
-  let mockWatcher: any;
-  let chokidarWatchMock: any;
+  let mockWatcher: {
+    handlers: Record<string, (arg: unknown) => void>;
+    on(event: string, cb: (arg: unknown) => void): void;
+    close: ReturnType<typeof vi.fn>;
+  };
+  let chokidarWatchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.resetModules();
@@ -11,8 +16,8 @@ describe('watcher', () => {
 
     // Create a mock watcher object where test can trigger events
     mockWatcher = {
-      handlers: {} as Record<string, Function>,
-      on(event: string, cb: Function) {
+      handlers: {} as Record<string, (arg: unknown) => void>,
+      on(event: string, cb: (arg: unknown) => void) {
         this.handlers[event] = cb;
       },
       close: vi.fn()
@@ -28,11 +33,16 @@ describe('watcher', () => {
   afterEach(() => {
     try {
       vi.useRealTimers();
-    } catch {}
+    } catch (e) {
+      void e;
+    }
   });
 
   it('sends vault:file-changed and calls callback on change (debounced)', async () => {
-    const mainWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } } as any;
+    const mainWindow = {
+      isDestroyed: () => false,
+      webContents: { send: vi.fn() }
+    } as unknown as BrowserWindow;
 
     const { setupWatcher, stopWatcher } = await import('../watcher');
 
@@ -54,7 +64,10 @@ describe('watcher', () => {
   });
 
   it('does not send vault:file-changed for internal saves but still calls callback', async () => {
-    const mainWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } } as any;
+    const mainWindow = {
+      isDestroyed: () => false,
+      webContents: { send: vi.fn() }
+    } as unknown as BrowserWindow;
 
     const { setupWatcher, markInternalSave, stopWatcher } = await import('../watcher');
 
@@ -75,7 +88,10 @@ describe('watcher', () => {
   });
 
   it('sends file-added and file-deleted events', async () => {
-    const mainWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } } as any;
+    const mainWindow = {
+      isDestroyed: () => false,
+      webContents: { send: vi.fn() }
+    } as unknown as BrowserWindow;
 
     const { setupWatcher, stopWatcher } = await import('../watcher');
 
@@ -92,7 +108,10 @@ describe('watcher', () => {
   });
 
   it('does not send events when window is destroyed', async () => {
-    const mainWindow = { isDestroyed: () => true, webContents: { send: vi.fn() } } as any;
+    const mainWindow = {
+      isDestroyed: () => true,
+      webContents: { send: vi.fn() }
+    } as unknown as BrowserWindow;
 
     const { setupWatcher } = await import('../watcher');
 
@@ -113,7 +132,10 @@ describe('watcher', () => {
   });
 
   it('debounces rapid change events into a single callback', async () => {
-    const mainWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } } as any;
+    const mainWindow = {
+      isDestroyed: () => false,
+      webContents: { send: vi.fn() }
+    } as unknown as BrowserWindow;
     const { setupWatcher, stopWatcher } = await import('../watcher');
 
     const onFileChange = vi.fn();
@@ -134,7 +156,10 @@ describe('watcher', () => {
   });
 
   it('handles watcher error by logging', async () => {
-    const mainWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } } as any;
+    const mainWindow = {
+      isDestroyed: () => false,
+      webContents: { send: vi.fn() }
+    } as unknown as BrowserWindow;
     const { setupWatcher, stopWatcher } = await import('../watcher');
 
     const vaultPath = '/tmp/vault';
@@ -149,7 +174,10 @@ describe('watcher', () => {
   });
 
   it('stopWatcher is idempotent', async () => {
-    const mainWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } } as any;
+    const mainWindow = {
+      isDestroyed: () => false,
+      webContents: { send: vi.fn() }
+    } as unknown as BrowserWindow;
     const { setupWatcher, stopWatcher } = await import('../watcher');
 
     setupWatcher('/tmp/vault', mainWindow);

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { BrowserWindow } from 'electron';
 
 describe('coverage edgecases', () => {
   beforeEach(() => {
@@ -8,7 +9,10 @@ describe('coverage edgecases', () => {
   afterEach(() => {
     try {
       vi.restoreAllMocks();
-    } catch {}
+    } catch {
+      // ignore errors restoring mocks during teardown
+      void 0;
+    }
   });
 
   it('crypto.decryptBuffer throws for invalid header', async () => {
@@ -26,8 +30,8 @@ describe('coverage edgecases', () => {
 
     // Create a mock watcher like other watcher tests do
     const mockWatcher = {
-      handlers: {} as Record<string, Function>,
-      on(event: string, cb: Function) {
+      handlers: {} as Record<string, (...args: unknown[]) => void>,
+      on(event: string, cb: (...args: unknown[]) => void) {
         this.handlers[event] = cb;
       },
       close: vi.fn()
@@ -44,7 +48,10 @@ describe('coverage edgecases', () => {
       throw new Error('boom-debug');
     });
 
-    const mainWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } } as any;
+    const mainWindow = {
+      isDestroyed: () => false,
+      webContents: { send: vi.fn() }
+    } as unknown as BrowserWindow;
 
     const { setupWatcher, markInternalSave, stopWatcher } = await import('../watcher');
 

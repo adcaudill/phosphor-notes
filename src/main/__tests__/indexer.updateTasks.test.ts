@@ -1,4 +1,5 @@
 import { describe, it, beforeEach, vi, expect } from 'vitest';
+import type { BrowserWindow } from 'electron';
 
 describe('indexer.updateTasksForFile', () => {
   beforeEach(() => {
@@ -19,13 +20,16 @@ describe('indexer.updateTasksForFile', () => {
     }));
 
     // Mock fs.promises.readFile used in indexer (indexer imports { promises as fsp } from 'fs')
-    const fspMock = {
+    const fspMock: Partial<typeof import('fs').promises> = {
       readFile: vi.fn().mockResolvedValue(sample)
-    } as any;
+    };
 
     vi.doMock('fs', () => ({ promises: fspMock }));
 
-    const mainWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } } as any;
+    const mainWindow = {
+      isDestroyed: () => false,
+      webContents: { send: vi.fn() }
+    } as unknown as BrowserWindow;
 
     const { updateTasksForFile, getLastTasks } = await import('../indexer');
 
@@ -43,7 +47,11 @@ describe('indexer.updateTasksForFile', () => {
     const firstContent = `- [ ] one\n`;
     const secondContent = `- [ ] two\n- [ ] three\n`;
 
-    const fspMock = { readFile: vi.fn() } as any;
+    const readFileMock = vi
+      .fn()
+      .mockResolvedValueOnce(firstContent)
+      .mockResolvedValueOnce(secondContent);
+    const fspMock: Partial<typeof import('fs').promises> = { readFile: readFileMock };
 
     vi.doMock('electron', () => ({ app: { getPath: () => '/tmp' } }));
 
@@ -53,11 +61,13 @@ describe('indexer.updateTasksForFile', () => {
     }));
 
     // First call returns firstContent, second call returns secondContent
-    fspMock.readFile.mockResolvedValueOnce(firstContent).mockResolvedValueOnce(secondContent);
 
     vi.doMock('fs', () => ({ promises: fspMock }));
 
-    const mainWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } } as any;
+    const mainWindow = {
+      isDestroyed: () => false,
+      webContents: { send: vi.fn() }
+    } as unknown as BrowserWindow;
 
     const { updateTasksForFile, getLastTasks } = await import('../indexer');
 

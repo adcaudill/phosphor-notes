@@ -11,12 +11,19 @@ describe('Task Extraction (Indexer Logic)', () => {
    * Simulate the extractTasks function from worker/indexer.ts
    * Tests focus on the regex patterns and metadata extraction
    */
+  type Task = {
+    line: number;
+    status: 'todo' | 'doing' | 'done';
+    text: string;
+    dueDate?: string;
+    completedAt?: string;
+  };
 
-  const extractTasksFromContent = (content: string) => {
-    const tasks: any[] = [];
+  const extractTasksFromContent = (content: string): Task[] => {
+    const tasks: Task[] = [];
     const taskRegex = /^\s*-\s*\[([ x/])\]\s*(.*)$/gm;
 
-    let match;
+    let match: RegExpExecArray | null;
     while ((match = taskRegex.exec(content)) !== null) {
       const status = match[1] === ' ' ? 'todo' : match[1] === '/' ? 'doing' : 'done';
       const text = match[2].trim();
