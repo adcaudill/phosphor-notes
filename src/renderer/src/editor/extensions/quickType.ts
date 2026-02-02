@@ -89,6 +89,7 @@ function computeSuggestion(
   const before = view.state.doc.sliceString(line.from, head);
   const after = view.state.doc.sliceString(head, head + 1);
   const context = getSentenceContext(view, head);
+  const isSentenceStart = context.length === 0;
 
   // If there's any non-whitespace text immediately after the cursor,
   // avoid offering an in-word completion to prevent corrupting existing text.
@@ -101,7 +102,9 @@ function computeSuggestion(
     const prevWord = parts[parts.length - 1] || '';
     const prevPrevWord = parts[parts.length - 2] || '';
     if (prevWord) {
-      const next = engine.predictNext(prevWord, prevPrevWord || null, context);
+      const next = engine.predictNext(prevWord, prevPrevWord || null, context, {
+        isSentenceStart
+      });
       if (next) {
         return { text: `${next} `, pos: head, kind: 'next' };
       }

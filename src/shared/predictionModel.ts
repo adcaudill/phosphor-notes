@@ -16,6 +16,20 @@ export interface PredictionModelSnapshot {
   trie: SerializedTrieNode;
   bigrams: Record<string, SerializedSuggestion[]>;
   trigrams: Record<string, SerializedSuggestion[]>; // key: "word1 word2"
+  caseStats?: Record<string, TokenCaseStats>;
+}
+
+export interface TokenCaseStats {
+  lower: number;
+  capitalizedStart: number;
+  capitalizedMid: number;
+  upper: number;
+}
+
+export interface TokenWithCaseMeta {
+  word: string; // normalized lowercase
+  casing: 'lower' | 'capitalized' | 'upper';
+  isSentenceStart: boolean;
 }
 
 export interface TrainOptions {
@@ -36,6 +50,7 @@ const MAX_WORD_LENGTH = 64; // avoid pathological trie depth from extremely long
 
 export interface TokenizeOptions {
   minWordLength?: number;
+  preserveCase?: boolean;
 }
 
 /**
@@ -60,7 +75,8 @@ export function normalizeWikilinks(text: string): string {
 
 export function tokenizeText(text: string, opts: TokenizeOptions = {}): string[] {
   const normalized = normalizeWikilinks(text);
-  const matches = normalized.toLowerCase().match(/[a-z0-9'][a-z0-9'-]*/gi);
+  const lowered = opts.preserveCase ? normalized : normalized.toLowerCase();
+  const matches = lowered.match(/[a-z0-9'][a-z0-9'-]*/gi);
   if (!matches) return [];
   const minLen = opts.minWordLength ?? 0;
   return matches
@@ -68,11 +84,47 @@ export function tokenizeText(text: string, opts: TokenizeOptions = {}): string[]
     .filter((w) => w.length >= minLen);
 }
 
+export function tokenizeWithCaseMeta(
+  text: string,
+  opts: TokenizeOptions = {}
+): TokenWithCaseMeta[] {
+  const normalized = normalizeWikilinks(text);
+  const matches = normalized.match(/[a-z0-9'][a-z0-9'-]*/gi);
+  if (!matches) return [];
+
+  const minLen = opts.minWordLength ?? 0;
+  const result: TokenWithCaseMeta[] = [];
+  let lastEnd = 0;
+  for (const match of normalized.matchAll(/[a-z0-9'][a-z0-9'-]*/gi)) {
+    const raw = match[0];
+    if (!raw) continue;
+    const start = match.index ?? 0;
+    const between = normalized.slice(lastEnd, start);
+    const isSentenceStart = result.length === 0 || /[.!?]["')\]]?\s|\n{2,}/.test(between);
+
+    const word = raw.slice(0, MAX_WORD_LENGTH).toLowerCase();
+    if (word.length < minLen) {
+      lastEnd = start + raw.length;
+      continue;
+    }
+
+    result.push({
+      word,
+      casing: classifyCasing(raw),
+      isSentenceStart
+    });
+
+    lastEnd = start + raw.length;
+  }
+  return result;
+}
+
 export function buildSnapshotFromCounts(
   wordCounts: Map<string, number>,
   bigramCounts: Map<string, Map<string, number>>,
   trigramCounts: Map<string, Map<string, number>>,
   tokenCount: number,
+  caseStats: Map<string, TokenCaseStats>,
   options: TrainOptions = {}
 ): PredictionModelSnapshot {
   const maxTop = options.maxTopPerPrefix ?? DEFAULT_MAX_TOP;
@@ -111,6 +163,11 @@ export function buildSnapshotFromCounts(
     }
   }
 
+  const serializedCaseStats: Record<string, TokenCaseStats> = {};
+  for (const [word, stats] of caseStats.entries()) {
+    serializedCaseStats[word] = stats;
+  }
+
   return {
     version: 1,
     updatedAt: Date.now(),
@@ -118,7 +175,8 @@ export function buildSnapshotFromCounts(
     uniqueTokens: wordCounts.size,
     trie: root,
     bigrams,
-    trigrams
+    trigrams,
+    caseStats: serializedCaseStats
   };
 }
 
@@ -153,4 +211,14 @@ function updateTopList(
 
   list.sort((a, b) => b.c - a.c || (a.w < b.w ? -1 : 1));
   return list.slice(0, maxTop);
+}
+
+function classifyCasing(raw: string): TokenWithCaseMeta['casing'] {
+  const hasLetter = /[a-zA-Z]/.test(raw);
+  if (!hasLetter) return 'lower';
+  if (raw === raw.toUpperCase()) return 'upper';
+  if (raw[0] === raw[0].toUpperCase() && raw.slice(1) === raw.slice(1).toLowerCase()) {
+    return 'capitalized';
+  }
+  return 'lower';
 }

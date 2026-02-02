@@ -9,8 +9,9 @@ import { getActiveMasterKey, isEncryptionEnabled } from './ipc';
 import { decryptBuffer } from './crypto';
 import {
   buildSnapshotFromCounts,
-  tokenizeText,
+  tokenizeWithCaseMeta,
   type PredictionModelSnapshot,
+  type TokenCaseStats,
   type TrainOptions
 } from '../shared/predictionModel';
 
@@ -70,6 +71,7 @@ interface FilePredictionStats {
   wordCounts: Map<string, number>;
   bigramCounts: Map<string, Map<string, number>>;
   trigramCounts: Map<string, Map<string, number>>;
+  caseStats: Map<string, TokenCaseStats>;
 }
 
 const predictionOptions: TrainOptions = {
@@ -85,6 +87,7 @@ const perFilePredictionStats = new Map<string, FilePredictionStats>();
 const globalWordCounts = new Map<string, number>();
 const globalBigramCounts = new Map<string, Map<string, number>>();
 const globalTrigramCounts = new Map<string, Map<string, number>>();
+const globalCaseStats = new Map<string, TokenCaseStats>();
 let globalTokenCount = 0;
 
 const predictionUpdateTimers = new Map<string, NodeJS.Timeout>();
@@ -129,16 +132,46 @@ function addBigramCounts(
 
 const addTrigramCounts = addBigramCounts;
 
+function addCaseStats(
+  target: Map<string, TokenCaseStats>,
+  delta: Map<string, TokenCaseStats>,
+  sign: 1 | -1
+): void {
+  for (const [word, stats] of delta.entries()) {
+    const existing = target.get(word) ?? {
+      lower: 0,
+      capitalizedStart: 0,
+      capitalizedMid: 0,
+      upper: 0
+    };
+    const next: TokenCaseStats = {
+      lower: existing.lower + sign * stats.lower,
+      capitalizedStart: existing.capitalizedStart + sign * stats.capitalizedStart,
+      capitalizedMid: existing.capitalizedMid + sign * stats.capitalizedMid,
+      upper: existing.upper + sign * stats.upper
+    };
+
+    const total = next.lower + next.capitalizedStart + next.capitalizedMid + next.upper;
+    if (total <= 0) {
+      target.delete(word);
+    } else {
+      target.set(word, next);
+    }
+  }
+}
+
 function computePredictionStats(text: string): FilePredictionStats {
-  const tokens = tokenizeText(text, { minWordLength: predictionOptions.minWordLength });
+  const tokens = tokenizeWithCaseMeta(text, { minWordLength: predictionOptions.minWordLength });
   const wordCounts = new Map<string, number>();
   const bigramCounts = new Map<string, Map<string, number>>();
   const trigramCounts = new Map<string, Map<string, number>>();
+  const caseStats = new Map<string, TokenCaseStats>();
 
   for (let i = 0; i < tokens.length; i++) {
-    const word = tokens[i];
-    const nextWord = tokens[i + 1];
-    const prevWord = tokens[i - 1];
+    const { word, casing, isSentenceStart } = tokens[i];
+    const nextWord = tokens[i + 1]?.word;
+    const prevWord = tokens[i - 1]?.word;
+
     wordCounts.set(word, (wordCounts.get(word) ?? 0) + 1);
     if (nextWord) {
       let nextMap = bigramCounts.get(word);
@@ -158,13 +191,33 @@ function computePredictionStats(text: string): FilePredictionStats {
       }
       nextMap.set(nextWord, (nextMap.get(nextWord) ?? 0) + 1);
     }
+
+    const existing = caseStats.get(word) ?? {
+      lower: 0,
+      capitalizedStart: 0,
+      capitalizedMid: 0,
+      upper: 0
+    };
+    if (casing === 'upper') {
+      existing.upper += 1;
+    } else if (casing === 'capitalized') {
+      if (isSentenceStart) {
+        existing.capitalizedStart += 1;
+      } else {
+        existing.capitalizedMid += 1;
+      }
+    } else {
+      existing.lower += 1;
+    }
+    caseStats.set(word, existing);
   }
 
   return {
     tokenCount: tokens.length,
     wordCounts,
     bigramCounts,
-    trigramCounts
+    trigramCounts,
+    caseStats
   };
 }
 
@@ -175,6 +228,7 @@ function rebuildPredictionSnapshot(mainWindow: BrowserWindow): void {
       globalBigramCounts,
       globalTrigramCounts,
       globalTokenCount,
+      globalCaseStats,
       predictionOptions
     );
 
@@ -211,6 +265,7 @@ function applyFileStats(filename: string, stats: FilePredictionStats | null): vo
     addCounts(globalWordCounts, existing.wordCounts, -1);
     addBigramCounts(globalBigramCounts, existing.bigramCounts, -1);
     addTrigramCounts(globalTrigramCounts, existing.trigramCounts, -1);
+    addCaseStats(globalCaseStats, existing.caseStats, -1);
   }
 
   if (stats) {
@@ -218,6 +273,7 @@ function applyFileStats(filename: string, stats: FilePredictionStats | null): vo
     addCounts(globalWordCounts, stats.wordCounts, 1);
     addBigramCounts(globalBigramCounts, stats.bigramCounts, 1);
     addTrigramCounts(globalTrigramCounts, stats.trigramCounts, 1);
+    addCaseStats(globalCaseStats, stats.caseStats, 1);
     perFilePredictionStats.set(filename, stats);
   } else {
     perFilePredictionStats.delete(filename);

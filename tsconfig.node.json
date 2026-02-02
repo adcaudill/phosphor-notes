@@ -5,7 +5,8 @@
     "src/main/**/*",
     "src/preload/**/*",
     "src/types/**/*",
-    "src/shared/**/*"
+    "src/shared/**/*",
+    "src/renderer/**/*"
   ],
   "compilerOptions": {
     "composite": true,

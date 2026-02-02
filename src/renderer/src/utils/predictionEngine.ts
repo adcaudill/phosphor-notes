@@ -1,10 +1,16 @@
 import { brill } from 'brill';
-import type { PredictionModelSnapshot, SerializedTrieNode } from '../../../shared/predictionModel';
+import type {
+  PredictionModelSnapshot,
+  SerializedTrieNode,
+  TokenCaseStats
+} from '../../../shared/predictionModel';
 
 interface PredictionOptions {
   minPrefixLength?: number;
   minNextProb?: number;
   minNextCount?: number;
+  capitalizeMidThreshold?: number;
+  minCaseCount?: number;
 }
 
 interface BestNext {
@@ -17,6 +23,9 @@ export class PredictionEngine {
   private readonly minPrefix: number;
   private readonly minNextProb: number;
   private readonly minNextCount: number;
+  private readonly capitalizeMidThreshold: number;
+  private readonly minCaseCount: number;
+  private readonly caseStats: Record<string, TokenCaseStats>;
 
   constructor(
     private readonly snapshot: PredictionModelSnapshot,
@@ -25,6 +34,9 @@ export class PredictionEngine {
     this.minPrefix = opts.minPrefixLength ?? 2;
     this.minNextProb = opts.minNextProb ?? 0.25;
     this.minNextCount = opts.minNextCount ?? 2;
+    this.capitalizeMidThreshold = opts.capitalizeMidThreshold ?? 0.4;
+    this.minCaseCount = opts.minCaseCount ?? 2;
+    this.caseStats = snapshot.caseStats ?? {};
   }
 
   predictCompletion(prefix: string, context?: string | null): string | null {
@@ -64,7 +76,12 @@ export class PredictionEngine {
     return best.w;
   }
 
-  predictNext(prevWord: string, prevPrev?: string | null, context?: string | null): string | null {
+  predictNext(
+    prevWord: string,
+    prevPrev?: string | null,
+    context?: string | null,
+    opts?: { isSentenceStart?: boolean }
+  ): string | null {
     if (!prevWord) return null;
 
     const trigramKey = prevPrev ? `${prevPrev.toLowerCase()} ${prevWord.toLowerCase()}` : null;
@@ -83,7 +100,8 @@ export class PredictionEngine {
     if (best.count < this.minNextCount) return null;
     if (best.prob < this.minNextProb) return null;
 
-    return best.word;
+    const cased = this.applyCasing(best.word, opts?.isSentenceStart ?? false);
+    return cased;
   }
 
   private pickBestNext(
@@ -302,6 +320,46 @@ export class PredictionEngine {
   private getTags(word: string): string[] {
     if (!word) return [];
     return brill[word] || brill[word.toLowerCase()] || [];
+  }
+
+  private applyCasing(word: string, isSentenceStart: boolean): string {
+    const stats = this.caseStats[word];
+    if (!stats) {
+      return isSentenceStart ? this.capitalize(word) : word;
+    }
+
+    const total = stats.lower + stats.capitalizedStart + stats.capitalizedMid + stats.upper;
+    if (total < this.minCaseCount) {
+      return isSentenceStart ? this.capitalize(word) : word;
+    }
+
+    if (isSentenceStart) {
+      if (stats.upper >= Math.max(stats.capitalizedStart, stats.capitalizedMid, stats.lower)) {
+        return word.toUpperCase();
+      }
+      if (stats.capitalizedStart + stats.capitalizedMid >= this.minCaseCount) {
+        return this.capitalize(word);
+      }
+      return this.capitalize(word);
+    }
+
+    if (stats.upper >= Math.max(stats.capitalizedMid, stats.lower, stats.capitalizedStart)) {
+      return word.toUpperCase();
+    }
+
+    const midCount = stats.capitalizedMid;
+    const lowerCount = stats.lower + stats.capitalizedStart;
+    const ratio = midCount + lowerCount > 0 ? midCount / (midCount + lowerCount) : 0;
+    if (midCount >= this.minCaseCount && ratio >= this.capitalizeMidThreshold) {
+      return this.capitalize(word);
+    }
+
+    return word;
+  }
+
+  private capitalize(word: string): string {
+    if (!word) return word;
+    return word[0].toUpperCase() + word.slice(1);
   }
 
   private findNode(prefix: string): SerializedTrieNode | null {
