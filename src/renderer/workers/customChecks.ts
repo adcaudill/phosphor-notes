@@ -233,7 +233,6 @@ const checkCliches: CustomCheck = (text: string, settings?: CustomCheckSettings)
     // Many entries contain spaces/punctuation; we still try to anchor to boundaries to avoid substrings.
     const pattern = new RegExp(`\\b${escapeRegex(phrase)}\\b`, 'gi');
     let m: RegExpExecArray | null;
-    // eslint-disable-next-line no-cond-assign
     while ((m = pattern.exec(text)) !== null) {
       diagnostics.push({
         from: m.index,
@@ -255,7 +254,6 @@ const checkCommonIssues: CustomCheck = (text: string) => {
     const pattern = new RegExp(`\\b${escapeRegex(phrase)}\\b`, 'gi');
     let m: RegExpExecArray | null;
 
-    // eslint-disable-next-line no-cond-assign
     while ((m = pattern.exec(text)) !== null) {
       const replacement =
         'replace' in details && details.replace !== undefined
@@ -296,7 +294,6 @@ const checkTimeIssues: CustomCheck = (text: string) => {
   const noSpaceOrPeriods = /\d{1,2}:\d{2}\s?[ap]m/gi;
   let m: RegExpExecArray | null;
 
-  // eslint-disable-next-line no-cond-assign
   while ((m = noSpaceOrPeriods.exec(text)) !== null) {
     const matched = m[0];
     const isProper = /\d{1,2}:\d{2}\s[ap]\.m\./i.test(matched);
@@ -384,7 +381,6 @@ const checkCapitalization: CustomCheck = (text: string) => {
   const wordPattern = /\b[a-z']+\b/gi;
   let m: RegExpExecArray | null;
 
-  // eslint-disable-next-line no-cond-assign
   while ((m = wordPattern.exec(text)) !== null) {
     const word = m[0];
     const normalizedWord = word.toLowerCase();
