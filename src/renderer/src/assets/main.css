@@ -39,6 +39,7 @@
   --editor-tooltip-bg: #1f2937;
   --editor-tooltip-border: #4b5563;
   --editor-tooltip-text: #e5e7eb;
+  --editor-nesting-guide: rgba(176, 176, 176, 0.3);
 
   /* Typography */
   --font-family:
@@ -102,6 +103,7 @@
     --editor-tooltip-bg: #1f2937;
     --editor-tooltip-border: #4b5563;
     --editor-tooltip-text: #e5e7eb;
+    --editor-nesting-guide: rgba(176, 176, 176, 0.3);
   }
 }
 

@@ -368,3 +368,74 @@ export const outlinerHangingIndentExtension: Extension = ViewPlugin.fromClass(
     decorations: (v) => v.decorations
   }
 );
+
+// Visual guide lines for nested outliner structure
+export const outlinerNestingGuidesExtension: Extension = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+
+    constructor(view: EditorView) {
+      this.decorations = this.build(view);
+    }
+
+    update(update: ViewUpdate): void {
+      if (update.docChanged || update.viewportChanged) {
+        this.decorations = this.build(update.view);
+      }
+    }
+
+    build(view: EditorView): DecorationSet {
+      const builder = new RangeSetBuilder<Decoration>();
+
+      for (const { from, to } of view.visibleRanges) {
+        let pos = from;
+        while (pos <= to) {
+          const line = view.state.doc.lineAt(pos);
+          const isBulletLine = /^(\s*)-\s/.test(line.text);
+
+          if (isBulletLine) {
+            // Get the indentation level (number of spaces before the dash)
+            const indentMatch = line.text.match(/^(\s*)-/);
+            const indentLevel = indentMatch ? indentMatch[1].length : 0;
+
+            if (indentLevel > 0) {
+              // Build a single gradient that includes all guide lines for all nesting levels
+              // Each level is 4 spaces, with a guide at position level + 1
+              const gradientStops: string[] = [];
+
+              for (let level = 0; level < indentLevel; level += 4) {
+                const linePos = level + 1; // Position within the indentation area (ch units)
+                const start = `${linePos}ch`;
+                const end = `${linePos + 0.05}ch`; // Thin line (0.05ch = ~1px)
+                gradientStops.push(`transparent ${start}`);
+                gradientStops.push(`var(--editor-nesting-guide) ${start}`);
+                gradientStops.push(`var(--editor-nesting-guide) ${end}`);
+                gradientStops.push(`transparent ${end}`);
+              }
+
+              const background = `linear-gradient(to right, ${gradientStops.join(', ')})`;
+
+              builder.add(
+                line.from,
+                line.from,
+                Decoration.line({
+                  class: 'cm-nesting-guide',
+                  attributes: {
+                    style: `background: ${background};`
+                  }
+                })
+              );
+            }
+          }
+
+          pos = line.to + 1;
+        }
+      }
+
+      return builder.finish();
+    }
+  },
+  {
+    decorations: (v) => v.decorations
+  }
+);

@@ -27,7 +27,8 @@ import { createGrammarLint } from '../editor/extensions/grammar';
 import { smartTypographyExtension } from '../editor/extensions/smartTypography';
 import {
   outlinerHangingIndentExtension,
-  outlinerKeymapExtension
+  outlinerKeymapExtension,
+  outlinerNestingGuidesExtension
 } from '../editor/extensions/outlinerKeymap';
 import { createSearchExtension, createSearchAPI } from '../editor/extensions/search';
 import { useSettings } from '../hooks/useSettings';
@@ -196,7 +197,13 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
         doc: initialContent,
         extensions: [
           keymap.of([...closeBracketsKeymap, ...baseKeymap, ...foldKeymap]), // base keymap + folding
-          ...(isOutlinerMode ? [outlinerKeymapExtension, outlinerHangingIndentExtension] : []), // outliner behavior + wrapped indent
+          ...(isOutlinerMode
+            ? [
+                outlinerKeymapExtension,
+                outlinerHangingIndentExtension,
+                outlinerNestingGuidesExtension
+              ]
+            : []), // outliner behavior + wrapped indent + nesting guides
           EditorView.lineWrapping, // Soft wrap long lines
           markdown(), // Markdown syntax support
           foldGutter(),
@@ -280,6 +287,10 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
                 fontSize: '12px',
                 fontFamily: 'var(--font-editor)',
                 whiteSpace: 'nowrap'
+              },
+              // Nesting guide lines for outliner mode
+              '.cm-nesting-guide': {
+                // Background is set inline via the decoration style attribute
               }
             },
             { dark: true }
