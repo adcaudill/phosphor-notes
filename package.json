@@ -29,7 +29,7 @@
     "@codemirror/language": "^6.12.1",
     "@codemirror/lint": "^6.9.3",
     "@codemirror/state": "^6.5.4",
-    "@codemirror/view": "^6.39.11",
+    "@codemirror/view": "^6.39.12",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@lezer/highlight": "^1.2.3",
