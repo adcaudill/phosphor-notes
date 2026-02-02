@@ -179,6 +179,54 @@ export const outlinerShiftTab = (view: EditorView): boolean => {
 };
 
 /**
+ * Handler for Backspace/Delete in outliner mode
+ * If the current line is a task (has a checkbox like `- [ ] `) and the
+ * cursor is inside that checkbox area, remove the checkbox but keep the
+ * bullet marker (`- `).
+ */
+export const outlinerDelete = (view: EditorView): boolean => {
+  // First pass: detect if any cursor is inside a checkbox area
+  let shouldHandle = false;
+  for (const range of view.state.selection.ranges) {
+    if (!range.empty) continue;
+    const line = view.state.doc.lineAt(range.head);
+    const match = line.text.match(/^(\s*)-\s*(\[(?: |x|X)\]\s)/);
+    if (match) {
+      const indentLen = match[1].length;
+      const checkboxStart = line.from + indentLen + 2; // after '- '
+      const checkboxEnd = checkboxStart + match[2].length;
+      if (range.head >= checkboxStart && range.head <= checkboxEnd) {
+        shouldHandle = true;
+        break;
+      }
+    }
+  }
+
+  if (!shouldHandle) return false;
+
+  // Build a change per-range using changeByRange so cursor positions are set correctly
+  const transaction = view.state.changeByRange((range) => {
+    if (!range.empty) return { changes: [], range };
+    const line = view.state.doc.lineAt(range.head);
+    const match = line.text.match(/^(\s*)-\s*(\[(?: |x|X)\]\s)/);
+    if (match) {
+      const indentLen = match[1].length;
+      const checkboxStart = line.from + indentLen + 2;
+      const checkboxEnd = checkboxStart + match[2].length;
+      if (range.head >= checkboxStart && range.head <= checkboxEnd) {
+        const change: ChangeSpec = { from: checkboxStart, to: checkboxEnd, insert: '' };
+        const cursor = EditorSelection.cursor(checkboxStart);
+        return { changes: change, range: cursor };
+      }
+    }
+    return { changes: [], range };
+  });
+
+  view.dispatch(transaction);
+  return true;
+};
+
+/**
  * Create the outliner keymap for CodeMirror
  * This overrides default Enter and Tab behavior in outliner mode
  */
@@ -192,6 +240,14 @@ export function createOutlinerKeymap(): KeyBinding[] {
     {
       key: 'Tab',
       run: outlinerTab
+    },
+    {
+      key: 'Backspace',
+      run: outlinerDelete
+    },
+    {
+      key: 'Delete',
+      run: outlinerDelete
     },
     {
       key: 'Shift-Tab',
