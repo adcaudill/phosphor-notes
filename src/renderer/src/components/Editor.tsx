@@ -37,6 +37,7 @@ import { smartPaste } from '../editor/extensions/smartPaste';
 import { getURLAtPosition, urlExtensions } from '../editor/extensions/urlHandler';
 import { strikethroughExtension } from '../editor/extensions/strikethrough';
 import { SearchPanel } from './SearchPanel';
+import { ImageViewer } from './ImageViewer';
 import { createCombinedAutocompleteExtension } from '../editor/extensions/autocomplete';
 import {
   extractFrontmatter,
@@ -137,6 +138,8 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
     const getPredictionEngine = useCallback(() => predictionEngineRef.current, []);
     const [showSearch, setShowSearch] = useState(false);
     const [searchAPI, setSearchAPI] = useState<ReturnType<typeof createSearchAPI> | null>(null);
+    const [imageViewerOpen, setImageViewerOpen] = useState(false);
+    const [imageViewerUrl, setImageViewerUrl] = useState('');
 
     // Extract frontmatter and content, memoized to avoid re-extraction on every render
     const { frontmatter, content } = useMemo(() => extractFrontmatter(initialDoc), [initialDoc]);
@@ -381,6 +384,18 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
               try {
                 const target = event.target as HTMLElement | null;
 
+                // Handle image clicks
+                const imgEl =
+                  target?.closest &&
+                  (target.closest('.cm-image-widget') as HTMLImageElement | null);
+                if (imgEl) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setImageViewerUrl(imgEl.src);
+                  setImageViewerOpen(true);
+                  return true;
+                }
+
                 // Handle wiki link clicks
                 const linkEl =
                   target?.closest && (target.closest('.cm-wiki-link') as HTMLElement | null);
@@ -472,6 +487,21 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
       }
     }, [content, isOutlinerMode]);
 
+    // Listen for image viewer requests from the image widget
+    useEffect(() => {
+      const handleImageViewerRequest = (e: Event): void => {
+        const customEvent = e as CustomEvent;
+        if (customEvent.detail?.imageUrl) {
+          setImageViewerUrl(customEvent.detail.imageUrl);
+          setImageViewerOpen(true);
+        }
+      };
+
+      document.addEventListener('phosphor-image-viewer-open', handleImageViewerRequest);
+      return () =>
+        document.removeEventListener('phosphor-image-viewer-open', handleImageViewerRequest);
+    }, []);
+
     // Notify parent about search panel visibility
     useEffect(() => {
       if (onSearchOpen) {
@@ -506,6 +536,11 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
           spellCheck="true"
         />
         {showSearch && <SearchPanel searchAPI={searchAPI} onClose={() => setShowSearch(false)} />}
+        <ImageViewer
+          isOpen={imageViewerOpen}
+          imageUrl={imageViewerUrl}
+          onClose={() => setImageViewerOpen(false)}
+        />
       </div>
     );
   }

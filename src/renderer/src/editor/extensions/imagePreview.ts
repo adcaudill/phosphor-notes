@@ -8,6 +8,11 @@ import {
 } from '@codemirror/view';
 import { RangeSetBuilder } from '@codemirror/state';
 
+// Custom event for image click
+export const imageClickedEvent = new CustomEvent('image-viewer-request', {
+  bubbles: true
+});
+
 class ImageWidget extends WidgetType {
   constructor(readonly filename: string) {
     super();
@@ -23,6 +28,21 @@ class ImageWidget extends WidgetType {
     img.src = `phosphor:///${encodeURIComponent(this.filename)}`;
     img.className = 'cm-image-widget';
     img.alt = this.filename;
+
+    // Add click handler to open image viewer
+    img.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Dispatch custom event with image data - dispatch on document for guaranteed capture
+      const imageUrl = (e.target as HTMLImageElement).src;
+      const customEvent = new CustomEvent('phosphor-image-viewer-open', {
+        detail: { imageUrl, filename: this.filename },
+        bubbles: true,
+        cancelable: true
+      });
+      document.dispatchEvent(customEvent);
+    });
 
     wrapper.appendChild(img);
     return wrapper;
