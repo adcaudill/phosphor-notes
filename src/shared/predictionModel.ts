@@ -38,8 +38,29 @@ export interface TokenizeOptions {
   minWordLength?: number;
 }
 
+/**
+ * Replace wikilinks like [[Namespace/Page|Display]] or [[Namespace/Page]]
+ * with either the explicit display text (after |) or the last path segment
+ * (after the final "/") so namespaces don't add noisy tokens.
+ */
+export function normalizeWikilinks(text: string): string {
+  return text.replace(/\[\[([^\]]+)\]\]/g, (_match, inner: string) => {
+    const parts = inner.split('|');
+    const target = parts[0].trim();
+    const display = parts[1] ? parts[1].trim() : undefined;
+    const chosen = display || target;
+
+    const lastSegment = chosen.includes('/')
+      ? chosen.substring(chosen.lastIndexOf('/') + 1)
+      : chosen;
+
+    return lastSegment;
+  });
+}
+
 export function tokenizeText(text: string, opts: TokenizeOptions = {}): string[] {
-  const matches = text.toLowerCase().match(/[a-z0-9'][a-z0-9'-]*/gi);
+  const normalized = normalizeWikilinks(text);
+  const matches = normalized.toLowerCase().match(/[a-z0-9'][a-z0-9'-]*/gi);
   if (!matches) return [];
   const minLen = opts.minWordLength ?? 0;
   return matches
