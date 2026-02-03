@@ -119,6 +119,11 @@ export const taskCheckboxPlugin = ViewPlugin.fromClass(
         const taskStart = line.from + match.index + bracketIndex;
         const taskEnd = taskStart + 3; // Length of "[ ]", "[x]", or "[/]"
 
+        // Also find the leading dash in the matched text and include it in the
+        // decoration range so the `-` is hidden beneath the widget.
+        const dashIndex = match[0].indexOf('-');
+        const dashStart = dashIndex !== -1 ? line.from + match.index + dashIndex : taskStart;
+
         const status = match[1] === ' ' ? 'todo' : match[1] === '/' ? 'doing' : 'done';
 
         const onToggle = (): void => {
@@ -216,7 +221,7 @@ export const taskCheckboxPlugin = ViewPlugin.fromClass(
           Decoration.replace({
             widget,
             side: -1
-          }).range(taskStart, taskEnd)
+          }).range(dashStart, taskEnd)
         );
       }
 
