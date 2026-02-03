@@ -20,6 +20,7 @@ class TaskCheckboxWidget extends WidgetType {
     readonly lineStart: number,
     readonly matchStart: number,
     readonly matchEnd: number,
+    readonly dashStart: number,
     readonly onToggle: () => void
   ) {
     super();
@@ -31,6 +32,17 @@ class TaskCheckboxWidget extends WidgetType {
     wrap.setAttribute('data-task-status', this.status);
     wrap.style.alignItems = 'center';
     wrap.style.lineHeight = '1';
+    // Reserve the same horizontal space as the replaced characters so the
+    // following text doesn't shift left when we replace the marker with the widget.
+    try {
+      const replacedChars = Math.max(1, this.matchEnd - this.dashStart);
+      wrap.style.width = `${replacedChars}ch`;
+      // Nudge the widget slightly right to better match the visual position
+      // of the original list marker in CodeMirror's indented layout.
+      wrap.style.marginLeft = '0.6ch';
+    } catch {
+      // Fallback: don't set width if measurements fail
+    }
 
     const indicator = document.createElement('span');
     indicator.className = 'material-symbols-outlined';
@@ -46,8 +58,8 @@ class TaskCheckboxWidget extends WidgetType {
     indicator.style.alignItems = 'center';
     indicator.style.justifyContent = 'center';
     indicator.style.verticalAlign = 'middle';
-    indicator.style.marginRight = '6px';
-    indicator.style.marginLeft = '-2px';
+    indicator.style.marginRight = '0.5ch';
+    indicator.style.marginLeft = '0';
     indicator.style.width = '1.4em';
     indicator.style.textAlign = 'center';
     indicator.style.cursor = 'pointer';
@@ -216,7 +228,14 @@ export const taskCheckboxPlugin = ViewPlugin.fromClass(
           }
         };
 
-        const widget = new TaskCheckboxWidget(status, line.from, taskStart, taskEnd, onToggle);
+        const widget = new TaskCheckboxWidget(
+          status,
+          line.from,
+          taskStart,
+          taskEnd,
+          dashStart,
+          onToggle
+        );
         decorations.push(
           Decoration.replace({
             widget,
