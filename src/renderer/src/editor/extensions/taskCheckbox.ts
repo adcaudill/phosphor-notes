@@ -29,27 +29,31 @@ class TaskCheckboxWidget extends WidgetType {
     const wrap = document.createElement('span');
     wrap.className = `cm-task-checkbox cm-task-${this.status}`;
     wrap.setAttribute('data-task-status', this.status);
-
-    // Use consistent circle indicators for all states
-    let circleChar = '○'; // empty circle for todo
-    if (this.status === 'doing') {
-      circleChar = '◐'; // half-circle for doing
-    } else if (this.status === 'done') {
-      circleChar = '●'; // filled circle for done
-    }
+    wrap.style.alignItems = 'center';
+    wrap.style.lineHeight = '1';
 
     const indicator = document.createElement('span');
-    indicator.textContent = circleChar;
-    indicator.style.display = 'inline-block';
+    indicator.className = 'material-symbols-outlined';
+    // Map statuses to Material Symbols icon names
+    const iconName =
+      this.status === 'todo'
+        ? 'check_box_outline_blank'
+        : this.status === 'doing'
+          ? 'indeterminate_check_box'
+          : 'check_box';
+    indicator.textContent = iconName;
+    indicator.style.display = 'inline-flex';
+    indicator.style.alignItems = 'center';
+    indicator.style.justifyContent = 'center';
+    indicator.style.verticalAlign = 'middle';
     indicator.style.marginRight = '6px';
     indicator.style.marginLeft = '-2px';
     indicator.style.width = '1.4em';
     indicator.style.textAlign = 'center';
     indicator.style.cursor = 'pointer';
-    indicator.style.fontSize = '1.1em';
+    indicator.style.fontSize = '1.4em';
     indicator.style.lineHeight = '1';
     indicator.style.color = 'var(--color-primary)';
-    indicator.style.fontWeight = 'bold';
     indicator.style.userSelect = 'none';
 
     // Use pointerdown to intercept before CodeMirror processes cursor movement
