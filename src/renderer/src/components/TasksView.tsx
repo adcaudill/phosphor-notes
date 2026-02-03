@@ -170,15 +170,14 @@ export const TasksView: React.FC<TasksViewProps> = ({ onTaskClick }) => {
     setGroupedTasks(grouped);
   }, [tasks]);
 
-  const getStatusIcon = (status: 'todo' | 'doing' | 'done'): string => {
-    switch (status) {
-      case 'todo':
-        return '○';
-      case 'doing':
-        return '◐';
-      case 'done':
-        return '✓';
-    }
+  const getStatusIcon = (status: 'todo' | 'doing' | 'done'): React.ReactNode => {
+    const name =
+      status === 'todo'
+        ? 'check_box_outline_blank'
+        : status === 'doing'
+          ? 'indeterminate_check_box'
+          : 'check_box';
+    return <span className="material-symbols-outlined">{name}</span>;
   };
 
   const getDueDateIcon = (urgency: 'overdue' | 'today' | 'upcoming' | 'no-date'): string => {
@@ -243,15 +242,19 @@ export const TasksView: React.FC<TasksViewProps> = ({ onTaskClick }) => {
         <h2>Tasks</h2>
         <div className="tasks-stats">
           <span className="stat">
-            <span className="stat-icon todo">○</span>
+            <span className="stat-icon todo material-symbols-outlined">
+              check_box_outline_blank
+            </span>
             {todoCount}
           </span>
           <span className="stat">
-            <span className="stat-icon doing">◐</span>
+            <span className="stat-icon doing material-symbols-outlined">
+              indeterminate_check_box
+            </span>
             {doingCount}
           </span>
           <span className="stat">
-            <span className="stat-icon done">✓</span>
+            <span className="stat-icon done material-symbols-outlined">check_box</span>
             {doneCount}
           </span>
         </div>
