@@ -5,7 +5,9 @@ on:
     branches: ["main"]
     paths:
       - 'docs/**'  # Trigger only if files in the 'docs' directory change
-
+  pull_request:
+    paths:
+      - 'docs/**'  # Run build for PRs targeting main when docs change
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
@@ -50,6 +52,7 @@ jobs:
 
   # Deployment job
   deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
