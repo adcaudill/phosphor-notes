@@ -12,6 +12,7 @@ GEM
       eventmachine (>= 0.12.9)
       http_parser.rb (~> 0)
     eventmachine (1.2.7)
+    ffi (1.17.1)
     ffi (1.17.1-arm64-darwin)
     ffi (1.17.1-x86_64-darwin)
     ffi (1.17.1-x86_64-linux)
@@ -94,6 +95,7 @@ GEM
 
 PLATFORMS
   arm64-darwin
+  ruby
   x86_64-darwin-21
   x86_64-linux
 
