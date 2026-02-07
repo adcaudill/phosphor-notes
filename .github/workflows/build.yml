@@ -6,8 +6,12 @@ permissions:
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'  # Don't trigger on changes to the 'docs' directory, which is built/deployed separately
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
 
 jobs:
   build:
