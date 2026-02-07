@@ -13,9 +13,6 @@ GEM
       http_parser.rb (~> 0)
     eventmachine (1.2.7)
     ffi (1.17.3)
-    ffi (1.17.3-arm64-darwin)
-    ffi (1.17.3-x86_64-darwin)
-    ffi (1.17.3-x86_64-linux)
     forwardable-extended (2.6.0)
     google-protobuf (4.33.5)
       bigdecimal
@@ -100,6 +97,7 @@ PLATFORMS
   x86_64-linux
 
 DEPENDENCIES
+  ffi
   jekyll (~> 4.4.1)
   just-the-docs (= 0.12.0)
   sass-embedded (~> 1.78.0)
