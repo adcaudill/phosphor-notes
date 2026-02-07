@@ -24,7 +24,7 @@
     "build:linux": "electron-vite build && electron-builder --linux"
   },
   "dependencies": {
-    "@codemirror/commands": "^6.10.1",
+    "@codemirror/commands": "^6.10.2",
     "@codemirror/lang-markdown": "^6.5.0",
     "@codemirror/language": "^6.12.1",
     "@codemirror/lint": "^6.9.3",
