@@ -1,3 +1,8 @@
+---
+title: Task Management
+layout: home
+---
+
 # Task Management
 
 This guide explains how to create and manage tasks in Phosphor. It describes the markdown syntax the editor recognizes, how to set due dates and recurrence, how tasks behave when completed, and how to use the Tasks panel.

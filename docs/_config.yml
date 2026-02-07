@@ -1,0 +1,31 @@
+title: Phosphor Notes
+description: A minimal, secure, and focused knowledge studio for the modern thinker.
+theme: just-the-docs
+
+footer_content: "Copyright &copy; 2026 <a href=\"https://adamcaudill.com\">Adam Caudill</a>."
+
+url: https://phosphor.adamcaudill.com
+
+aux_links:
+  Phosphor Notes on GitHub:
+    - https://github.com/adcaudill/phosphor-notes
+
+sass:
+  quiet_deps: true
+color_scheme: dark
+
+callouts:
+  highlight:
+    color: yellow
+  important:
+    title: Important
+    color: blue
+  new:
+    title: New
+    color: green
+  note:
+    title: Note
+    color: purple
+  warning:
+    title: Warning
+    color: red

@@ -1,3 +1,8 @@
+---
+title: Slash Commands
+layout: home
+---
+
 # Slash Commands
 
 The editor includes a quick "slash" menu that helps you insert dates, headings, and other common content using short commands.
