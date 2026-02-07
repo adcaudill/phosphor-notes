@@ -33,10 +33,9 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3' # Not needed with a .ruby-version file
-          working-directory: docs
-      - name: Install dependencies
-        working-directory: docs
-        run: bundle install --verbose
+          bundler-cache: true # runs 'bundle install' and caches installed gems automatically
+          cache-version: 1 # Increment this number if you need to re-download cached gems
+          working-directory: docs # Run bundler in the docs directory where the Gemfile lives
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v5
