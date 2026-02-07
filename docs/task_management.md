@@ -11,7 +11,7 @@ This guide explains how to create and manage tasks in Phosphor. It describes the
 
 - Create a task using GitHub Flavored Markdown (GFM) checkbox bullets:
 
-- [ ] Buy groceries
+`- [ ] Buy groceries`
 
 Status characters used by the app:
 
@@ -51,7 +51,7 @@ Supported due date forms (examples):
 
 Example:
 
-- [ ] File tax return 📅 2026-04-15
+`- [ ] File tax return 📅 2026-04-15`
 
 The Tasks panel categorizes due dates as:
 
@@ -78,7 +78,7 @@ Recurrence format notes:
 
 Example recurring task:
 
-- [ ] Water plants 📅 2026-01-20 🔁 +1w
+`- [ ] Water plants 📅 2026-01-20 🔁 +1w`
 
 What happens when you complete a recurring task:
 
@@ -87,12 +87,12 @@ What happens when you complete a recurring task:
 
 Example before completion:
 
-- [ ] Water plants 📅 2026-01-20 🔁 +1w
+`- [ ] Water plants 📅 2026-01-20 🔁 +1w`
 
 After completing (click the checkbox):
 
-- [x] Water plants 📅 2026-01-20 🔁 +1w ✓ 2026-01-20 09:00:00
-- [ ] Water plants 📅 2026-01-27 🔁 +1w
+`- [x] Water plants 📅 2026-01-20 🔁 +1w ✓ 2026-01-20 09:00:00`
+`- [ ] Water plants 📅 2026-01-27 🔁 +1w`
 
 Notes:
 
@@ -124,23 +124,23 @@ Filters available in the Tasks panel:
 
 1. Simple todo
 
-- [ ] Call Alice
+`- [ ] Call Alice`
 
 2. Todo with due date (emoji)
 
-- [ ] Project proposal 📅 2026-02-01
+`- [ ] Project proposal 📅 2026-02-01`
 
 3. Todo with due date (Phosphor meta)
 
-- [ ] Project proposal @due(2026-02-01)
+`- [ ] Project proposal @due(2026-02-01)`
 
 4. Recurring weekly task
 
-- [ ] Run report 📅 2026-01-16 🔁 +1w
+`- [ ] Run report 📅 2026-01-16 🔁 +1w`
 
 5. Org-mode style deadline
 
-- [ ] Submit invoice DEADLINE: <2026-02-10>
+`- [ ] Submit invoice DEADLINE: <2026-02-10>`
 
 ## Tips and gotchas
 
