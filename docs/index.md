@@ -1,6 +1,7 @@
 ---
 title: Home
 layout: home
+nav_order: 0
 ---
 
 **A minimal, secure, and focused knowledge studio for the modern thinker.**
