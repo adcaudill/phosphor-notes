@@ -32,7 +32,8 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
           checkReadability: true,
           checkProfanities: true,
           checkCliches: false,
-          checkIntensify: false
+          checkIntensify: false,
+          holidayCountry: 'US'
         });
       } finally {
         setIsLoading(false);

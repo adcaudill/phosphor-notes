@@ -21,7 +21,8 @@ const defaults: UserSettings = {
   checkReadability: false,
   checkProfanities: false,
   checkCliches: false,
-  checkIntensify: false
+  checkIntensify: false,
+  holidayCountry: 'US'
 };
 
 const CONFIG_DIR = path.join(app.getPath('userData'), '.phosphor');

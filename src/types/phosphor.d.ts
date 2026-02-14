@@ -116,6 +116,8 @@ export interface UserSettings {
   checkProfanities: boolean;
   checkCliches: boolean;
   checkIntensify: boolean;
+  // Holiday settings
+  holidayCountry: string;
   // Optional persisted window bounds from the last session
   windowBounds?: {
     width: number;

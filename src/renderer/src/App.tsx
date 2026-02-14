@@ -10,6 +10,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { FrontmatterModal } from './components/FrontmatterModal';
 import { GraphStatsModal } from './components/GraphStatsModal';
 import DailyNav from './components/DailyNav';
+import Holiday from './components/Holiday';
 import { TasksView } from './components/TasksView';
 import { EncryptionModal } from './components/EncryptionModal';
 import { AboutModal } from './components/AboutModal';
@@ -935,6 +936,7 @@ function AppContent(): React.JSX.Element {
                     onOpenFile={handleFileSelect}
                   />
                 )}
+                {viewMode === 'editor' && <Holiday currentFile={currentFile} content={content} />}
                 {conflict && (
                   <div className="conflict-banner">
                     ⚠️ File changed on disk. You have unsaved changes.

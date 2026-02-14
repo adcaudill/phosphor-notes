@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import Holidays from 'date-holidays';
 import { useSettings } from '../hooks/useSettings';
 import '../styles/SettingsModal.css';
 
@@ -12,6 +13,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const [activeTab, setActiveTab] = useState<'editor' | 'appearance' | 'grammar' | 'keybindings'>(
     'editor'
   );
+
+  /**
+   * Get sorted list of supported countries from the Holidays library
+   */
+  const countries = useMemo(() => {
+    try {
+      const holidays = new Holidays('US'); // Initialize with any country to access getCountries
+      const countriesData = holidays.getCountries() as Record<string, string>;
+      return Object.entries(countriesData)
+        .map(([code, name]) => ({ code, name: String(name) }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    } catch (err) {
+      console.error('Failed to load countries from Holidays library:', err);
+      console.debug('Falling back to default US country option');
+      return [];
+    }
+  }, []);
 
   if (!isOpen) return null;
 
@@ -213,6 +231,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                     <option value="amber">Amber</option>
                     <option value="green">Green</option>
                   </select>
+                </div>
+
+                <div className="setting-item">
+                  <label htmlFor="holiday-country">Holiday Country</label>
+                  <select
+                    id="holiday-country"
+                    value={settings.holidayCountry}
+                    onChange={(e) => updateSetting('holidayCountry', e.target.value)}
+                  >
+                    {countries.map((country) => (
+                      <option key={country.code} value={country.code}>
+                        {country.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="setting-hint">
+                    Select your country to display relevant holidays above daily notes.
+                  </p>
                 </div>
               </>
             )}
