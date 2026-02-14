@@ -1,12 +1,13 @@
 ---
 layout: page
-title: "Grammar & Error Checking"
-parent: "Technical Notes"
+title: 'Grammar & Error Checking'
+parent: 'Technical Notes'
 ---
 
 This document describes how Phosphor Notes detects and surfaces grammar, style, and writing errors to users.
 
 **Key files**
+
 - Editor extension that wires linting into CodeMirror: [src/renderer/src/editor/extensions/grammar.ts](https://github.com/adcaudill/phosphor-notes/blob/main/src/renderer/src/editor/extensions/grammar.ts#L1-L120)
 - Worker that runs the grammar pipeline: [src/renderer/workers/grammar.ts](https://github.com/adcaudill/phosphor-notes/blob/main/src/renderer/workers/grammar.ts#L1-L200)
 - Site-specific/custom checks: [src/renderer/workers/customChecks.ts](https://github.com/adcaudill/phosphor-notes/blob/main/src/renderer/workers/customChecks.ts#L1-L200)
@@ -34,7 +35,8 @@ The pieces are orchestrated inside a dedicated web worker; the editor extension 
 
 The worker is the heart of the feature; it performs three categories of checks and merges their results.
 
-1) retext pipeline (retext-*/unified plugins)
+1. retext pipeline (retext-\*/unified plugins)
+
 - The worker builds a `unified()` processor and conditionally registers retext plugins depending on `settings` (the toggles the user sets). This is done in `createProcessor(settings)` in [src/renderer/workers/grammar.ts](https://github.com/adcaudill/phosphor-notes/blob/main/src/renderer/workers/grammar.ts#L1-L200).
 - The following plugins are used when enabled:
   - `retext-passive` (passive voice detection)
@@ -48,13 +50,15 @@ The worker is the heart of the feature; it performs three categories of checks a
 - retext reports positions as line/column ranges; the worker converts these to absolute offsets using `calculateOffset(text, line, column)`.
 - For each message the worker maps the `source` (retext plugin name) to a human-readable source string like "Passive Voice" or "Readability" so the editor UI shows sensible labels.
 
-2) Harper (harper.js)
+2. Harper (harper.js)
+
 - The worker lazily imports `harper.js` at runtime (so the heavy WASM component is only pulled in if needed). The import is wrapped in a `getHarperLinter()` helper that caches a promise to avoid re-initializing the linter multiple times.
 - The Harper linter is configured with some features disabled by default (for example spelling is disabled via `setLintConfig({ SpellCheck: false, DefiniteArticle: false, UseTitleCase: false })`). The linter is initialized with an appropriate dialect inferred from the runtime locale (American, British, Canadian, Australian, Indian) using `navigator`/`Intl` detection.
 - Harper produces `Lint` objects that include spans and optional suggestions; these are mapped into the same diagnostic shape (absolute offsets, severity 'warning', a message and a `source` string). Suggestions are formatted (insert/replace/remove) and appended to the message text when available.
 - Harper is called concurrently with retext to speed up processing.
 
-3) Custom checks (project heuristics)
+3. Custom checks (project heuristics)
+
 - A set of custom JavaScript checks runs synchronously on the input text (`runCustomChecks()` in [src/renderer/workers/customChecks.ts](https://github.com/adcaudill/phosphor-notes/blob/main/src/renderer/workers/customChecks.ts#L1-L200)). Each check returns an array of diagnostics; these checks include:
   - Indefinite article checks (suggesting `a` vs `an` based on locale-aware heuristics and silent-`h` handling).
   - Cliché detection (matching against a large `CLICHES` list).

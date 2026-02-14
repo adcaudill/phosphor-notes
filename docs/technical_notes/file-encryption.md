@@ -1,7 +1,7 @@
 ---
-title: "File Encryption"
+title: 'File Encryption'
 layout: home
-parent: "Technical Notes"
+parent: 'Technical Notes'
 ---
 
 **Overview**

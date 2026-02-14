@@ -2,12 +2,12 @@ name: Deploy Jekyll site to Pages
 
 on:
   push:
-    branches: ["main"]
+    branches: ['main']
     paths:
-      - 'docs/**'  # Trigger only if files in the 'docs' directory change
+      - 'docs/**' # Trigger only if files in the 'docs' directory change
   pull_request:
     paths:
-      - 'docs/**'  # Run build for PRs targeting main when docs change
+      - 'docs/**' # Run build for PRs targeting main when docs change
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
@@ -19,7 +19,7 @@ permissions:
 
 # Allow one concurrent deployment
 concurrency:
-  group: "pages"
+  group: 'pages'
   cancel-in-progress: true
 
 jobs:
@@ -61,4 +61,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-

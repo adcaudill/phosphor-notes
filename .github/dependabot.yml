@@ -6,8 +6,8 @@ updates:
       interval: 'daily'
     open-pull-requests-limit: 10
 
-  - package-ecosystem: "bundler"
-    directory: "/docs"
+  - package-ecosystem: 'bundler'
+    directory: '/docs'
     schedule:
       interval: 'daily'
     open-pull-requests-limit: 10
