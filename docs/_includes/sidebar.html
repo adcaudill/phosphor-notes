@@ -1,0 +1,101 @@
+<nav class="sidebar">
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a class="sidebar-nav-link {% if page.url == '/' %}active{% endif %}" href="{{ site.baseurl }}/">
+        <span class="material-symbols-outlined">home</span> <span class="sidebar-nav-link-text">Home</span>
+      </a>
+    </li>
+    <li class="sidebar-nav-item">
+      <a class="sidebar-nav-link {% if page.url == '/blog/' %}active{% endif %}" href="{{ site.baseurl }}/blog/">
+        <span class="material-symbols-outlined">article</span> <span class="sidebar-nav-link-text">Blog</span>
+      </a>
+    </li>
+  </ul>
+
+  {% assign docs_pages = site.pages | where_exp: "page", "page.path contains 'docs' and page.name != 'index.md' and page.path != 'docs/index.md' and page.layout != 'home' and page.layout != nil" | sort: "title" %}
+
+  {% if docs_pages.size > 0 %}
+    <div class="sidebar-section-title">Documentation</div>
+
+    {% comment %} Display root level docs (directly in docs/) {% endcomment %}
+    <ul class="sidebar-nav">
+      {% for doc in docs_pages %}
+        {% assign parts = doc.path | split: '/' %}
+        {% if parts.size == 2 %}
+          <li class="sidebar-nav-item">
+            <a class="sidebar-nav-link {% if page.url == doc.url %}active{% endif %}" href="{{ doc.url }}">
+              <span class="sidebar-nav-link-text">{{ doc.title | default: doc.name }}</span>
+            </a>
+          </li>
+        {% endif %}
+      {% endfor %}
+    </ul>
+
+    {% comment %} Collect unique folder names from nested docs {% endcomment %}
+    {% assign folder_names = "" %}
+    {% for doc in docs_pages %}
+      {% assign parts = doc.path | split: '/' %}
+      {% if parts.size > 2 %}
+        {% assign folder = parts[1] %}
+        {% unless folder_names contains folder %}
+          {% if folder_names == "" %}
+            {% assign folder_names = folder %}
+          {% else %}
+            {% assign folder_names = folder_names | append: "||" | append: folder %}
+          {% endif %}
+        {% endunless %}
+      {% endif %}
+    {% endfor %}
+
+    {% comment %} Display nested docs grouped by folder {% endcomment %}
+    {% if folder_names != "" %}
+      {% assign folders = folder_names | split: "||" | sort %}
+      {% for folder in folders %}
+        <div class="sidebar-folder-group" data-folder="{{ folder }}">
+          <button class="sidebar-folder-toggle" aria-expanded="false" type="button">
+            <span class="material-symbols-outlined">expand_more</span>
+            <span class="sidebar-folder-name">{{ folder | replace: '_', ' ' | capitalize }}</span>
+          </button>
+
+          <ul class="sidebar-folder-nav" style="display: none;">
+            {% for doc in docs_pages %}
+              {% assign parts = doc.path | split: '/' %}
+              {% if parts.size > 2 and parts[1] == folder %}
+                <li class="sidebar-nav-item">
+                  <a class="sidebar-nav-link {% if page.url == doc.url %}active{% endif %}" href="{{ doc.url }}">
+                    <span class="sidebar-nav-link-text">{{ doc.title | default: doc.name }}</span>
+                  </a>
+                </li>
+              {% endif %}
+            {% endfor %}
+          </ul>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endif %}
+
+  {% assign blog_posts = site.posts | slice: 0, 5 %}
+  {% if blog_posts.size > 0 %}
+    <div class="sidebar-section-title">Recent Posts</div>
+    <ul class="sidebar-nav">
+      {% for post in blog_posts %}
+        <li class="sidebar-nav-item">
+          <a class="sidebar-nav-link" href="{{ post.url }}">
+            <span class="sidebar-nav-link-text">{{ post.title }}</span>
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  {% if site.github_url %}
+    <div class="sidebar-section-title">Links</div>
+    <ul class="sidebar-nav">
+      <li class="sidebar-nav-item">
+        <a class="sidebar-nav-link" href="{{ site.github_url }}" target="_blank" rel="noopener noreferrer">
+          <span class="material-symbols-outlined">rebase</span> <span class="sidebar-nav-link-text">GitHub</span>
+        </a>
+      </li>
+    </ul>
+  {% endif %}
+</nav>

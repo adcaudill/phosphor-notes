@@ -1,6 +1,6 @@
 ---
 title: Task Management
-layout: home
+layout: page
 ---
 
 # Task Management

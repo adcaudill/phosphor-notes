@@ -1,6 +1,6 @@
 ---
 title: Slash Commands
-layout: home
+layout: page
 ---
 
 # Slash Commands

@@ -1,7 +1,6 @@
 ---
-layout: page
 title: 'Grammar & Error Checking'
-parent: 'Technical Notes'
+layout: page
 ---
 
 This document describes how Phosphor Notes detects and surfaces grammar, style, and writing errors to users.

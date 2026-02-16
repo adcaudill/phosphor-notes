@@ -1,7 +1,6 @@
 ---
 title: 'File Encryption'
-layout: home
-parent: 'Technical Notes'
+layout: page
 ---
 
 **Overview**

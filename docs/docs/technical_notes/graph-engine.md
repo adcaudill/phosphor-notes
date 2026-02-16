@@ -1,7 +1,6 @@
 ---
 title: Graph Engine
-layout: default
-parent: 'Technical Notes'
+layout: page
 ---
 
 **Graph Engine**
