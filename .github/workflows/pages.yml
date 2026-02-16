@@ -47,17 +47,18 @@ jobs:
           JEKYLL_ENV: production
       - name: Fix sitemap for search engines
         run: |
-          if [ -f ../_site/sitemap.xml ]; then
-            sed -i 's/ xmlns:xsi="[^"]*" xsi:schemaLocation="[^"]*"//g' ../_site/sitemap.xml
+          if [ -f ./_site/sitemap.xml ]; then
+            sed -i 's/ xmlns:xsi="[^"]*" xsi:schemaLocation="[^"]*"//g' ./_site/sitemap.xml
             echo "Sitemap namespace attributes removed for better search engine compatibility"
           fi
       - name: Update robots.txt
         # The sitemap plugin generates a robots.txt with a sitemap URL, but nothing else.
         # This step ensures that the robots.txt allows crawling of the site and includes the sitemap URL.
         run: |
-          echo "User-agent: *" > ../_site/robots.txt
-          echo "Allow: /" >> ../_site/robots.txt
-          echo "Sitemap: ${{ steps.pages.outputs.page_url }}/sitemap.xml" >> ../_site/robots.txt
+          touch ./_site/robots.txt
+          echo "User-agent: *" > ./_site/robots.txt
+          echo "Allow: /" >> ./_site/robots.txt
+          echo "Sitemap: ${{ steps.pages.outputs.page_url }}/sitemap.xml" >> ./_site/robots.txt
           echo "robots.txt updated with sitemap URL"
       - name: Upload artifact
         # Automatically uploads an artifact from the './_site' directory by default
