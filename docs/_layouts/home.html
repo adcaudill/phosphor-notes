@@ -1,0 +1,41 @@
+---
+layout: default
+---
+
+<div class="home-page">
+  <article>
+    {{ content }}
+  </article>
+
+  {% if site.posts.size > 0 %}
+  <section class="blog-section">
+    <h2 id="recent-posts">Recent Blog Posts</h2>
+    <div class="blog-posts-list">
+      {% for post in site.posts limit: 6 %}
+      <a href="{{ post.url }}" class="blog-post-item" style="text-decoration: none; color: inherit; display: block;">
+        <div class="blog-post-title">
+          {{ post.title }}
+        </div>
+        <div class="blog-post-meta">
+          <span class="post-date">{{ post.date | date: "%B %d, %Y" }}</span>
+          {% if post.author %}
+          <span class="post-author"> • By {{ post.author }}</span>
+          {% endif %}
+        </div>
+        {% if post.excerpt %}
+        <div class="blog-post-excerpt">
+          {{ post.excerpt | strip_html | truncatewords: 30 }}
+        </div>
+        {% endif %}
+      </a>
+      {% endfor %}
+    </div>
+
+    {% if site.posts.size > 6 %}
+    <p style="margin-top: var(--spacing-6); text-align: center;">
+      <a href="{{ site.baseurl }}/blog/" class="btn">View All Posts</a>
+    </p>
+    {% endif %}
+  </section>
+  {% endif %}
+</div>

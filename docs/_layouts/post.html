@@ -1,0 +1,38 @@
+---
+layout: default
+---
+
+<article class="blog-post">
+  <header class="post-header">
+    <h1>{{ page.title }}</h1>
+
+    <div class="post-meta" style="margin: var(--spacing-4) 0; color: var(--color-text-secondary); font-size: var(--font-size-sm);">
+      <span class="post-date">{{ page.date | date: "%B %d, %Y" }}</span>
+      {% if page.author %}
+      <span class="post-author"> • By <strong>{{ page.author }}</strong></span>
+      {% endif %}
+    </div>
+  </header>
+
+  <div class="post-content" style="margin-top: var(--spacing-6);">
+    {{ content }}
+  </div>
+
+  <hr style="margin: var(--spacing-8) 0; border: none; border-top: 1px solid var(--color-border);">
+
+  <nav class="post-navigation" style="display: flex; justify-content: space-between; gap: var(--spacing-4); margin-top: var(--spacing-6);">
+    {% if page.previous %}
+    <div class="prev-post" style="flex: 1;">
+      <strong>← Previous</strong><br>
+      <a href="{{ page.previous.url }}">{{ page.previous.title }}</a>
+    </div>
+    {% endif %}
+
+    {% if page.next %}
+    <div class="next-post" style="flex: 1; text-align: right;">
+      <strong>Next →</strong><br>
+      <a href="{{ page.next.url }}">{{ page.next.title }}</a>
+    </div>
+    {% endif %}
+  </nav>
+</article>
