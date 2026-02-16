@@ -16,6 +16,7 @@ markdown: kramdown
 plugins:
   - jekyll-feed
   - jekyll-gfm-admonitions
+  - jekyll-sitemap
 
 highlighter: rouge
 
