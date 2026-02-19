@@ -39,7 +39,7 @@
     "d3-selection": "^3.0.0",
     "d3-zoom": "^3.0.0",
     "date-holidays": "^3.26.8",
-    "electron-updater": "^6.3.9",
+    "electron-updater": "^6.8.3",
     "fs-extra": "^11.3.3",
     "harper.js": "^1.7.0",
     "material-symbols": "^0.40.2",
