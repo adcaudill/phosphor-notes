@@ -40,7 +40,7 @@
     "d3-zoom": "^3.0.0",
     "date-holidays": "^3.26.8",
     "electron-updater": "^6.8.3",
-    "fs-extra": "^11.3.3",
+    "fs-extra": "^11.3.4",
     "harper.js": "^1.9.0",
     "material-symbols": "^0.40.2",
     "minisearch": "^7.2.0",
