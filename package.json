@@ -28,7 +28,7 @@
     "@codemirror/lang-markdown": "^6.5.0",
     "@codemirror/language": "^6.12.2",
     "@codemirror/lint": "^6.9.5",
-    "@codemirror/state": "^6.5.4",
+    "@codemirror/state": "^6.7.1",
     "@codemirror/view": "^6.40.0",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
