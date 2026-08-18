@@ -40,7 +40,7 @@ jobs:
           working-directory: docs # Run bundler in the docs directory where the Gemfile lives
       - name: Setup Pages
         id: pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
       - name: Build with Jekyll
         # Build from within 'docs' (Gemfile/config there) and output to repo-root './_site'
         working-directory: docs
