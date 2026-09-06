@@ -10,6 +10,7 @@ import retextRedundantAcronyms from 'retext-redundant-acronyms';
 import retextIntensify from 'retext-intensify';
 import retextSyntaxUrls from 'retext-syntax-urls';
 import { Diagnostic, runCustomChecks } from './customChecks';
+import { binaryInlined } from 'harper.js/binaryInlined';
 type HarperModule = typeof import('harper.js');
 type HarperLint = import('harper.js').Lint;
 type HarperLinter = import('harper.js').Linter;
@@ -230,8 +231,7 @@ const getHarperLinter = async (): Promise<HarperLinter | null> => {
         };
 
         const linter = new harper.LocalLinter({
-          // Use the inlined WASM to avoid MIME-type issues when served by dev/preview servers.
-          binary: harper.binaryInlined ?? harper.binary,
+          binary: binaryInlined,
           dialect: detectDialect()
         });
 
