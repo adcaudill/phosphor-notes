@@ -1309,14 +1309,15 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
               try {
                 safeLog('Import: compiled worker missing, using runtime TS fallback');
                 const tsCode = fs.readFileSync(possibleSrc, 'utf-8');
-                // Transpile with Typescript at runtime to CommonJS
-                const ts = await import('typescript');
-                const transpiled = ts.transpileModule(tsCode, {
-                  compilerOptions: {
-                    module: ts.ModuleKind.CommonJS,
-                    target: ts.ScriptTarget.ES2020
-                  }
-                }).outputText;
+                // Transpile with esbuild at runtime to CommonJS
+                const { transform } = await import('esbuild');
+                const transpiled = (
+                  await transform(tsCode, {
+                    loader: 'ts',
+                    format: 'cjs',
+                    target: 'es2020'
+                  })
+                ).code;
 
                 // Start worker from transpiled code using eval
                 worker = new Worker(transpiled, { eval: true });

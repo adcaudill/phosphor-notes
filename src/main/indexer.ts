@@ -574,16 +574,16 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
           safeError('Failed to inline shared util for runtime worker:', inlineErr);
         }
 
-        // Transpile with Typescript at runtime to CommonJS
+        // Transpile with esbuild at runtime to CommonJS
         // Import lazily to avoid top-level dependency when not needed
-        const ts = await import('typescript');
-        const transpiled = ts.transpileModule(tsCode, {
-          compilerOptions: {
-            module: ts.ModuleKind.CommonJS,
-            target: ts.ScriptTarget.ES2020,
-            jsx: ts.JsxEmit.React
-          }
-        }).outputText;
+        const { transform } = await import('esbuild');
+        const transpiled = (
+          await transform(tsCode, {
+            loader: 'ts',
+            format: 'cjs',
+            target: 'es2020'
+          })
+        ).code;
 
         // Start worker from transpiled code using eval
         indexerWorker = new Worker(transpiled, { eval: true });
@@ -735,8 +735,10 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
       }
     }
 
-    // If we reach here, no worker could be started
-    safeError(`Indexer worker not found at ${workerPath} and no source fallback available.`);
+    // If we reach here, no worker could be started and no source fallback was available.
+    if (!fs.existsSync(possibleSrc)) {
+      safeError(`Indexer worker not found at ${workerPath} and no source fallback available.`);
+    }
   } catch (err) {
     safeError('Failed to start indexer worker:', err);
   }
