@@ -17,7 +17,23 @@ interface Suggestion {
   kind: 'completion' | 'next';
 }
 
+interface SoftSpace {
+  pos: number;
+  punctuationPending: boolean;
+}
+
 const setSuggestion = StateEffect.define<Suggestion | null>();
+const setSoftSpace = StateEffect.define<SoftSpace | null>();
+
+const attachingPunctuation = /^[,!?;:)\]}%]$/;
+
+export function shouldAttachPunctuation(text: string): boolean {
+  return attachingPunctuation.test(text);
+}
+
+export function shouldPreservePeriodSpace(text: string): boolean {
+  return /^\.?[A-Z]/.test(text);
+}
 
 const suggestionField = StateField.define<Suggestion | null>({
   create: () => null,
@@ -25,9 +41,7 @@ const suggestionField = StateField.define<Suggestion | null>({
     for (const effect of tr.effects) {
       if (effect.is(setSuggestion)) return effect.value;
     }
-    if (tr.docChanged || tr.selection) {
-      return null;
-    }
+    if (tr.docChanged || tr.selection) return null;
     return value;
   },
   provide: (field) =>
@@ -42,6 +56,17 @@ const suggestionField = StateField.define<Suggestion | null>({
     })
 });
 
+const softSpaceField = StateField.define<SoftSpace | null>({
+  create: () => null,
+  update(value, tr) {
+    for (const effect of tr.effects) {
+      if (effect.is(setSoftSpace)) return effect.value;
+    }
+    if (tr.docChanged || tr.selection) return null;
+    return value;
+  }
+});
+
 class GhostSuggestionWidget extends WidgetType {
   constructor(private readonly text: string) {
     super();
@@ -53,6 +78,41 @@ class GhostSuggestionWidget extends WidgetType {
     span.textContent = this.text;
     return span;
   }
+}
+
+function handleSoftSpaceInput(view: EditorView, from: number, to: number, text: string): boolean {
+  const softSpace = view.state.field(softSpaceField, false);
+  if (!softSpace || from !== to || from !== softSpace.pos + 1) return false;
+  if (view.state.doc.sliceString(softSpace.pos, from) !== ' ') return false;
+
+  if (!softSpace.punctuationPending && text === '.') {
+    view.dispatch({
+      changes: { from, to, insert: text },
+      effects: setSoftSpace.of({ ...softSpace, punctuationPending: true }),
+      selection: EditorSelection.cursor(from + text.length)
+    });
+    return true;
+  }
+
+  if (!softSpace.punctuationPending && shouldAttachPunctuation(text)) {
+    view.dispatch({
+      changes: { from: softSpace.pos, to, insert: text },
+      effects: setSoftSpace.of(null),
+      selection: EditorSelection.cursor(softSpace.pos + text.length)
+    });
+    return true;
+  }
+
+  if (!softSpace.punctuationPending) return false;
+
+  if (shouldPreservePeriodSpace(text)) return false;
+
+  view.dispatch({
+    changes: { from: softSpace.pos, to, insert: `.${text}` },
+    effects: setSoftSpace.of(null),
+    selection: EditorSelection.cursor(softSpace.pos + text.length + 1)
+  });
+  return true;
 }
 
 function getSentenceContext(view: EditorView, head: number): string {
@@ -130,9 +190,20 @@ function acceptSuggestion(view: EditorView): boolean {
   if (!suggestion) return false;
 
   const insertAt = view.state.selection.main.head;
+  const insertedSpace = suggestion.text.endsWith(' ');
   const tr = view.state.update({
     changes: { from: insertAt, to: insertAt, insert: suggestion.text },
-    effects: setSuggestion.of(null),
+    effects: [
+      setSuggestion.of(null),
+      ...(insertedSpace
+        ? [
+            setSoftSpace.of({
+              pos: insertAt + suggestion.text.length - 1,
+              punctuationPending: false
+            })
+          ]
+        : [])
+    ],
     selection: EditorSelection.cursor(insertAt + suggestion.text.length)
   });
   view.dispatch(tr);
@@ -188,5 +259,12 @@ export function createQuickTypeExtension(getEngine: () => PredictionEngine | nul
     }
   });
 
-  return [suggestionField, plugin, theme, Prec.highest(keymap.of(createKeymap()))];
+  return [
+    suggestionField,
+    softSpaceField,
+    plugin,
+    theme,
+    Prec.highest(EditorView.inputHandler.of(handleSoftSpaceInput)),
+    Prec.highest(keymap.of(createKeymap()))
+  ];
 }
