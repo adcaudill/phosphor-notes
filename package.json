@@ -76,7 +76,7 @@
     "@types/stopword": "^2.0.3",
     "@types/turndown": "^5.0.5",
     "@vitejs/plugin-react": "^6.0.0",
-    "@vitest/coverage-v8": "^5.0.0",
+    "@vitest/coverage-v8": "^5.0.1",
     "@vitest/ui": "^5.0.0",
     "electron": "^39.6.1",
     "electron-builder": "^26.8.1",
