@@ -222,6 +222,13 @@ Content`;
       expect(graph['contact.md']).toEqual([]);
     });
 
+    it('should include unresolved wikilink targets as empty nodes', () => {
+      const graph = buildWikiGraph({ 'index.md': '[[future-page]]' });
+
+      expect(graph['index.md']).toEqual(['future-page.md']);
+      expect(graph['future-page.md']).toEqual([]);
+    });
+
     it('should handle empty files', () => {
       const files = { 'empty.md': '' };
       const graph = buildWikiGraph(files);

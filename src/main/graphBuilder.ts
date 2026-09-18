@@ -165,6 +165,9 @@ export function buildWikiGraph(fileContents: Record<string, string>, files?: str
     const allLinks = [...links, ...ownPathLinks];
 
     graph[filename] = allLinks;
+    for (const target of allLinks) {
+      if (!graph[target]) graph[target] = [];
+    }
   }
 
   // Add virtual temporal nodes for daily notes if file list is provided

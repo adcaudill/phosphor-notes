@@ -327,6 +327,9 @@ parentPort?.on(
             const uniqueLinks = Array.from(new Set(allLinks));
 
             graph[filename] = uniqueLinks;
+            for (const target of uniqueLinks) {
+              if (!graph[target]) graph[target] = [];
+            }
 
             // Extract tasks from this file
             const fileTasks = extractTasks(content, filename);
