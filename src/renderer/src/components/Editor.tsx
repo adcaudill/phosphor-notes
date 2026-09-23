@@ -33,7 +33,7 @@ import {
 import { createSearchExtension, createSearchAPI } from '../editor/extensions/search';
 import { useSettings } from '../hooks/useSettings';
 import { pdfWidgetPlugin } from '../editor/extensions/pdfWidget';
-import { smartPaste } from '../editor/extensions/smartPaste';
+import { createSmartPaste } from '../editor/extensions/smartPaste';
 import { getURLAtPosition, urlExtensions } from '../editor/extensions/urlHandler';
 import { strikethroughExtension } from '../editor/extensions/strikethrough';
 import { SearchPanel } from './SearchPanel';
@@ -202,10 +202,10 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
           keymap.of([...closeBracketsKeymap, ...baseKeymap, ...foldKeymap]), // base keymap + folding
           ...(isOutlinerMode
             ? [
-                outlinerKeymapExtension,
-                outlinerHangingIndentExtension,
-                outlinerNestingGuidesExtension
-              ]
+              outlinerKeymapExtension,
+              outlinerHangingIndentExtension,
+              outlinerNestingGuidesExtension
+            ]
             : []), // outliner behavior + wrapped indent + nesting guides
           EditorView.lineWrapping, // Soft wrap long lines
           markdown(), // Markdown syntax support
@@ -235,7 +235,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
           createCombinedAutocompleteExtension(wikiPageSuggestions), // Autocomplete for wiki links and slash commands
           createQuickTypeExtension(getPredictionEngine), // QuickType-style inline suggestions
           ...urlExtensions, // URL detection, styling, and tooltips
-          smartPaste,
+          createSmartPaste(isOutlinerMode),
           strikethroughExtension,
 
           // 2. Listener for changes (call latest handler via ref, reconstruct with frontmatter)
