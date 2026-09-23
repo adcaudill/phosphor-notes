@@ -31,6 +31,27 @@ function getIndentationString(line: string): string {
   return match ? match[1] : '';
 }
 
+function getSelectedLineNumbers(state: EditorView['state']): number[] {
+  const lineNumbers = new Set<number>();
+
+  for (const range of state.selection.ranges) {
+    let end = range.to;
+
+    // A selection ending at the start of a line should not include that line.
+    if (end > range.from && end < state.doc.length && state.doc.lineAt(end).from === end) {
+      end -= 1;
+    }
+
+    const firstLine = state.doc.lineAt(range.from).number;
+    const lastLine = state.doc.lineAt(end).number;
+    for (let lineNumber = firstLine; lineNumber <= lastLine; lineNumber += 1) {
+      lineNumbers.add(lineNumber);
+    }
+  }
+
+  return Array.from(lineNumbers).sort((first, second) => first - second);
+}
+
 /**
  * Find the indentation of the nearest bullet line above (including current).
  * Fallback to the current line indentation if no bullet is found.
@@ -131,9 +152,8 @@ export const outlinerSoftBreak = (view: EditorView): boolean => {
 export const outlinerTab = (view: EditorView): boolean => {
   const changes: ChangeSpec[] = [];
 
-  for (const range of view.state.selection.ranges) {
-    const line = view.state.doc.lineAt(range.head);
-
+  for (const lineNumber of getSelectedLineNumbers(view.state)) {
+    const line = view.state.doc.line(lineNumber);
     // Add 4 spaces (one tab stop)
     changes.push({
       from: line.from,
@@ -156,8 +176,8 @@ export const outlinerTab = (view: EditorView): boolean => {
 export const outlinerShiftTab = (view: EditorView): boolean => {
   const changes: ChangeSpec[] = [];
 
-  for (const range of view.state.selection.ranges) {
-    const line = view.state.doc.lineAt(range.head);
+  for (const lineNumber of getSelectedLineNumbers(view.state)) {
+    const line = view.state.doc.line(lineNumber);
     const indent = getIndentationLevel(line.text);
 
     // Only outdent if there's indentation to remove
