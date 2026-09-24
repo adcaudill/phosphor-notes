@@ -46,62 +46,64 @@ export function DailyTaskRollup({
   const overdueCount = sorted.filter((t) => t.dueDate && isPastDate(t.dueDate, today)).length;
 
   return (
-    <div className="daily-task-rollup">
-      <button
-        type="button"
-        className="daily-task-rollup-header"
-        onClick={() => setCollapsed((v) => !v)}
-      >
-        <span className={`material-symbols-outlined daily-task-rollup-chevron ${collapsed ? '' : 'open'}`}>
-          chevron_right
-        </span>
-        <span className="material-symbols-outlined daily-task-rollup-icon">
-          {overdueCount > 0 ? 'warning' : 'event_upcoming'}
-        </span>
-        <span className="daily-task-rollup-summary">
-          {overdueCount > 0
-            ? `${overdueCount} overdue, ${sorted.length - overdueCount} due today`
-            : `${sorted.length} due today`}
-        </span>
-        <span
-          className="daily-task-rollup-dismiss"
-          onClick={(e) => {
-            e.stopPropagation();
-            setDismissed(true);
-          }}
-          title="Dismiss for now"
+    <div className="daily-task-rollup-container">
+      <div className="daily-task-rollup">
+        <button
+          type="button"
+          className="daily-task-rollup-header"
+          onClick={() => setCollapsed((v) => !v)}
         >
-          <span className="material-symbols-outlined">close</span>
-        </span>
-      </button>
-      {!collapsed && (
-        <div className="daily-task-rollup-list">
-          {sorted.map((task) => (
-            <div
-              key={`${task.file}-${task.line}`}
-              className={`daily-task-rollup-item task-${task.status} ${task.dueDate && isPastDate(task.dueDate, today) ? 'overdue' : ''}`}
-              onClick={() => onTaskClick(task.file, task.line)}
-            >
-              <span
-                className="task-status-icon"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleStatus(task);
-                }}
-                title="Cycle status"
+          <span className={`material-symbols-outlined daily-task-rollup-chevron ${collapsed ? '' : 'open'}`}>
+            chevron_right
+          </span>
+          <span className="material-symbols-outlined daily-task-rollup-icon">
+            {overdueCount > 0 ? 'warning' : 'event_upcoming'}
+          </span>
+          <span className="daily-task-rollup-summary">
+            {overdueCount > 0
+              ? `${overdueCount} overdue, ${sorted.length - overdueCount} due today`
+              : `${sorted.length} due today`}
+          </span>
+          <span
+            className="daily-task-rollup-dismiss"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDismissed(true);
+            }}
+            title="Dismiss for now"
+          >
+            <span className="material-symbols-outlined">close</span>
+          </span>
+        </button>
+        {!collapsed && (
+          <div className="daily-task-rollup-list">
+            {sorted.map((task) => (
+              <div
+                key={`${task.file}-${task.line}`}
+                className={`daily-task-rollup-item task-${task.status} ${task.dueDate && isPastDate(task.dueDate, today) ? 'overdue' : ''}`}
+                onClick={() => onTaskClick(task.file, task.line)}
               >
-                <span className="material-symbols-outlined">
-                  {task.status === 'todo' ? 'check_box_outline_blank' : 'indeterminate_check_box'}
+                <span
+                  className="task-status-icon"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleStatus(task);
+                  }}
+                  title="Cycle status"
+                >
+                  <span className="material-symbols-outlined">
+                    {task.status === 'todo' ? 'check_box_outline_blank' : 'indeterminate_check_box'}
+                  </span>
                 </span>
-              </span>
-              <span className="daily-task-rollup-text">{task.text}</span>
-              {task.file !== currentFile && (
-                <span className="daily-task-rollup-file">{task.file}</span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+                <span className="daily-task-rollup-text">{task.text}</span>
+                {task.file !== currentFile && (
+                  <span className="daily-task-rollup-file">{task.file}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
