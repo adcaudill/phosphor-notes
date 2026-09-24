@@ -18,6 +18,21 @@ import { mcpController } from '../mcp/controller';
 import { getConfigPath } from '../mcp/config';
 import * as vaultState from '../vaultState';
 
+// The default MCP port is a real, well-known port a user's own running app
+// may legitimately be listening on right now (this has happened twice
+// already) - so any test that actually binds a port asks the OS for a free
+// one instead of relying on the controller's built-in default.
+async function getEphemeralPort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const probe = net.createServer();
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const port = (probe.address() as net.AddressInfo).port;
+      probe.close(() => resolve(port));
+    });
+  });
+}
+
 describe('mcpController', () => {
   let userDataDir: string;
 
@@ -40,6 +55,7 @@ describe('mcpController', () => {
 
   it('enable() starts listening, persists enabled:true, and disable() stops it', async () => {
     await mcpController.init(userDataDir);
+    await mcpController.setPort(await getEphemeralPort());
 
     const afterEnable = await mcpController.enable();
     expect(afterEnable.listening).toBe(true);
@@ -84,10 +100,19 @@ describe('mcpController', () => {
 
   it('setPort while listening rebinds to the new port', async () => {
     await mcpController.init(userDataDir);
+    await mcpController.setPort(await getEphemeralPort());
     const first = await mcpController.enable();
     const firstPort = first.port;
 
-    const second = await mcpController.setPort(firstPort === 47823 ? 47824 : 47823);
+    // Ask the OS for a second free port, distinct from the one already
+    // bound (an ephemeral port is never reused while still open, but loop
+    // just in case, rather than assume).
+    let nextPort = await getEphemeralPort();
+    while (nextPort === firstPort) {
+      nextPort = await getEphemeralPort();
+    }
+
+    const second = await mcpController.setPort(nextPort);
     expect(second.listening).toBe(true);
     expect(second.port).not.toBe(firstPort);
   });
