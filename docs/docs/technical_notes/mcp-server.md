@@ -25,7 +25,7 @@ Once enabled, any AI app you authorize can read your vault's contents, and that 
 | `get_vault_status` | Vault name, open/locked/readable state - the only tool that works before unlocking |
 | `list_notes` | List notes, optionally scoped to a folder |
 | `read_note` | Full text and parsed frontmatter of one note |
-| `search_notes` | Full-text search |
+| `search_notes` | Full-text search. Requires every query word to match (unlike the app's own Cmd+K search, which is deliberately forgiving) - a compound query like an email address won't return unrelated notes that only share one word with it. |
 | `list_tasks` | Filter checkbox tasks by status, file, or due date |
 | `get_note_links` | A note's outgoing wikilinks and backlinks |
 | `get_graph_stats` | Vault-wide link graph statistics |
@@ -40,14 +40,17 @@ A second toggle, off by default even when read access is on, controls write acce
 | Tool | What it does |
 |---|---|
 | `create_note` | Creates a new note. Refuses to overwrite an existing one unless you're explicitly asked to allow it, in which case the old content is backed up to a `.bak` file first. |
-| `append_to_note` | Adds content to the *end* of an existing note - the only way to modify an existing note through this connection. There is no tool that edits the middle of a note or replaces its content wholesale. |
+| `append_to_note` | Adds content to the *end* of an existing note. There is no tool that edits the middle of a note or replaces its content wholesale. |
+| `insert_under_bullet` | Adds content under a *specific existing bullet* elsewhere in an outliner note (found by matching its text), rather than only at the very end - useful for filing new content under an already-existing heading-like bullet instead of creating a duplicate. |
 | `add_task` | Adds one checkbox task, by default to today's daily journal (auto-created if needed). |
+
+Together, `append_to_note` and `insert_under_bullet` are the only ways to modify an existing note through this connection - there is no tool that edits arbitrary text in place, deletes, renames, or moves a note.
 
 Notes created or appended to this way automatically match the target note's own formatting convention - see "Outliner vs. freeform" below. Writes take effect immediately; there's no per-call confirmation dialog from Phosphor itself; the connected AI app's own tool-approval UI is the safety net for that.
 
 **Outliner vs. freeform**
 
-A note's format is entirely determined by its own frontmatter (`mode: outliner` vs. anything else/absent). `create_note` picks a sensible default (your journal-mode setting for daily-note-named files, freeform otherwise) unless you specify one; `append_to_note` and `add_task` always detect the target's existing mode and format new content to match - plain paragraphs for freeform notes, properly nested `- ` bullets (4 spaces per level) for outliner notes. Checkbox tasks (`- [ ] ...`) work the same way in both modes.
+A note's format is entirely determined by its own frontmatter (`mode: outliner` vs. anything else/absent). `create_note` picks a sensible default (your journal-mode setting for daily-note-named files, freeform otherwise) unless you specify one; `append_to_note`, `insert_under_bullet`, and `add_task` always detect the target's existing mode and format new content to match - plain paragraphs for freeform notes, properly nested `- ` bullets (4 spaces per level) for outliner notes. Relative indentation is preserved, not flattened: an indented line in what's written becomes a nested child, an unindented one a new top-level (or, for `insert_under_bullet`, top-of-that-subtree) bullet. Checkbox tasks (`- [ ] ...`) work the same way in both modes. `insert_under_bullet` only applies to outliner notes - it matches an existing bullet by a case-insensitive substring of its own text and requires that match to be unique, erroring with a list of candidates if it isn't.
 
 **Known limitations**
 

@@ -233,12 +233,32 @@ const initSearch = (): void => {
   });
 };
 
+// Splits a query the same simple way MiniSearch's default tokenizer does
+// (non-word-character boundaries), for finding a snippet line that actually
+// contains something the search matched on - not necessarily the full
+// literal query string, since the engine itself matches per-token.
+// Exported for direct unit testing (see worker/__tests__/indexer.snippet.test.ts).
+export function queryTokens(query: string): string[] {
+  return query
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((t) => t.length > 0);
+}
+
+// Strips a leading YAML-ish frontmatter block (same pattern as extractTags
+// above), so snippet generation never picks the frontmatter delimiter line
+// itself - "---" is non-blank, so without this it would otherwise "win" the
+// first-non-blank-line fallback for nearly every note.
+export function stripFrontmatter(content: string): string {
+  return content.replace(/^---\n[\s\S]*?\n---\n?/, '');
+}
+
 parentPort?.on(
   'message',
   async (
     msg:
       | string
-      | { type: string; query: string; requestId?: string }
+      | { type: string; query: string; requestId?: string; combineWith?: 'OR' | 'AND' }
       | { vaultPath?: string; masterKey?: string }
   ) => {
     // Handle search queries
@@ -248,7 +268,12 @@ parentPort?.on(
       'type' in msg &&
       (msg as { type?: unknown }).type === 'search'
     ) {
-      const searchMsg = msg as { type: 'search'; query: string; requestId?: string };
+      const searchMsg = msg as {
+        type: 'search';
+        query: string;
+        requestId?: string;
+        combineWith?: 'OR' | 'AND';
+      };
       if (!searchEngine) {
         // Return empty results if search engine not ready yet
         parentPort?.postMessage({
@@ -258,25 +283,44 @@ parentPort?.on(
         });
         return;
       }
-      const results = searchEngine.search(searchMsg.query, { prefix: true });
+      const results = searchEngine.search(searchMsg.query, {
+        prefix: true,
+        combineWith: searchMsg.combineWith ?? 'OR'
+      });
+
+      const tokens = queryTokens(searchMsg.query);
 
       // Generate snippets from content
       const resultsWithSnippets = results.slice(0, 20).map((result: Record<string, unknown>) => {
-        const content = typeof result.content === 'string' ? result.content : '';
-        // Find the first line containing the search query (case-insensitive)
+        const rawContent = typeof result.content === 'string' ? result.content : '';
+        const content = stripFrontmatter(rawContent);
         const lines = content.split('\n').filter((line) => line.trim().length > 0);
         let snippet = '';
 
+        // Prefer a line containing the literal full query string...
         for (const line of lines) {
           if (line.toLowerCase().includes(searchMsg.query.toLowerCase())) {
-            // Extract first 100 chars and clean up
             snippet = line.substring(0, 120).trim();
             if (snippet.length === 120) snippet += '…';
             break;
           }
         }
 
-        // If no match found in content but title matched, use first non-empty line
+        // ...otherwise, a line containing any token the query actually
+        // matched on (the common case: the engine matched per-token, so no
+        // single line necessarily contains the full literal query).
+        if (!snippet && tokens.length > 0) {
+          for (const line of lines) {
+            const lower = line.toLowerCase();
+            if (tokens.some((t) => lower.includes(t))) {
+              snippet = line.substring(0, 120).trim();
+              if (snippet.length === 120) snippet += '…';
+              break;
+            }
+          }
+        }
+
+        // Last resort: first non-blank body line (frontmatter already stripped).
         if (!snippet && lines.length > 0) {
           snippet = lines[0].substring(0, 120).trim();
           if (snippet.length === 120) snippet += '…';

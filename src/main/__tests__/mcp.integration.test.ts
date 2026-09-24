@@ -94,6 +94,11 @@ describe('MCP server (integration)', () => {
           expectedGeneration: ctx.generation,
           createIfMissing
         }),
+      insertUnderBullet: (relPath, matchText, addition, ctx, insertOpts) =>
+        vaultWriter.insertUnderBullet(vault, relPath, matchText, addition, {
+          expectedGeneration: ctx.generation,
+          occurrence: insertOpts?.occurrence
+        }),
       searchNotes: async (query: string) => [
         { filename: 'top.md', title: 'Top', snippet: `...${query}...` }
       ],
@@ -425,12 +430,20 @@ describe('MCP server (integration)', () => {
       expect(namesOff).not.toContain('create_note');
       expect(namesOff).not.toContain('append_to_note');
       expect(namesOff).not.toContain('add_task');
+      expect(namesOff).not.toContain('insert_under_bullet');
       await clientOff.close();
 
       writeEnabled = true;
       const clientOn = await makeClient(token);
       const namesOn = (await clientOn.listTools()).tools.map((t) => t.name);
-      expect(namesOn).toEqual(expect.arrayContaining(['create_note', 'append_to_note', 'add_task']));
+      expect(namesOn).toEqual(
+        expect.arrayContaining([
+          'create_note',
+          'append_to_note',
+          'add_task',
+          'insert_under_bullet'
+        ])
+      );
       await clientOn.close();
     });
 
@@ -564,6 +577,76 @@ describe('MCP server (integration)', () => {
       expect(fs.readFileSync(path.join(vault, 'Freeform.md'), 'utf-8')).toBe(
         'First paragraph.\n\nSecond paragraph.\n'
       );
+      await client.close();
+    });
+
+    it('inserts under an existing bullet, after its existing children, end-to-end', async () => {
+      fs.writeFileSync(
+        path.join(vault, 'Nested.md'),
+        '---\nmode: outliner\n---\n- [[IOmergent]]\n    - Meetings\n        - Standup\n- Personal\n'
+      );
+      const client = await makeClient(token);
+      const result = await client.callTool({
+        name: 'insert_under_bullet',
+        arguments: { path: 'Nested.md', matchText: 'Meetings', content: 'Planning session' }
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toMatchObject({
+        mode: 'outliner',
+        matchedText: 'Meetings'
+      });
+      expect(fs.readFileSync(path.join(vault, 'Nested.md'), 'utf-8')).toBe(
+        '---\nmode: outliner\n---\n' +
+          '- [[IOmergent]]\n' +
+          '    - Meetings\n' +
+          '        - Standup\n' +
+          '        - Planning session\n' +
+          '- Personal\n'
+      );
+      await client.close();
+    });
+
+    it('rejects insert_under_bullet on a freeform note', async () => {
+      fs.writeFileSync(path.join(vault, 'PlainNote.md'), 'Just prose.');
+      const client = await makeClient(token);
+      const result = await client.callTool({
+        name: 'insert_under_bullet',
+        arguments: { path: 'PlainNote.md', matchText: 'prose', content: 'x' }
+      });
+      expect(result.isError).toBe(true);
+      expect((result.content as Array<{ text: string }>)[0].text).toContain('NOT_OUTLINER_MODE');
+      expect(fs.readFileSync(path.join(vault, 'PlainNote.md'), 'utf-8')).toBe('Just prose.');
+      await client.close();
+    });
+
+    it('reports AMBIGUOUS_MATCH listing every match when matchText is not unique', async () => {
+      const doc = '---\nmode: outliner\n---\n- Notes\n- Project Notes\n';
+      fs.writeFileSync(path.join(vault, 'Ambiguous.md'), doc);
+      const client = await makeClient(token);
+      const result = await client.callTool({
+        name: 'insert_under_bullet',
+        arguments: { path: 'Ambiguous.md', matchText: 'Notes', content: 'x' }
+      });
+      expect(result.isError).toBe(true);
+      const text = (result.content as Array<{ text: string }>)[0].text;
+      expect(text).toContain('AMBIGUOUS_MATCH');
+      expect(text).toContain('Project Notes');
+      expect(fs.readFileSync(path.join(vault, 'Ambiguous.md'), 'utf-8')).toBe(doc);
+      await client.close();
+    });
+
+    it('reports BULLET_NOT_FOUND without writing when nothing matches', async () => {
+      const doc = '---\nmode: outliner\n---\n- Something\n';
+      fs.writeFileSync(path.join(vault, 'NoMatch.md'), doc);
+      const client = await makeClient(token);
+      const result = await client.callTool({
+        name: 'insert_under_bullet',
+        arguments: { path: 'NoMatch.md', matchText: 'Nonexistent', content: 'x' }
+      });
+      expect(result.isError).toBe(true);
+      expect((result.content as Array<{ text: string }>)[0].text).toContain('BULLET_NOT_FOUND');
+      expect(fs.readFileSync(path.join(vault, 'NoMatch.md'), 'utf-8')).toBe(doc);
       await client.close();
     });
 

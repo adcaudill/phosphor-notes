@@ -828,7 +828,10 @@ let searchResultsCallback: ((results: unknown[]) => void) | null = null;
  * of racing on a single shared callback. Prefer this over `performSearch`
  * below for any new caller.
  */
-export function searchAsync(query: string, opts?: { timeoutMs?: number }): Promise<unknown[]> {
+export function searchAsync(
+  query: string,
+  opts?: { timeoutMs?: number; combineWith?: 'OR' | 'AND' }
+): Promise<unknown[]> {
   const timeoutMs = opts?.timeoutMs ?? 5000;
   return new Promise((resolve) => {
     if (!indexerWorker) {
@@ -848,7 +851,7 @@ export function searchAsync(query: string, opts?: { timeoutMs?: number }): Promi
       resolve([]);
     }, timeoutMs);
     pendingSearches.set(requestId, { resolve, timer });
-    indexerWorker.postMessage({ type: 'search', query, requestId });
+    indexerWorker.postMessage({ type: 'search', query, requestId, combineWith: opts?.combineWith });
   });
 }
 

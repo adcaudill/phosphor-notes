@@ -54,8 +54,13 @@ const BULLET_MARKER_RE = /^[-*+](\s+|$)/;
  * clamps so a level can never jump more than one deeper than the line
  * before it. Blank lines are dropped; fenced code blocks are passed through
  * as children of the previous bullet rather than turned into bullets.
+ *
+ * `baseLevel` shifts every emitted line that many levels deeper - used by
+ * `insertUnderBullet` to re-base freshly-normalized content so it lands as
+ * a child of a specific existing bullet rather than always starting at the
+ * top level.
  */
-export function normalizeOutlinerLines(text: string): string[] {
+export function normalizeOutlinerLines(text: string, baseLevel = 0): string[] {
   const lines = text.split('\n');
 
   let unit = 4;
@@ -81,13 +86,13 @@ export function normalizeOutlinerLines(text: string): string[] {
   for (const rawLine of lines) {
     if (isFenceMarker(rawLine)) {
       const level = Math.max(lastLevel, 0);
-      out.push('    '.repeat(level + 1) + rawLine.trimStart());
+      out.push('    '.repeat(level + 1 + baseLevel) + rawLine.trimStart());
       inFence = !inFence;
       continue;
     }
     if (inFence) {
       const level = Math.max(lastLevel, 0);
-      out.push('    '.repeat(level + 1) + rawLine.trimStart());
+      out.push('    '.repeat(level + 1 + baseLevel) + rawLine.trimStart());
       continue;
     }
     if (rawLine.trim() === '') continue;
@@ -97,7 +102,7 @@ export function normalizeOutlinerLines(text: string): string[] {
     const stripped = rawLine.trimStart().replace(BULLET_MARKER_RE, '');
     if (stripped.trim() === '') continue; // a lone "-"/"* " etc. - nothing to bullet
 
-    out.push('    '.repeat(level) + '- ' + stripped);
+    out.push('    '.repeat(level + baseLevel) + '- ' + stripped);
     lastLevel = level;
   }
 
@@ -176,6 +181,171 @@ export function formatAppend(
   return mode === 'outliner'
     ? formatOutlinerAppend(frontmatterRaw, body, normalizedAddition)
     : formatFreeformAppend(frontmatterRaw, body, normalizedAddition);
+}
+
+export class NotOutlinerModeError extends Error {
+  constructor() {
+    super(
+      'This note is not in outliner mode - insert_under_bullet only applies to outliner notes; use append_to_note for a freeform note.'
+    );
+    this.name = 'NotOutlinerModeError';
+  }
+}
+
+export class BulletNotFoundError extends Error {
+  constructor(public readonly matchText: string) {
+    super(`No bullet matching "${matchText}" was found in this note.`);
+    this.name = 'BulletNotFoundError';
+  }
+}
+
+export interface BulletMatch {
+  /** 1-based line number within the note's body (frontmatter not counted). */
+  line: number;
+  /** The bullet's own text, with its marker and any checkbox stripped. */
+  text: string;
+}
+
+export class AmbiguousMatchError extends Error {
+  constructor(
+    public readonly matchText: string,
+    public readonly matches: BulletMatch[]
+  ) {
+    super(
+      `"${matchText}" matches ${matches.length} bullets: ` +
+        matches.map((m) => `line ${m.line}: "${m.text}"`).join('; ') +
+        `. Pass a more specific matchText, or an "occurrence" (1-${matches.length}) to disambiguate.`
+    );
+    this.name = 'AmbiguousMatchError';
+  }
+}
+
+interface ParsedOutlinerLine {
+  index: number; // 0-based index into the body's lines array
+  raw: string;
+  isBullet: boolean;
+  /** Only meaningful when isBullet is true. Existing app-written content is always an exact multiple of 4 spaces/level. */
+  level: number;
+  /** Only meaningful when isBullet is true: marker and checkbox stripped. */
+  text: string;
+}
+
+function parseOutlinerLines(body: string): ParsedOutlinerLine[] {
+  return body.split('\n').map((raw, index) => {
+    if (raw.trim() === '') {
+      return { index, raw, isBullet: false, level: 0, text: '' };
+    }
+    const trimmed = raw.trimStart();
+    if (!BULLET_MARKER_RE.test(trimmed)) {
+      return { index, raw, isBullet: false, level: 0, text: '' };
+    }
+    const afterMarker = trimmed.replace(BULLET_MARKER_RE, '');
+    const afterCheckbox = afterMarker.replace(/^\[[ x/]\]\s*/i, '');
+    return {
+      index,
+      raw,
+      isBullet: true,
+      level: Math.floor(leadingWidth(raw) / 4),
+      text: afterCheckbox.trim()
+    };
+  });
+}
+
+/**
+ * Inserts `addition` as new children (appended after any existing ones) of
+ * a specific existing bullet, found by a case-insensitive substring match
+ * against each bullet's own text (marker and checkbox stripped - matching
+ * "IOmergent" against a bullet reading `- [[IOmergent]]` needs no special
+ * wikilink handling, since the bracketed text already contains it as a
+ * plain substring). Only applies to outliner notes.
+ *
+ * A bullet's children are the immediately-following lines with strictly
+ * greater indent, stopping at the first line at or above its own level (or
+ * end of note); blank lines inside that run don't end it, but the
+ * insertion point is placed right after the last real content line, not
+ * after any trailing blank gap.
+ *
+ * Known limitation: a fenced code block nested under a bullet is not
+ * itself bullet-syntax, so it's treated as ending that bullet's children
+ * block for insertion purposes (matches `normalizeOutlinerLines`' own
+ * documented fence-handling limitation).
+ */
+export function insertUnderBullet(
+  existingDoc: string,
+  matchText: string,
+  addition: string,
+  opts?: { occurrence?: number }
+): { doc: string; appended: string; matchedLine: number; matchedText: string } {
+  if (detectNoteMode(existingDoc) !== 'outliner') {
+    throw new NotOutlinerModeError();
+  }
+  if (typeof matchText !== 'string' || matchText.trim() === '') {
+    throw new InvalidArgumentError('matchText must be a non-empty string');
+  }
+
+  const { frontmatter, content: body } = extractFrontmatter(existingDoc);
+  const frontmatterRaw = frontmatter ? frontmatter.raw : null;
+
+  const bodyLines = body.split('\n');
+  const parsed = parseOutlinerLines(body);
+  const needle = matchText.toLowerCase();
+  const matches = parsed.filter((p) => p.isBullet && p.text.toLowerCase().includes(needle));
+
+  if (matches.length === 0) {
+    throw new BulletNotFoundError(matchText);
+  }
+
+  let chosen: ParsedOutlinerLine;
+  if (matches.length === 1) {
+    chosen = matches[0];
+  } else {
+    const occurrence = opts?.occurrence;
+    if (
+      occurrence === undefined ||
+      !Number.isInteger(occurrence) ||
+      occurrence < 1 ||
+      occurrence > matches.length
+    ) {
+      throw new AmbiguousMatchError(
+        matchText,
+        matches.map((m) => ({ line: m.index + 1, text: m.text }))
+      );
+    }
+    chosen = matches[occurrence - 1];
+  }
+
+  const parentLevel = chosen.level;
+  let insertAfterIndex = chosen.index;
+  for (let i = chosen.index + 1; i < parsed.length; i++) {
+    const line = parsed[i];
+    if (line.raw.trim() === '') continue; // blank line inside the children block: keep scanning
+    if (line.isBullet && line.level > parentLevel) {
+      insertAfterIndex = i;
+      continue;
+    }
+    break; // a sibling/ancestor-level bullet, or a non-bullet line: children block ends here
+  }
+
+  const addLines = normalizeOutlinerLines(addition, parentLevel + 1);
+  if (addLines.length === 0) {
+    throw new InvalidArgumentError('content produced no bullets after normalization');
+  }
+
+  const newBodyLines = [
+    ...bodyLines.slice(0, insertAfterIndex + 1),
+    ...addLines,
+    ...bodyLines.slice(insertAfterIndex + 1)
+  ];
+  let newBody = newBodyLines.join('\n');
+  if (!newBody.endsWith('\n')) newBody += '\n';
+
+  const doc = frontmatterRaw ? frontmatterRaw + '\n' + newBody : newBody;
+  return {
+    doc,
+    appended: addLines.join('\n'),
+    matchedLine: chosen.index + 1,
+    matchedText: chosen.text
+  };
 }
 
 /** Builds frontmatter for a brand-new note, fixing generateDefaultFrontmatter's gap of only emitting `mode:` for daily-note filenames. */

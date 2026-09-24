@@ -15,11 +15,24 @@ import {
   detectNoteMode,
   formatAppend,
   hasOwnFrontmatter,
+  insertUnderBullet as formatInsertUnderBullet,
   InvalidArgumentError,
+  NotOutlinerModeError,
+  BulletNotFoundError,
+  AmbiguousMatchError,
   type NoteMode
 } from '../shared/noteFormat';
 
-export { VaultLockedError, NoteNotFoundError, DecryptError, PathNotAllowedError, InvalidArgumentError };
+export {
+  VaultLockedError,
+  NoteNotFoundError,
+  DecryptError,
+  PathNotAllowedError,
+  InvalidArgumentError,
+  NotOutlinerModeError,
+  BulletNotFoundError,
+  AmbiguousMatchError
+};
 
 export class NoteAlreadyExistsError extends Error {
   constructor(public readonly relPath: string) {
@@ -312,5 +325,72 @@ export async function appendToNote(
     const endLine = nextDoc.replace(/\n$/, '').split('\n').length;
 
     return { path: relPath, created, mode, appended, parentsCreated, endLine };
+  });
+}
+
+export interface InsertUnderBulletResult {
+  path: string;
+  mode: 'outliner';
+  matchedLine: number;
+  matchedText: string;
+  appended: string;
+}
+
+export interface InsertUnderBulletOptions {
+  expectedGeneration: number;
+  occurrence?: number;
+}
+
+/**
+ * Inserts `addition` as new children (after any existing ones) of a
+ * specific existing bullet in an outliner note, located by a
+ * case-insensitive substring match against each bullet's own text - see
+ * `noteFormat.insertUnderBullet` for the full matching/placement algorithm.
+ * Unlike `appendToNote`, this never creates the target note: it must
+ * already exist (throws `NoteNotFoundError` otherwise).
+ */
+export async function insertUnderBullet(
+  vaultPath: string,
+  relPath: string,
+  matchText: string,
+  addition: string,
+  opts: InsertUnderBulletOptions
+): Promise<InsertUnderBulletResult> {
+  const absPath = await resolveWritableNotePath(vaultPath, relPath);
+
+  return withFileLock(absPath, async () => {
+    let raw: Buffer;
+    try {
+      raw = await fsp.readFile(absPath);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        throw new NoteNotFoundError(relPath);
+      }
+      throw err;
+    }
+
+    const wasEncrypted = isEncrypted(raw);
+    // Decode synchronously right after the read - no `await` in between -
+    // so a concurrent lock can't zero the key mid-decrypt.
+    const decoded = decodeBuffer(raw, absPath);
+    const doc = decoded.toString('utf-8');
+
+    const result = formatInsertUnderBullet(doc, matchText, addition, {
+      occurrence: opts.occurrence
+    });
+
+    const buf = await encodeForVault(vaultPath, Buffer.from(result.doc, 'utf-8'), {
+      forceEncrypt: wasEncrypted,
+      expectedGeneration: opts.expectedGeneration
+    });
+    await fsp.writeFile(absPath, buf);
+
+    return {
+      path: relPath,
+      mode: 'outliner',
+      matchedLine: result.matchedLine,
+      matchedText: result.matchedText,
+      appended: result.appended
+    };
   });
 }

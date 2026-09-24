@@ -52,6 +52,13 @@ export interface McpDeps {
     ctx: { generation: number },
     createIfMissing?: { frontmatter: string }
   ): Promise<vaultWriter.AppendResult>;
+  insertUnderBullet(
+    relPath: string,
+    matchText: string,
+    addition: string,
+    ctx: { generation: number },
+    opts?: { occurrence?: number }
+  ): Promise<vaultWriter.InsertUnderBulletResult>;
 }
 
 function requireVaultPath(): string {
@@ -124,7 +131,11 @@ export function buildDefaultDeps(opts: BuildDepsOptions): McpDeps {
     getAppVersion: () => app.getVersion(),
     listNotes: (folder?: string) => vaultReader.listNotes(requireVaultPath(), folder),
     readNote: (relPath: string) => vaultReader.readNoteText(requireVaultPath(), relPath),
-    searchNotes: (query: string) => searchAsync(query, { timeoutMs: 5000 }),
+    // AND-combine: an MCP caller wants precise, all-tokens-must-match
+    // results (e.g. searching a full email address), not the GUI
+    // omni-search's forgiving OR-of-tokens default - which is left
+    // untouched since this is the only caller of McpDeps.searchNotes.
+    searchNotes: (query: string) => searchAsync(query, { timeoutMs: 5000, combineWith: 'AND' }),
     getTasks: () => getLastTasks(),
     getGraph: () => getLastGraph(),
 
@@ -153,6 +164,17 @@ export function buildDefaultDeps(opts: BuildDepsOptions): McpDeps {
         createIfMissing
       });
       await afterNoteWritten(vp, relPath, result, opts.getMainWindow());
+      return result;
+    },
+
+    insertUnderBullet: async (relPath, matchText, addition, ctx, insertOpts) => {
+      const vp = requireVaultPath();
+      const result = await vaultWriter.insertUnderBullet(vp, relPath, matchText, addition, {
+        expectedGeneration: ctx.generation,
+        occurrence: insertOpts?.occurrence
+      });
+      // Never creates the note or any parent stubs.
+      await afterNoteWritten(vp, relPath, { created: false, parentsCreated: [] }, opts.getMainWindow());
       return result;
     }
   };

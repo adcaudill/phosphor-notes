@@ -47,6 +47,12 @@ function errorCodeFor(err: unknown): string {
         return 'VAULT_STATE_CHANGED';
       case 'InvalidArgumentError':
         return 'INVALID_ARGUMENT';
+      case 'NotOutlinerModeError':
+        return 'NOT_OUTLINER_MODE';
+      case 'BulletNotFoundError':
+        return 'BULLET_NOT_FOUND';
+      case 'AmbiguousMatchError':
+        return 'AMBIGUOUS_MATCH';
       default:
         return 'INTERNAL_ERROR';
     }

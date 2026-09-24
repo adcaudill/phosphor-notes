@@ -7,7 +7,11 @@ import {
   buildNewNoteDoc,
   formatTaskLine,
   localDailyNoteFilename,
-  InvalidArgumentError
+  insertUnderBullet,
+  InvalidArgumentError,
+  NotOutlinerModeError,
+  BulletNotFoundError,
+  AmbiguousMatchError
 } from '../noteFormat';
 
 describe('detectNoteMode', () => {
@@ -95,6 +99,17 @@ describe('normalizeOutlinerLines', () => {
 
   it('returns an empty array for input with nothing but blank lines', () => {
     expect(normalizeOutlinerLines('\n\n')).toEqual([]);
+  });
+
+  it('re-bases every emitted line by baseLevel, used to nest content under an existing bullet', () => {
+    expect(normalizeOutlinerLines('parent item\n  child item', 1)).toEqual([
+      '    - parent item',
+      '        - child item'
+    ]);
+  });
+
+  it('defaults baseLevel to 0 (unchanged existing behavior)', () => {
+    expect(normalizeOutlinerLines('a\nb')).toEqual(['- a', '- b']);
   });
 });
 
@@ -294,5 +309,126 @@ describe('localDailyNoteFilename', () => {
   it('pads single-digit months and days', () => {
     const d = new Date(2026, 2, 4); // March 4, 2026
     expect(localDailyNoteFilename(d)).toBe('2026-03-04.md');
+  });
+});
+
+describe('insertUnderBullet', () => {
+  const fixture =
+    '---\nmode: outliner\n---\n' +
+    '- [[IOmergent]]\n' +
+    '    - Meetings\n' +
+    '        - Standup notes\n' +
+    '    - Followups\n' +
+    '- Personal\n' +
+    '    - Groceries\n';
+
+  it('inserts after the last existing child of the matched bullet, before its next sibling', () => {
+    const result = insertUnderBullet(fixture, 'Meetings', 'New meeting');
+    expect(result.doc).toBe(
+      '---\nmode: outliner\n---\n' +
+        '- [[IOmergent]]\n' +
+        '    - Meetings\n' +
+        '        - Standup notes\n' +
+        '        - New meeting\n' +
+        '    - Followups\n' +
+        '- Personal\n' +
+        '    - Groceries\n'
+    );
+    expect(result.matchedLine).toBe(2);
+    expect(result.matchedText).toBe('Meetings');
+    expect(result.appended).toBe('        - New meeting');
+  });
+
+  it('inserts as the first child when the matched bullet has no existing children yet', () => {
+    const result = insertUnderBullet(fixture, 'Followups', 'New sub');
+    expect(result.doc).toBe(
+      '---\nmode: outliner\n---\n' +
+        '- [[IOmergent]]\n' +
+        '    - Meetings\n' +
+        '        - Standup notes\n' +
+        '    - Followups\n' +
+        '        - New sub\n' +
+        '- Personal\n' +
+        '    - Groceries\n'
+    );
+  });
+
+  it('matches a bullet by text with its checkbox marker stripped', () => {
+    const doc = '---\nmode: outliner\n---\n- [ ] Buy milk\n- Other\n';
+    const result = insertUnderBullet(doc, 'Buy milk', 'Get 2%');
+    expect(result.matchedText).toBe('Buy milk');
+    expect(result.doc).toBe(
+      '---\nmode: outliner\n---\n- [ ] Buy milk\n    - Get 2%\n- Other\n'
+    );
+  });
+
+  it('does not extend the children block across a top-level wikilink bullet with no relation', () => {
+    // "[[IOmergent]]" is matched by a substring of its own bracketed text,
+    // with no special wikilink stripping needed.
+    const result = insertUnderBullet(fixture, 'IOmergent', 'New top item');
+    // IOmergent's children run through "Followups" (its last level-1 child);
+    // "Personal" is a sibling at level 0, so insertion lands right before it,
+    // as a new level-1 child (baseLevel = parentLevel(0) + 1 = 4 spaces).
+    expect(result.doc).toContain('    - Followups\n    - New top item\n- Personal\n');
+  });
+
+  it('keeps a blank line inside an existing children block from truncating it', () => {
+    const doc = '---\nmode: outliner\n---\n- Parent\n    - Child A\n\n    - Child B\n- Sibling\n';
+    const result = insertUnderBullet(doc, 'Parent', 'Child C');
+    expect(result.doc).toBe(
+      '---\nmode: outliner\n---\n- Parent\n    - Child A\n\n    - Child B\n    - Child C\n- Sibling\n'
+    );
+  });
+
+  it('throws BulletNotFoundError, and writes nothing, when no bullet matches', () => {
+    expect(() => insertUnderBullet(fixture, 'Nonexistent', 'x')).toThrow(BulletNotFoundError);
+  });
+
+  it('throws AmbiguousMatchError listing every match when matchText is not unique', () => {
+    const doc =
+      '---\nmode: outliner\n---\n- Notes\n- Project Notes\n- Other\n';
+    let error: unknown;
+    try {
+      insertUnderBullet(doc, 'Notes', 'x');
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(AmbiguousMatchError);
+    const amb = error as AmbiguousMatchError;
+    expect(amb.matches).toEqual([
+      { line: 1, text: 'Notes' },
+      { line: 2, text: 'Project Notes' }
+    ]);
+  });
+
+  it('resolves an ambiguous match via an explicit occurrence', () => {
+    const doc = '---\nmode: outliner\n---\n- Notes\n- Project Notes\n- Other\n';
+    const result = insertUnderBullet(doc, 'Notes', 'x', { occurrence: 2 });
+    expect(result.matchedText).toBe('Project Notes');
+    expect(result.doc).toBe(
+      '---\nmode: outliner\n---\n- Notes\n- Project Notes\n    - x\n- Other\n'
+    );
+  });
+
+  it('rejects an out-of-range occurrence as ambiguous', () => {
+    const doc = '---\nmode: outliner\n---\n- Notes\n- Project Notes\n';
+    expect(() => insertUnderBullet(doc, 'Notes', 'x', { occurrence: 5 })).toThrow(
+      AmbiguousMatchError
+    );
+  });
+
+  it('throws NotOutlinerModeError for a freeform note', () => {
+    const doc = '---\ntitle: X\n---\nSome paragraph.';
+    expect(() => insertUnderBullet(doc, 'Some', 'x')).toThrow(NotOutlinerModeError);
+  });
+
+  it('rejects an empty matchText', () => {
+    expect(() => insertUnderBullet(fixture, '   ', 'x')).toThrow(InvalidArgumentError);
+  });
+
+  it('rejects content that normalizes to nothing', () => {
+    expect(() => insertUnderBullet(fixture, 'Meetings', '\n\n  \n')).toThrow(
+      InvalidArgumentError
+    );
   });
 });

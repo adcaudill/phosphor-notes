@@ -7,6 +7,7 @@ import * as crypto from '../crypto';
 import {
   createNote,
   appendToNote,
+  insertUnderBullet,
   ensureParentFilesExist,
   encodeForVault,
   withFileLock,
@@ -15,7 +16,8 @@ import {
   VaultLockedError,
   NoteNotFoundError,
   DecryptError,
-  InvalidArgumentError
+  InvalidArgumentError,
+  BulletNotFoundError
 } from '../vaultWriter';
 
 function listAllFiles(root: string): string[] {
@@ -289,6 +291,100 @@ describe('vaultWriter', () => {
       // these lines look like list items - that's expected, not a lost write).
       const nonBlankLines = finalContent.split('\n').filter((l) => l.trim() !== '');
       expect(nonBlankLines).toHaveLength(21);
+    });
+  });
+
+  describe('insertUnderBullet', () => {
+    const outlinerDoc =
+      '---\nmode: outliner\n---\n' +
+      '- [[IOmergent]]\n' +
+      '    - Meetings\n' +
+      '- Personal\n';
+
+    it('inserts as a new child of the matched bullet, on disk', async () => {
+      fs.writeFileSync(path.join(vault, 'Journal.md'), outlinerDoc);
+      const gen = vaultState.getGeneration();
+
+      const result = await insertUnderBullet(vault, 'Journal.md', 'Meetings', 'Standup', {
+        expectedGeneration: gen
+      });
+
+      expect(result).toMatchObject({ mode: 'outliner', matchedText: 'Meetings' });
+      expect(fs.readFileSync(path.join(vault, 'Journal.md'), 'utf-8')).toBe(
+        '---\nmode: outliner\n---\n' +
+          '- [[IOmergent]]\n' +
+          '    - Meetings\n' +
+          '        - Standup\n' +
+          '- Personal\n'
+      );
+    });
+
+    it('throws NoteNotFoundError for a missing note, writing nothing', async () => {
+      const gen = vaultState.getGeneration();
+      await expect(
+        insertUnderBullet(vault, 'Missing.md', 'x', 'y', { expectedGeneration: gen })
+      ).rejects.toThrow(NoteNotFoundError);
+      expect(fs.existsSync(path.join(vault, 'Missing.md'))).toBe(false);
+    });
+
+    it('throws BulletNotFoundError without modifying the file', async () => {
+      fs.writeFileSync(path.join(vault, 'Journal.md'), outlinerDoc);
+      const gen = vaultState.getGeneration();
+
+      await expect(
+        insertUnderBullet(vault, 'Journal.md', 'Nonexistent', 'x', { expectedGeneration: gen })
+      ).rejects.toThrow(BulletNotFoundError);
+      expect(fs.readFileSync(path.join(vault, 'Journal.md'), 'utf-8')).toBe(outlinerDoc);
+    });
+
+    it('aborts before writing anything if the generation has changed', async () => {
+      fs.writeFileSync(path.join(vault, 'Journal.md'), outlinerDoc);
+      const gen = vaultState.getGeneration();
+      vaultState.setVaultPath(vault); // bumps generation
+
+      await expect(
+        insertUnderBullet(vault, 'Journal.md', 'Meetings', 'x', { expectedGeneration: gen })
+      ).rejects.toThrow(VaultStateChangedError);
+      expect(fs.readFileSync(path.join(vault, 'Journal.md'), 'utf-8')).toBe(outlinerDoc);
+    });
+
+    describe('encryption', () => {
+      beforeEach(() => {
+        fs.mkdirSync(path.join(vault, '.phosphor'), { recursive: true });
+        fs.writeFileSync(path.join(vault, '.phosphor', 'security.json'), '{}');
+      });
+
+      it('keeps an already-encrypted note encrypted after inserting', async () => {
+        const key = crypto.deriveMasterKey('hunter2', crypto.generateSalt());
+        const blob = crypto.encryptBuffer(Buffer.from(outlinerDoc), key);
+        fs.writeFileSync(path.join(vault, 'Secret.md'), blob);
+
+        vaultState.setVaultPath(vault);
+        vaultState.setMasterKey(key);
+        const gen = vaultState.getGeneration();
+
+        await insertUnderBullet(vault, 'Secret.md', 'Meetings', 'Standup', {
+          expectedGeneration: gen
+        });
+
+        const raw = fs.readFileSync(path.join(vault, 'Secret.md'));
+        expect(crypto.isEncrypted(raw)).toBe(true);
+        expect(crypto.decryptBuffer(raw, key).toString('utf-8')).toContain('        - Standup\n');
+      });
+
+      it('throws VaultLockedError when locked, writing nothing', async () => {
+        const key = crypto.deriveMasterKey('hunter2', crypto.generateSalt());
+        const blob = crypto.encryptBuffer(Buffer.from(outlinerDoc), key);
+        fs.writeFileSync(path.join(vault, 'Secret.md'), blob);
+
+        vaultState.setVaultPath(vault); // locked: no setMasterKey
+        const gen = vaultState.getGeneration();
+
+        await expect(
+          insertUnderBullet(vault, 'Secret.md', 'Meetings', 'Standup', { expectedGeneration: gen })
+        ).rejects.toThrow(VaultLockedError);
+        expect(fs.readFileSync(path.join(vault, 'Secret.md'))).toEqual(blob);
+      });
     });
   });
 
