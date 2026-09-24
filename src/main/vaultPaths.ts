@@ -113,3 +113,66 @@ export async function resolveReadableFolderPath(vaultPath: string, folder?: stri
   const resolved = validateAndResolvePath(vaultPath, normalized);
   return resolveWithSymlinkCheck(vaultPath, resolved, folder);
 }
+
+/**
+ * The write-facing counterpart of `resolveReadableNotePath`. Reusing the
+ * read resolver as-is for write targets is unsafe: its "target doesn't
+ * exist yet -> return the unresolved path" fallback (harmless for a read,
+ * which just reports "not found") is an escape hatch for a write, via
+ * either a symlinked *parent directory* pointing outside the vault, or a
+ * dangling symlink *at the target* pointing outside the vault - both hit
+ * ENOENT on `realpath` and would otherwise be followed by `fs.writeFile`.
+ *
+ * This additionally: rejects the target itself being a symlink at all
+ * (writing through a note-shaped symlink is never allowed), and walks up
+ * to the nearest existing ancestor directory to verify *it* is really
+ * inside the vault, so a symlinked parent can't be used to escape before
+ * the target file itself is created.
+ */
+export async function resolveWritableNotePath(vaultPath: string, rel: string): Promise<string> {
+  const resolved = await resolveReadableNotePath(vaultPath, rel);
+
+  try {
+    const stat = await fsp.lstat(resolved);
+    if (stat.isSymbolicLink()) {
+      throw new PathNotAllowedError(rel, 'symlinked notes are not writable');
+    }
+  } catch (err) {
+    if (err instanceof PathNotAllowedError) throw err;
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw new PathNotAllowedError(rel, 'failed to stat path');
+    }
+    // Target doesn't exist yet - fall through to the ancestor-directory check.
+  }
+
+  let realVault: string;
+  try {
+    realVault = await fsp.realpath(vaultPath);
+  } catch {
+    throw new PathNotAllowedError(rel, 'vault path not accessible');
+  }
+
+  let dir = path.dirname(resolved);
+  for (;;) {
+    try {
+      const realDir = await fsp.realpath(dir);
+      if (!realDir.startsWith(realVault + path.sep) && realDir !== realVault) {
+        throw new PathNotAllowedError(rel, 'resolves outside the vault');
+      }
+      break;
+    } catch (err) {
+      if (err instanceof PathNotAllowedError) throw err;
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw new PathNotAllowedError(rel, 'failed to resolve path');
+      }
+      const parent = path.dirname(dir);
+      if (parent === dir) {
+        // Walked all the way to the filesystem root without finding the vault.
+        throw new PathNotAllowedError(rel, 'failed to resolve path');
+      }
+      dir = parent;
+    }
+  }
+
+  return resolved;
+}

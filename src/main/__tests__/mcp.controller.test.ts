@@ -1,8 +1,19 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import * as path from 'path';
 import os from 'os';
 import * as net from 'net';
+
+// controller.ts -> mcp/deps.ts -> store.ts, and store.ts reads app.getPath('userData')
+// at module load time (for its own, unrelated settings.json path) - so merely
+// importing the controller needs a working electron mock, same as store.test.ts.
+vi.mock('electron', () => ({
+  app: {
+    getPath: () => fs.mkdtempSync(path.join(os.tmpdir(), 'phosphor-mcp-controller-electron-')),
+    getVersion: () => '0.0.0-test'
+  }
+}));
+
 import { mcpController } from '../mcp/controller';
 import { getConfigPath } from '../mcp/config';
 import * as vaultState from '../vaultState';

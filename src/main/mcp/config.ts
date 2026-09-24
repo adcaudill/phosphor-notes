@@ -9,13 +9,16 @@ export interface McpConfig {
   /** SHA-256 hex digest of the current bearer token. The plaintext token is never persisted. */
   tokenHash: string | null;
   tokenCreatedAt: string | null;
+  /** A second, separate opt-in from `enabled` - write tools aren't registered at all unless this is also true. */
+  writeEnabled: boolean;
 }
 
 const DEFAULTS: McpConfig = {
   enabled: false,
   port: DEFAULT_PORT,
   tokenHash: null,
-  tokenCreatedAt: null
+  tokenCreatedAt: null,
+  writeEnabled: false
 };
 
 export function getConfigPath(userDataDir: string): string {
@@ -26,7 +29,7 @@ export async function loadConfig(userDataDir: string): Promise<McpConfig> {
   try {
     const raw = await fsp.readFile(getConfigPath(userDataDir), 'utf-8');
     const parsed = JSON.parse(raw) as Partial<McpConfig>;
-    return { ...DEFAULTS, ...parsed };
+    return { ...DEFAULTS, ...parsed, writeEnabled: parsed.writeEnabled === true };
   } catch {
     return { ...DEFAULTS };
   }

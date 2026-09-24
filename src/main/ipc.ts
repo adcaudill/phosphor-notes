@@ -30,6 +30,7 @@ import {
 import sodium from 'sodium-native';
 import * as vaultState from './vaultState';
 import { validateAndResolvePath } from './vaultPaths';
+import { ensureParentFilesExist } from './vaultWriter';
 
 // Safe logging that ignores EPIPE errors during shutdown
 const safeLog = (msg: string): void => {
@@ -70,54 +71,6 @@ vaultState.onChange(() => {
 
 // Store mainWindow reference for sending updates
 let mainWindow: BrowserWindow | null = null;
-
-/**
- * Auto-create parent files for nested paths.
- * For example, if creating People/John/Notes.md, also creates:
- * - People.md
- * - People/John.md
- * Returns true if any parent files were created
- */
-async function ensureParentFilesExist(vaultPath: string, filePath: string): Promise<boolean> {
-  const relativePath = filePath.substring(vaultPath.length + 1).replace(/\\/g, '/');
-  const parts = relativePath.split('/');
-
-  // Don't process if it's a top-level file (no slashes)
-  if (parts.length <= 1) return false;
-
-  let anyCreated = false;
-
-  // Create parent files for each level (except the last one, which is the file itself)
-  for (let i = 1; i < parts.length; i++) {
-    const parentPath = parts.slice(0, i).join('/') + '.md';
-    const parentFilePath = path.join(vaultPath, parentPath);
-
-    try {
-      // Check if parent file already exists
-      await fsp.access(parentFilePath);
-      // File exists, continue
-    } catch {
-      // File doesn't exist, create it
-      try {
-        let buffer: Buffer;
-        if (activeMasterKey) {
-          // If vault is encrypted, encrypt the empty file
-          buffer = encryptBuffer(Buffer.from('', 'utf-8'), activeMasterKey);
-        } else {
-          // Otherwise, write as plain text
-          buffer = Buffer.from('', 'utf-8');
-        }
-        await fsp.writeFile(parentFilePath, buffer);
-        safeLog(`[Auto-create] Created parent file: ${parentPath}`);
-        anyCreated = true;
-      } catch (err) {
-        safeError(`[Auto-create] Failed to create parent file ${parentPath}:`, err);
-      }
-    }
-  }
-
-  return anyCreated;
-}
 
 const CONFIG_DIR = path.join(app.getPath('userData'), '.phosphor');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
@@ -601,7 +554,7 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
         await fsp.writeFile(filePath, ''); // Create empty file
 
         // If we created parent files, trigger a graph re-index
-        if (parentFilesCreated && mainWindow && !mainWindow.isDestroyed()) {
+        if (parentFilesCreated.length > 0 && mainWindow && !mainWindow.isDestroyed()) {
           safeLog('[Auto-create] Triggering graph re-index due to parent file creation');
           const mw = mainWindow; // Type-narrow mainWindow for TS type safety
           stopIndexing();
@@ -677,7 +630,7 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
       await fsp.writeFile(filePath, buffer);
 
       // If we created parent files, trigger a graph re-index
-      if (parentFilesCreated && mainWindow && !mainWindow.isDestroyed()) {
+      if (parentFilesCreated.length > 0 && mainWindow && !mainWindow.isDestroyed()) {
         safeLog('[Auto-create] Triggering graph re-index due to parent file creation');
         const mw = mainWindow; // Type-narrow mainWindow for TS type safety
         stopIndexing();

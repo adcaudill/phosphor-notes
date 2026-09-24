@@ -11,10 +11,16 @@ import type { McpClientConfig } from '../../types/phosphor.d';
  * readable or writable through that broader path.
  */
 export function setupMcpIPC(mainWindow: BrowserWindow): void {
+  mcpController.attachWindow(mainWindow);
+
   ipcMain.handle('mcp:get-status', () => mcpController.getStatus());
 
   ipcMain.handle('mcp:set-enabled', (_, enabled: boolean) =>
     enabled ? mcpController.enable() : mcpController.disable()
+  );
+
+  ipcMain.handle('mcp:set-write-enabled', (_, enabled: boolean) =>
+    mcpController.setWriteEnabled(enabled === true)
   );
 
   ipcMain.handle('mcp:set-port', (_, port: number) => mcpController.setPort(port));

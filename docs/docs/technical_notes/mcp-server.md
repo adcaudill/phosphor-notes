@@ -5,21 +5,20 @@ layout: page
 
 **Overview**
 
-- **What:** Phosphor Notes can run a local [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server, letting AI apps you run yourself - Claude Desktop, Claude Code, and other MCP-capable clients - read your vault. It's read-only, off by default, and requires an explicit opt-in.
+- **What:** Phosphor Notes can run a local [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server, letting AI apps you run yourself - Claude Desktop, Claude Code, and other MCP-capable clients - read your vault, and optionally create/append to notes. Off by default; both reading and writing require an explicit opt-in.
 - **Where:** Enable it in **Preferences \> AI Access**. It runs inside the same process as the app itself; there is no separate helper binary.
 
 **Privacy: read this before enabling**
 
-Once enabled, any AI app you authorize can read your vault's contents, and that content will be sent to whatever LLM backend that app uses. This is a real change from "your data never leaves your machine." The app shows this disclosure once when you turn the feature on. If you don't use MCP-capable AI tools, there's no reason to enable it.
+Once enabled, any AI app you authorize can read your vault's contents, and that content will be sent to whatever LLM backend that app uses. This is a real change from "your data never leaves your machine." The app shows this disclosure once when you turn the feature on. A second, separate toggle and disclosure govern write access - see below. If you don't use MCP-capable AI tools, there's no reason to enable either.
 
 **How it works**
 
 - A local HTTP server (the [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports) MCP transport) binds to `127.0.0.1` only - it is never reachable from another machine on your network, and never from a browser page's JavaScript (no CORS headers are ever sent, and any request carrying an `Origin` header is rejected outright).
 - Requests must present a bearer token, generated locally in the app. Only its SHA-256 hash is ever written to disk (`.phosphor/mcp.json` under Electron's `userData` directory) - the plaintext token is shown once, right after you generate it, and is not recoverable afterward. Regenerating a token immediately invalidates the old one.
 - The server only runs while the app is open, and it only answers tool calls (other than `get_vault_status`) while a vault is open **and** unlocked. **There is no tool to unlock the vault remotely** - the password never becomes reachable from an MCP client. If the vault is locked, tools return a clear error asking you to unlock it in the app.
-- All tools are read-only in this release. No note, task, or file can be created, edited, or deleted through MCP.
 
-**Tools exposed**
+**Read tools**
 
 | Tool | What it does |
 |---|---|
@@ -33,6 +32,27 @@ Once enabled, any AI app you authorize can read your vault's contents, and that 
 | `list_tags` / `find_notes_by_tag` | Frontmatter tags across the vault |
 
 All reads come from what's saved on disk. Unsaved edits sitting in the editor are not reflected.
+
+**Write tools (separate opt-in)**
+
+A second toggle, off by default even when read access is on, controls write access - it shows its own disclosure and requires the server itself to already be enabled. When it's off, the write tools below aren't just refused - they don't appear in the tool list at all.
+
+| Tool | What it does |
+|---|---|
+| `create_note` | Creates a new note. Refuses to overwrite an existing one unless you're explicitly asked to allow it, in which case the old content is backed up to a `.bak` file first. |
+| `append_to_note` | Adds content to the *end* of an existing note - the only way to modify an existing note through this connection. There is no tool that edits the middle of a note or replaces its content wholesale. |
+| `add_task` | Adds one checkbox task, by default to today's daily journal (auto-created if needed). |
+
+Notes created or appended to this way automatically match the target note's own formatting convention - see "Outliner vs. freeform" below. Writes take effect immediately; there's no per-call confirmation dialog from Phosphor itself; the connected AI app's own tool-approval UI is the safety net for that.
+
+**Outliner vs. freeform**
+
+A note's format is entirely determined by its own frontmatter (`mode: outliner` vs. anything else/absent). `create_note` picks a sensible default (your journal-mode setting for daily-note-named files, freeform otherwise) unless you specify one; `append_to_note` and `add_task` always detect the target's existing mode and format new content to match - plain paragraphs for freeform notes, properly nested `- ` bullets (4 spaces per level) for outliner notes. Checkbox tasks (`- [ ] ...`) work the same way in both modes.
+
+**Known limitations**
+
+- If you have unsaved edits open in the very same note an AI app just wrote to, there's a narrow window where your own autosave could still overwrite that write before Phosphor's usual conflict prompt appears - this is a pre-existing edge case in the save pipeline, not something MCP writes work around.
+- An AI client that connected before write access was turned on may need to reconnect (or you may need to restart it) to see the write tools appear.
 
 **Connecting a client**
 

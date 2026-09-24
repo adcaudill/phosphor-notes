@@ -159,10 +159,31 @@
   font-family: monospace;
 }
 
+.mcp-activity-target {
+  color: var(--color-text-secondary, #666);
+}
+
+.mcp-activity-write-badge {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  background: var(--color-warning, #ff9500);
+  color: #ffffff;
+}
+
 .mcp-activity-list li.ok .mcp-activity-result {
   color: var(--color-success, #34c759);
 }
 
 .mcp-activity-list li.error .mcp-activity-result {
   color: var(--color-error, #ff3b30);
+}
+
+.mcp-subsetting {
+  margin-left: 24px;
+  margin-top: -4px;
 }

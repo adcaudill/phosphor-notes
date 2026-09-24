@@ -9,6 +9,19 @@ const PRIVACY_DISCLOSURE =
   'be open and unlocked here for any of it to work, and there is no way to unlock the vault from ' +
   'the AI app itself.\n\nEnable the local MCP server?';
 
+const WRITE_DISCLOSURE =
+  'This lets connected AI apps change your vault, not just read it. They will be able to:\n' +
+  '  - create new notes (and replace a note if they explicitly ask to - a .bak backup of the ' +
+  'old version is kept next to it),\n' +
+  '  - add text to the end of existing notes,\n' +
+  '  - add tasks (by default to today’s daily note).\n\n' +
+  'They cannot delete, rename, or move notes, edit text in the middle of a note, or unlock the ' +
+  'vault. Changes happen immediately without asking you each time; if you have unsaved edits open ' +
+  'in the same note, Phosphor will show its usual conflict prompt. Content written into an ' +
+  'encrypted vault is encrypted like any other note.\n\n' +
+  'AI apps that are already connected may need to be restarted to see the new tools.\n\n' +
+  'Allow AI apps to create and edit notes?';
+
 function formatClientSnippet(config: McpClientConfig): string {
   const mcpRemoteJson = JSON.stringify(
     {
@@ -84,6 +97,19 @@ export const McpSettingsPanel: React.FC = () => {
     }
   };
 
+  const handleWriteToggle = async (checked: boolean): Promise<void> => {
+    if (checked && !window.confirm(WRITE_DISCLOSURE)) return;
+    setBusy(true);
+    try {
+      const next = await window.phosphor.mcpSetWriteEnabled(checked);
+      setStatus(next);
+    } catch (err) {
+      console.error('Failed to toggle MCP write access:', err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleRegenerateToken = async (): Promise<void> => {
     if (
       status?.hasToken &&
@@ -147,8 +173,10 @@ export const McpSettingsPanel: React.FC = () => {
       <h2>AI Access (MCP)</h2>
       <p className="setting-hint">
         Let AI apps that support the Model Context Protocol (Claude Desktop, Claude Code, etc.)
-        read this vault over a local, token-authenticated connection. Off by default. Read-only for
-        now - there is no way for a connected AI app to edit, delete, or unlock your vault.
+        connect to this vault over a local, token-authenticated connection. Off by default.{' '}
+        {status.writeEnabled
+          ? 'Read and write: connected AI apps can create notes and append to existing ones, but cannot delete, rename, or unlock anything.'
+          : 'Read-only: connected AI apps can read but not change your vault.'}
       </p>
 
       <div className="setting-item setting-checkbox">
@@ -164,6 +192,20 @@ export const McpSettingsPanel: React.FC = () => {
         </label>
       </div>
 
+      <div className="setting-item setting-checkbox mcp-subsetting">
+        <label htmlFor="mcp-write-enabled">
+          <input
+            id="mcp-write-enabled"
+            type="checkbox"
+            checked={status.writeEnabled}
+            disabled={busy || !status.enabled}
+            onChange={(e) => handleWriteToggle(e.target.checked)}
+          />
+          Allow connected AI apps to create notes and add to existing notes
+        </label>
+        {!status.enabled && <p className="setting-hint">Turn on the MCP server first.</p>}
+      </div>
+
       <div className="mcp-status-row">
         <span className={`mcp-status-dot ${status.listening ? 'ok' : status.enabled ? 'warn' : ''}`} />
         <span>{statusLabel}</span>
@@ -171,6 +213,11 @@ export const McpSettingsPanel: React.FC = () => {
       <div className="mcp-status-row mcp-status-secondary">
         <span>Vault: {status.vaultReadable ? 'open and unlocked' : 'closed or locked'}</span>
       </div>
+      {status.enabled && (
+        <div className="mcp-status-row mcp-status-secondary">
+          <span>Access: {status.writeEnabled ? 'read and write' : 'read-only'}</span>
+        </div>
+      )}
 
       <div className="setting-item">
         <label htmlFor="mcp-port">Port</label>
@@ -252,7 +299,11 @@ export const McpSettingsPanel: React.FC = () => {
                   <span className="mcp-activity-time">
                     {new Date(entry.ts).toLocaleTimeString()}
                   </span>
-                  <span className="mcp-activity-tool">{entry.tool}</span>
+                  {entry.write && <span className="mcp-activity-write-badge">write</span>}
+                  <span className="mcp-activity-tool">
+                    {entry.tool}
+                    {entry.target && <span className="mcp-activity-target"> {entry.target}</span>}
+                  </span>
                   <span className="mcp-activity-result">{entry.ok ? 'ok' : entry.errorCode}</span>
                 </li>
               ))}

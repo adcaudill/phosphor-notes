@@ -6,6 +6,7 @@ import {
   validateAndResolvePath,
   resolveReadableNotePath,
   resolveReadableFolderPath,
+  resolveWritableNotePath,
   PathNotAllowedError
 } from '../vaultPaths';
 
@@ -138,5 +139,67 @@ describe('resolveReadableFolderPath', () => {
     await expect(resolveReadableFolderPath(vault, '.phosphor')).rejects.toThrow(
       PathNotAllowedError
     );
+  });
+});
+
+describe('resolveWritableNotePath (write-facing strict guard)', () => {
+  let vault: string;
+
+  beforeEach(() => {
+    vault = fs.mkdtempSync(path.join(os.tmpdir(), 'phosphor-vaultpaths-test-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('allows a normal new nested path (no file or directory exists yet)', async () => {
+    const resolved = await resolveWritableNotePath(vault, 'Projects/Foo/Bar.md');
+    expect(resolved).toBe(path.join(vault, 'Projects', 'Foo', 'Bar.md'));
+  });
+
+  it('allows writing to an existing plain file', async () => {
+    fs.writeFileSync(path.join(vault, 'existing.md'), 'hi');
+    const resolved = await resolveWritableNotePath(vault, 'existing.md');
+    expect(resolved).toBe(path.join(vault, 'existing.md'));
+  });
+
+  it('rejects writing to a symlinked note, even one pointing inside the vault', async () => {
+    fs.writeFileSync(path.join(vault, 'real.md'), 'content');
+    fs.symlinkSync(path.join(vault, 'real.md'), path.join(vault, 'alias.md'));
+
+    await expect(resolveWritableNotePath(vault, 'alias.md')).rejects.toThrow(PathNotAllowedError);
+  });
+
+  it('rejects a dangling symlink target pointing outside the vault', async () => {
+    const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), 'phosphor-vaultpaths-outside-'));
+    try {
+      // The symlink target does not exist, so a naive "ENOENT -> allow" check
+      // (correct for reads) would let a write follow it out of the vault.
+      const danglingTarget = path.join(outsideDir, 'not-created-yet.md');
+      fs.symlinkSync(danglingTarget, path.join(vault, 'dangling.md'));
+
+      await expect(resolveWritableNotePath(vault, 'dangling.md')).rejects.toThrow(
+        PathNotAllowedError
+      );
+    } finally {
+      fs.rmSync(outsideDir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a symlinked parent directory pointing outside the vault', async () => {
+    const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), 'phosphor-vaultpaths-outside-'));
+    try {
+      fs.symlinkSync(outsideDir, path.join(vault, 'Linked'));
+
+      // The target file itself doesn't exist, so resolution has to walk up
+      // to "Linked/" (the nearest existing ancestor) and notice *that* is a
+      // symlink escaping the vault, rather than stopping at the file's ENOENT.
+      await expect(resolveWritableNotePath(vault, 'Linked/New.md')).rejects.toThrow(
+        PathNotAllowedError
+      );
+    } finally {
+      fs.rmSync(outsideDir, { recursive: true, force: true });
+    }
   });
 });

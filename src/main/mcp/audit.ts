@@ -7,6 +7,10 @@ export interface AuditEntry {
   argsSummary?: string;
   ok: boolean;
   errorCode?: string;
+  /** The vault-relative path affected, for write-tool calls only. */
+  target?: string;
+  /** True for a create/append/add-task style call. */
+  write?: boolean;
 }
 
 /** In-memory-only ring buffer of recent MCP tool calls, surfaced in Settings. Never written to disk. */

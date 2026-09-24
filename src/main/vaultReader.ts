@@ -39,20 +39,24 @@ export class DecryptError extends Error {
 }
 
 /**
- * Read a file's raw bytes and transparently decrypt it if it carries the
- * vault's encryption magic header (see crypto.ts's `isEncrypted`). This is
- * the one shared decrypt-on-read path: it checks the file's own header
- * rather than a vault-wide "encryption enabled" flag, so it behaves
- * correctly for encrypted, plain, and mixed vaults alike, and it throws
- * instead of ever returning ciphertext as if it were plaintext.
+ * Transparently decrypts `buffer` if it carries the vault's encryption
+ * magic header (see crypto.ts's `isEncrypted`) - the shared decode step
+ * behind `readDecrypted`, extracted so callers that already have the raw
+ * bytes in hand (e.g. `vaultWriter.ts`, checking whether a file being
+ * overwritten was encrypted) don't need to re-read the file to decode it.
+ * Checks the file's own header rather than a vault-wide "encryption
+ * enabled" flag, so it behaves correctly for encrypted, plain, and mixed
+ * vaults alike, and throws instead of ever returning ciphertext as if it
+ * were plaintext.
  */
-export async function readDecrypted(absPath: string): Promise<Buffer> {
-  const buffer = await fsp.readFile(absPath);
+export function decodeBuffer(buffer: Buffer, absPath: string): Buffer {
   if (!isEncrypted(buffer)) return buffer;
 
   // Fetch the key *after* the read completes: holding a reference to it
   // across an earlier await would risk using a buffer that a concurrent
-  // vault lock has already zeroed in place.
+  // vault lock has already zeroed in place. Callers that read `buffer`
+  // themselves must likewise call this synchronously, right after the
+  // read, with no `await` in between.
   const key = vaultState.getMasterKey();
   if (!key) {
     throw new VaultLockedError(absPath);
@@ -62,6 +66,12 @@ export async function readDecrypted(absPath: string): Promise<Buffer> {
   } catch (err) {
     throw new DecryptError(absPath, err);
   }
+}
+
+/** Reads a file's raw bytes and decodes them via `decodeBuffer`. The one shared decrypt-on-read path. */
+export async function readDecrypted(absPath: string): Promise<Buffer> {
+  const buffer = await fsp.readFile(absPath);
+  return decodeBuffer(buffer, absPath);
 }
 
 export interface NoteInfo {

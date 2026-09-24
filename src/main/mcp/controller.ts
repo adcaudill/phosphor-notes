@@ -1,4 +1,5 @@
 import * as http from 'http';
+import type { BrowserWindow } from 'electron';
 import * as vaultState from '../vaultState';
 import { loadConfig, saveConfig, DEFAULT_PORT, type McpConfig } from './config';
 import { generateToken, hashToken } from './auth';
@@ -22,12 +23,23 @@ class McpController {
     enabled: false,
     port: DEFAULT_PORT,
     tokenHash: null,
-    tokenCreatedAt: null
+    tokenCreatedAt: null,
+    writeEnabled: false
   };
   private server: http.Server | null = null;
   private lastError: string | null = null;
   private statusListeners = new Set<(status: McpStatus) => void>();
   private unsubscribeVaultState: (() => void) | null = null;
+  private mainWindow: BrowserWindow | null = null;
+
+  /** Called once from `ipcHandlers.ts` so post-write notifications have a window to send to. */
+  attachWindow(win: BrowserWindow): void {
+    this.mainWindow = win;
+  }
+
+  private getMainWindow = (): BrowserWindow | null => {
+    return this.mainWindow && !this.mainWindow.isDestroyed() ? this.mainWindow : null;
+  };
 
   async init(userDataDir: string): Promise<void> {
     this.userDataDir = userDataDir;
@@ -53,7 +65,8 @@ class McpController {
       error: this.lastError,
       hasToken: this.config.tokenHash !== null,
       tokenCreatedAt: this.config.tokenCreatedAt,
-      vaultReadable: await vaultState.isReadable()
+      vaultReadable: await vaultState.isReadable(),
+      writeEnabled: this.config.enabled && this.config.writeEnabled
     };
   }
 
@@ -66,8 +79,22 @@ class McpController {
 
   async disable(): Promise<McpStatus> {
     this.config.enabled = false;
+    // Re-enabling read access later must never silently restore write
+    // access without a fresh confirmation from the user.
+    this.config.writeEnabled = false;
     await this.persist();
     await this.stopListening();
+    return this.getStatus();
+  }
+
+  /** Refused (config/status unchanged) if the server itself is disabled - enable it first. */
+  async setWriteEnabled(enabled: boolean): Promise<McpStatus> {
+    if (enabled && !this.config.enabled) {
+      return this.getStatus();
+    }
+    this.config.writeEnabled = enabled;
+    await this.persist();
+    this.notify();
     return this.getStatus();
   }
 
@@ -116,7 +143,13 @@ class McpController {
     const listener = createRequestListener({
       getTokenHash: () => this.config.tokenHash,
       getPort: () => this.config.port,
-      buildServer: () => createPhosphorMcpServer(buildDefaultDeps())
+      buildServer: () =>
+        createPhosphorMcpServer(
+          buildDefaultDeps({
+            isWriteEnabled: () => this.config.enabled && this.config.writeEnabled,
+            getMainWindow: this.getMainWindow
+          })
+        )
     });
     const server = http.createServer(listener);
 

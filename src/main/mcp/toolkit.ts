@@ -25,7 +25,7 @@ export function toErrorResult(code: string, message: string): CallToolResult {
   };
 }
 
-/** Maps the vaultReader/vaultPaths typed errors (matched by name, to avoid a hard import) to a stable code. */
+/** Maps the vaultReader/vaultPaths/vaultWriter typed errors (matched by name, to avoid a hard import) to a stable code. */
 function errorCodeFor(err: unknown): string {
   if (err instanceof Error) {
     switch (err.name) {
@@ -41,6 +41,12 @@ function errorCodeFor(err: unknown): string {
         return 'PATH_NOT_ALLOWED';
       case 'IndexNotReadyError':
         return 'INDEX_NOT_READY';
+      case 'NoteAlreadyExistsError':
+        return 'NOTE_ALREADY_EXISTS';
+      case 'VaultStateChangedError':
+        return 'VAULT_STATE_CHANGED';
+      case 'InvalidArgumentError':
+        return 'INVALID_ARGUMENT';
       default:
         return 'INTERNAL_ERROR';
     }
@@ -83,6 +89,61 @@ export function withVaultGuard<Args extends unknown[], T extends Record<string, 
           'The vault was locked, switched, or closed while this request was in progress. Retry the request.'
         );
       }
+      record(true);
+      return toCallToolResult(result);
+    } catch (err) {
+      const code = errorCodeFor(err);
+      record(false, code);
+      return toErrorResult(code, err instanceof Error ? err.message : String(err));
+    }
+  };
+}
+
+/**
+ * The write-tool counterpart of `withVaultGuard`: additionally requires
+ * `isWriteEnabled()`, and hands the handler a `{generation}` context to
+ * pass down into `vaultWriter`'s own pre-write generation check (inside its
+ * synchronous encode step) - unlike the read-side guard, there is
+ * deliberately **no post-handler generation re-check** here. Once bytes are
+ * on disk the write happened; reporting `VAULT_STATE_CHANGED` for a write
+ * that already succeeded would just cause the caller to retry and
+ * duplicate the change. `targetOf` extracts the vault-relative path (if
+ * any) from the tool's arguments, recorded in the audit log.
+ */
+export function withVaultWriteGuard<TArgs, T extends Record<string, unknown>>(
+  toolName: string,
+  deps: Pick<McpDeps, 'isReadable' | 'getGeneration' | 'isWriteEnabled'>,
+  handler: (args: TArgs, ctx: { generation: number }) => Promise<T>,
+  targetOf?: (args: TArgs) => string | undefined
+): (args: TArgs) => Promise<CallToolResult> {
+  return async (args: TArgs) => {
+    const record = (ok: boolean, errorCode?: string): void =>
+      auditLog.record({
+        ts: new Date().toISOString(),
+        tool: toolName,
+        ok,
+        errorCode,
+        target: targetOf?.(args),
+        write: true
+      });
+
+    if (!deps.isWriteEnabled()) {
+      record(false, 'WRITE_DISABLED');
+      return toErrorResult(
+        'WRITE_DISABLED',
+        "Write access is turned off. Ask the user to enable it in Phosphor Notes' Settings > AI Access."
+      );
+    }
+    if (!(await deps.isReadable())) {
+      record(false, 'VAULT_LOCKED');
+      return toErrorResult(
+        'VAULT_LOCKED',
+        'The vault is locked or not open. Ask the user to open or unlock it in the Phosphor Notes app - there is no tool to unlock it remotely.'
+      );
+    }
+    const generation = deps.getGeneration();
+    try {
+      const result = await handler(args, { generation });
       record(true);
       return toCallToolResult(result);
     } catch (err) {

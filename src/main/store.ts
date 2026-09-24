@@ -67,6 +67,13 @@ export async function initializeSettings(): Promise<UserSettings> {
   return cachedSettings;
 }
 
+/** Reads the current settings (cached-or-load, same as initializeSettings) - for callers that just want a value, not app startup. */
+export async function getSettings(): Promise<UserSettings> {
+  if (cachedSettings) return cachedSettings;
+  cachedSettings = await loadSettings();
+  return cachedSettings;
+}
+
 // Set up IPC handlers for settings
 export function setupSettingsHandlers(): void {
   ipcMain.handle('settings:get', async () => {

@@ -20,6 +20,8 @@ export interface McpStatus {
   hasToken: boolean;
   tokenCreatedAt: string | null;
   vaultReadable: boolean;
+  /** A second, separate opt-in from `enabled` - true only when both the server and write access are on. */
+  writeEnabled: boolean;
 }
 
 export interface McpActivityEntry {
@@ -27,6 +29,10 @@ export interface McpActivityEntry {
   tool: string;
   ok: boolean;
   errorCode?: string;
+  /** The vault-relative path affected, for write-tool calls only. */
+  target?: string;
+  /** True for a create/append/add-task style call, so the UI can badge it distinctly from a read. */
+  write?: boolean;
 }
 
 export interface McpClientConfig {
@@ -118,6 +124,8 @@ export interface PhosphorAPI {
   // MCP (Model Context Protocol) local server
   mcpGetStatus: () => Promise<McpStatus>;
   mcpSetEnabled: (enabled: boolean) => Promise<McpStatus>;
+  /** Refused (status unchanged) if the server itself is disabled - enable it first. */
+  mcpSetWriteEnabled: (enabled: boolean) => Promise<McpStatus>;
   mcpSetPort: (port: number) => Promise<McpStatus>;
   /** Generates a new token and returns the plaintext ONCE - only its hash is persisted. */
   mcpRegenerateToken: () => Promise<string>;

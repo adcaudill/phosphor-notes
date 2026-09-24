@@ -41,7 +41,7 @@ Whether you are managing complex projects, journaling your daily life, or writin
 ### Security & Architecture
 
 - **Zero-Knowledge Encryption:** Optional, robust vault encryption using **Argon2id** (Key Derivation) and **XChaCha20-Poly1305** (Authenticated Encryption). Your password is never stored; your data is unreadable without it.
-- **Local AI Access (MCP):** Optional, off-by-default local [Model Context Protocol](https://modelcontextprotocol.io/) server so AI apps like Claude Desktop or Claude Code can read your vault. Read-only, token-authenticated, loopback-only. See [the MCP docs](docs/docs/technical_notes/mcp-server.md) for details.
+- **Local AI Access (MCP):** Optional, off-by-default local [Model Context Protocol](https://modelcontextprotocol.io/) server so AI apps like Claude Desktop or Claude Code can read your vault, and - behind a second, separate opt-in - create notes and append to existing ones. Token-authenticated, loopback-only. See [the MCP docs](docs/docs/technical_notes/mcp-server.md) for details.
 - **Rich Media:** Drag-and-drop images (`.png`, `.jpg`) directly into the editor. Assets are stored locally (and encrypted if the vault is locked).
 - **Color Palettes:** Three built-in themes (Snow, Amber, Green) inspired by the colors of classic CRT monitors, with light/dark modes.
 - **Logseq Importer:** Seamlessly migrate your Logseq data (Markdown files with embedded metadata) into Phosphor Notes. This importer preserves backlinks, tags, and task statuses, and includes images and other attachments.

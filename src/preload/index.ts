@@ -205,6 +205,7 @@ const api = {
   // MCP (Model Context Protocol) local server
   mcpGetStatus: () => ipcRenderer.invoke('mcp:get-status'),
   mcpSetEnabled: (enabled: boolean) => ipcRenderer.invoke('mcp:set-enabled', enabled),
+  mcpSetWriteEnabled: (enabled: boolean) => ipcRenderer.invoke('mcp:set-write-enabled', enabled),
   mcpSetPort: (port: number) => ipcRenderer.invoke('mcp:set-port', port),
   mcpRegenerateToken: (): Promise<string> => ipcRenderer.invoke('mcp:regenerate-token'),
   mcpGetActivity: (): Promise<McpActivityEntry[]> => ipcRenderer.invoke('mcp:get-activity'),
