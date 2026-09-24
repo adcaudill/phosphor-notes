@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
-import type { Task, UserSettings } from '../types/phosphor';
+import type { Task, UserSettings, McpStatus, McpActivityEntry, McpClientConfig } from '../types/phosphor';
 import type { PredictionModelSnapshot } from '../shared/predictionModel';
 
 const parsePredictionModel = (
@@ -201,6 +201,20 @@ const api = {
 
   // Import Logseq vault
   importLogseq: () => ipcRenderer.invoke('import:logseq'),
+
+  // MCP (Model Context Protocol) local server
+  mcpGetStatus: () => ipcRenderer.invoke('mcp:get-status'),
+  mcpSetEnabled: (enabled: boolean) => ipcRenderer.invoke('mcp:set-enabled', enabled),
+  mcpSetPort: (port: number) => ipcRenderer.invoke('mcp:set-port', port),
+  mcpRegenerateToken: (): Promise<string> => ipcRenderer.invoke('mcp:regenerate-token'),
+  mcpGetActivity: (): Promise<McpActivityEntry[]> => ipcRenderer.invoke('mcp:get-activity'),
+  mcpGetClientConfig: (token: string): Promise<McpClientConfig> =>
+    ipcRenderer.invoke('mcp:get-client-config', token),
+  onMcpStatusChange: (cb: (status: McpStatus) => void) => {
+    const handler = (_event: IpcRendererEvent, data: McpStatus): void => cb(data);
+    ipcRenderer.on('mcp:status-changed', handler);
+    return () => ipcRenderer.removeListener('mcp:status-changed', handler);
+  },
 
   // Get app versions
   getVersions: () => ipcRenderer.invoke('app:get-versions'),

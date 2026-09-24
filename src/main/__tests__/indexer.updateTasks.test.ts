@@ -13,15 +13,11 @@ describe('indexer.updateTasksForFile', () => {
     // Mock electron app.getPath used by ipc module (import-time)
     vi.doMock('electron', () => ({ app: { getPath: () => '/tmp' } }));
 
-    // Mock encryption helpers so readMarkdownFile treats files as unencrypted
-    vi.doMock('../ipc', () => ({
-      isEncryptionEnabled: vi.fn().mockResolvedValue(false),
-      getActiveMasterKey: vi.fn(() => null)
-    }));
-
-    // Mock fs.promises.readFile used in indexer (indexer imports { promises as fsp } from 'fs')
+    // Mock fs.promises.readFile used in indexer (indexer imports { promises as fsp } from 'fs').
+    // Real reads return a Buffer, which vaultReader's `isEncrypted` check
+    // requires (it inspects the first bytes for a magic header).
     const fspMock: Partial<typeof import('fs').promises> = {
-      readFile: vi.fn().mockResolvedValue(sample)
+      readFile: vi.fn().mockResolvedValue(Buffer.from(sample))
     };
 
     vi.doMock('fs', () => ({ promises: fspMock }));
@@ -49,16 +45,11 @@ describe('indexer.updateTasksForFile', () => {
 
     const readFileMock = vi
       .fn()
-      .mockResolvedValueOnce(firstContent)
-      .mockResolvedValueOnce(secondContent);
+      .mockResolvedValueOnce(Buffer.from(firstContent))
+      .mockResolvedValueOnce(Buffer.from(secondContent));
     const fspMock: Partial<typeof import('fs').promises> = { readFile: readFileMock };
 
     vi.doMock('electron', () => ({ app: { getPath: () => '/tmp' } }));
-
-    vi.doMock('../ipc', () => ({
-      isEncryptionEnabled: vi.fn().mockResolvedValue(false),
-      getActiveMasterKey: vi.fn(() => null)
-    }));
 
     // First call returns firstContent, second call returns secondContent
 

@@ -5,8 +5,7 @@ import * as fs from 'fs';
 import { promises as fsp } from 'fs';
 import { isDailyNote, extractDateHierarchy } from './graphBuilder';
 import { extractWikilinks, getImplicitPathLinks } from '../shared/wikilinks';
-import { getActiveMasterKey, isEncryptionEnabled } from './ipc';
-import { decryptBuffer } from './crypto';
+import * as vaultReader from './vaultReader';
 import {
   buildSnapshotFromCounts,
   tokenizeWithCaseMeta,
@@ -44,6 +43,7 @@ interface WorkerMessage {
   type: string;
   data?: unknown;
   error?: unknown;
+  requestId?: string;
 }
 
 interface Task {
@@ -61,6 +61,24 @@ interface FileContent {
 }
 
 let indexerWorker: Worker | null = null;
+let searchRequestCounter = 0;
+const pendingSearches = new Map<
+  string,
+  { resolve: (results: unknown[]) => void; timer: NodeJS.Timeout }
+>();
+
+// Resolve a specific search request by id, as echoed back by the worker.
+// Used by `searchAsync` to let concurrent callers (e.g. the GUI and an MCP
+// tool searching at the same time) each get their own results instead of
+// racing on a single module-level callback (see `searchResultsCallback`
+// below, which the legacy `performSearch` API still uses internally).
+function resolvePendingSearch(requestId: string, results: unknown[]): void {
+  const pending = pendingSearches.get(requestId);
+  if (!pending) return;
+  clearTimeout(pending.timer);
+  pendingSearches.delete(requestId);
+  pending.resolve(results);
+}
 let lastGraph: Record<string, string[]> | null = null;
 let lastTasks: Task[] | null = null;
 let lastPredictionModel: PredictionModelSnapshot | null = null;
@@ -354,32 +372,22 @@ async function getFilesRecursively(dir: string): Promise<string[]> {
   return files;
 }
 
-// Helper: read a markdown file and decrypt if needed
-async function readMarkdownFile(filePath: string, vaultPath: string): Promise<string> {
-  const buffer = await fsp.readFile(filePath);
-
-  // Check if vault is encrypted and we have a master key
-  if (await isEncryptionEnabled(vaultPath)) {
-    const masterKey = getActiveMasterKey();
-    if (masterKey) {
-      try {
-        // Try to decrypt
-        const decrypted = decryptBuffer(buffer, masterKey);
-        return decrypted.toString('utf-8');
-      } catch (err) {
-        void err;
-        // If decryption fails, assume it's plaintext (safety fallback)
-        try {
-          return buffer.toString('utf-8');
-        } catch {
-          return '';
-        }
-      }
+// Helper: read a markdown file and decrypt if needed. Delegates to the
+// shared vaultReader, which checks the file's own encryption header rather
+// than the vault-wide "encryption enabled" flag this used to check, and
+// throws instead of ever returning ciphertext as if it were plaintext. If
+// the vault is locked or the file fails to decrypt, this returns an empty
+// string rather than indexing garbage bytes as note content.
+async function readMarkdownFile(filePath: string, _vaultPath: string): Promise<string> {
+  try {
+    const buffer = await vaultReader.readDecrypted(filePath);
+    return buffer.toString('utf-8');
+  } catch (err) {
+    if (err instanceof vaultReader.VaultLockedError || err instanceof vaultReader.DecryptError) {
+      return '';
     }
+    throw err;
   }
-
-  // Not encrypted or no master key - read as plaintext
-  return buffer.toString('utf-8');
 }
 
 async function tryStartWorkerFromFile(
@@ -476,7 +484,11 @@ async function tryStartWorkerFromFile(
       } catch {
         // Silently ignore console errors
       }
-      searchResultsCallback?.(msg.data as unknown[]);
+      if (msg.requestId) {
+        resolvePendingSearch(msg.requestId, msg.data as unknown[]);
+      } else {
+        searchResultsCallback?.(msg.data as unknown[]);
+      }
     } else if (msg?.type === 'graph-error') {
       console.error('Indexer error:', msg.error);
     }
@@ -699,7 +711,11 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
               );
             }
           } else if (msg?.type === 'search-results') {
-            searchResultsCallback?.(msg.data as unknown[]);
+            if (msg.requestId) {
+              resolvePendingSearch(msg.requestId, msg.data as unknown[]);
+            } else {
+              searchResultsCallback?.(msg.data as unknown[]);
+            }
           } else if (msg?.type === 'graph-error') {
             safeError('Indexer error:', msg.error);
           }
@@ -805,19 +821,40 @@ export function getLastTasks(): Task[] | null {
 
 let searchResultsCallback: ((results: unknown[]) => void) | null = null;
 
+/**
+ * Correlated search: tags each request with a unique id that the worker
+ * echoes back in its response, so concurrent callers (e.g. the GUI and an
+ * MCP tool searching at the same time) each get their own results instead
+ * of racing on a single shared callback. Prefer this over `performSearch`
+ * below for any new caller.
+ */
+export function searchAsync(query: string, opts?: { timeoutMs?: number }): Promise<unknown[]> {
+  const timeoutMs = opts?.timeoutMs ?? 5000;
+  return new Promise((resolve) => {
+    if (!indexerWorker) {
+      console.warn('Search called but no indexer worker available');
+      resolve([]);
+      return;
+    }
+    try {
+      console.debug('Performing search for:', query);
+    } catch {
+      // Silently ignore console errors
+    }
+    const requestId = `search-${++searchRequestCounter}-${Date.now()}`;
+    const timer = setTimeout(() => {
+      pendingSearches.delete(requestId);
+      console.warn('Search timeout for query:', query);
+      resolve([]);
+    }, timeoutMs);
+    pendingSearches.set(requestId, { resolve, timer });
+    indexerWorker.postMessage({ type: 'search', query, requestId });
+  });
+}
+
+/** @deprecated Legacy callback-based search API, kept for compatibility. Prefer `searchAsync`. */
 export function performSearch(query: string, callback: (results: unknown[]) => void): void {
-  if (!indexerWorker) {
-    console.warn('Search called but no indexer worker available');
-    callback([]);
-    return;
-  }
-  try {
-    console.debug('Performing search for:', query);
-  } catch {
-    // Silently ignore console errors
-  }
-  searchResultsCallback = callback;
-  indexerWorker.postMessage({ type: 'search', query });
+  searchAsync(query).then(callback);
 }
 
 export function setSearchResultsHandler(handler: (results: unknown[]) => void): void {

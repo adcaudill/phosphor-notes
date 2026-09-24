@@ -236,7 +236,10 @@ const initSearch = (): void => {
 parentPort?.on(
   'message',
   async (
-    msg: string | { type: string; query: string } | { vaultPath?: string; masterKey?: string }
+    msg:
+      | string
+      | { type: string; query: string; requestId?: string }
+      | { vaultPath?: string; masterKey?: string }
   ) => {
     // Handle search queries
     if (
@@ -245,12 +248,13 @@ parentPort?.on(
       'type' in msg &&
       (msg as { type?: unknown }).type === 'search'
     ) {
-      const searchMsg = msg as { type: 'search'; query: string };
+      const searchMsg = msg as { type: 'search'; query: string; requestId?: string };
       if (!searchEngine) {
         // Return empty results if search engine not ready yet
         parentPort?.postMessage({
           type: 'search-results',
-          data: []
+          data: [],
+          requestId: searchMsg.requestId
         });
         return;
       }
@@ -288,7 +292,8 @@ parentPort?.on(
 
       parentPort?.postMessage({
         type: 'search-results',
-        data: resultsWithSnippets
+        data: resultsWithSnippets,
+        requestId: searchMsg.requestId
       });
       return;
     }

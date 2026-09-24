@@ -11,6 +11,36 @@ export interface Task {
   completedAt?: string; // ISO datetime string (YYYY-MM-DD HH:MM:SS)
 }
 
+export interface McpStatus {
+  enabled: boolean;
+  listening: boolean;
+  port: number;
+  /** Non-null only when the last attempt to start listening failed, e.g. "PORT_IN_USE". */
+  error: string | null;
+  hasToken: boolean;
+  tokenCreatedAt: string | null;
+  vaultReadable: boolean;
+}
+
+export interface McpActivityEntry {
+  ts: string; // ISO timestamp
+  tool: string;
+  ok: boolean;
+  errorCode?: string;
+}
+
+export interface McpClientConfig {
+  url: string;
+  /** A ready-to-run `claude mcp add ...` command for Claude Code. */
+  claudeCode: string;
+  /** A config snippet for stdio-only clients (e.g. Claude Desktop), bridged via the community `mcp-remote` tool. */
+  mcpRemote: {
+    command: string;
+    args: string[];
+    env: Record<string, string>;
+  };
+}
+
 export interface PhosphorAPI {
   // Vault Management
   selectVault: () => Promise<string | null>; // Returns the folder name (not full path) or null if cancelled
@@ -84,6 +114,16 @@ export interface PhosphorAPI {
   ) => Promise<UserSettings>;
   setMultipleSettings: (updates: Partial<UserSettings>) => Promise<UserSettings>;
   onSettingsChange: (cb: (settings: UserSettings) => void) => () => void;
+
+  // MCP (Model Context Protocol) local server
+  mcpGetStatus: () => Promise<McpStatus>;
+  mcpSetEnabled: (enabled: boolean) => Promise<McpStatus>;
+  mcpSetPort: (port: number) => Promise<McpStatus>;
+  /** Generates a new token and returns the plaintext ONCE - only its hash is persisted. */
+  mcpRegenerateToken: () => Promise<string>;
+  mcpGetActivity: () => Promise<McpActivityEntry[]>;
+  mcpGetClientConfig: (token: string) => Promise<McpClientConfig>;
+  onMcpStatusChange: (cb: (status: McpStatus) => void) => () => void;
 
   // App Info
   getVersions: () => Promise<{ electron?: string; chrome?: string; node?: string; app?: string }>;

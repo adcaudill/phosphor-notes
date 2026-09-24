@@ -15,6 +15,8 @@ import { createMenu } from './menu';
 import { setupSettingsHandlers, initializeSettings, updateSettings } from './store';
 import type { UserSettings } from '../types/phosphor.d';
 import { decryptBuffer, isEncrypted } from './crypto';
+import { mcpController } from './mcp/controller';
+import { setupMcpIPC } from './mcp/ipcHandlers';
 
 // Suppress EPIPE errors that occur when trying to write to stdout/stderr during shutdown
 // This prevents "write EPIPE" errors when the process is closing
@@ -347,10 +349,27 @@ function createWindow(settings?: UserSettings): BrowserWindow {
   return mainWindow;
 }
 
+// Only one instance of the app should run at a time: two instances would
+// each run their own file watcher/indexer against the same vault, and (once
+// enabled) could each try to bind the local MCP server to the same port.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
+app.on('second-instance', () => {
+  const [existingWindow] = BrowserWindow.getAllWindows();
+  if (existingWindow) {
+    if (existingWindow.isMinimized()) existingWindow.restore();
+    existingWindow.focus();
+  }
+});
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.whenReady().then(async () => {
+if (gotSingleInstanceLock) {
+  app.whenReady().then(async () => {
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron');
 
@@ -377,6 +396,15 @@ app.whenReady().then(async () => {
   const mainWindow = createWindow(settings);
   setupIPC(mainWindow);
   createMenu(mainWindow);
+
+  // Local MCP server: off by default, loads its own on-disk config and only
+  // starts listening if previously enabled by the user in Settings.
+  try {
+    await mcpController.init(app.getPath('userData'));
+    setupMcpIPC(mainWindow);
+  } catch (err) {
+    console.error('Failed to initialize MCP server:', err);
+  }
 
   // Persist window bounds on close so we can restore on next launch
   mainWindow.on('close', async () => {
@@ -441,7 +469,8 @@ app.whenReady().then(async () => {
       }
     });
   });
-});
+  });
+}
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
@@ -450,6 +479,10 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('will-quit', () => {
+  mcpController.shutdown().catch((err) => console.error('Failed to shut down MCP server:', err));
 });
 
 // In this file you can include the rest of your app's specific main process

@@ -28,6 +28,8 @@ import {
   toggleFavorite
 } from './store';
 import sodium from 'sodium-native';
+import * as vaultState from './vaultState';
+import { validateAndResolvePath } from './vaultPaths';
 
 // Safe logging that ignores EPIPE errors during shutdown
 const safeLog = (msg: string): void => {
@@ -54,32 +56,20 @@ const safeWarn = (msg: string, err?: unknown): void => {
   }
 };
 
-// Store the active vault path in memory for this session
-let activeVaultPath: string | null = null;
-
-// Master Key is stored in process memory and cleared on app quit
-// This variable is only set after successful password authentication
-let activeMasterKey: Buffer | null = null;
+// Local mirrors of the canonical vault state now owned by `vaultState.ts`,
+// kept in sync via its change event. This avoids having to rewrite the many
+// existing reads of these two names throughout this file; the only
+// authoritative source of truth is vaultState, and any new code (e.g. the
+// MCP server) should read from vaultState directly rather than from here.
+let activeVaultPath: string | null = vaultState.getVaultPath();
+let activeMasterKey: Buffer | null = vaultState.getMasterKey();
+vaultState.onChange(() => {
+  activeVaultPath = vaultState.getVaultPath();
+  activeMasterKey = vaultState.getMasterKey();
+});
 
 // Store mainWindow reference for sending updates
 let mainWindow: BrowserWindow | null = null;
-
-/**
- * Safely resolve a filename relative to the vault, preventing directory traversal attacks.
- * Allows nested paths like "People/John.md" but rejects "../../../etc/passwd"
- */
-function validateAndResolvePath(vaultPath: string, filename: string): string {
-  // Resolve both paths to absolute to compare them properly
-  const resolvedVault = path.resolve(vaultPath);
-  const resolvedPath = path.resolve(vaultPath, filename);
-
-  // Ensure resolved path is within vault directory
-  if (!resolvedPath.startsWith(resolvedVault + path.sep) && resolvedPath !== resolvedVault) {
-    throw new Error('Path traversal attempt detected');
-  }
-
-  return resolvedPath;
-}
 
 /**
  * Auto-create parent files for nested paths.
@@ -175,19 +165,6 @@ function getSecurityConfigPath(vaultPath: string): string {
 }
 
 /**
- * Check if vault has encryption enabled
- */
-export async function isEncryptionEnabled(vaultPath: string): Promise<boolean> {
-  try {
-    const securityPath = getSecurityConfigPath(vaultPath);
-    await fsp.access(securityPath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Load security config from vault
  */
 async function loadSecurityConfig(vaultPath: string): Promise<SecurityConfig | null> {
@@ -251,7 +228,7 @@ async function tryUnlockVault(vaultPath: string, password: string): Promise<bool
     try {
       decryptBuffer(encryptedCheckToken, masterKey);
       // Success! Store the master key for this session
-      activeMasterKey = masterKey;
+      vaultState.setMasterKey(masterKey);
       safeLog('[Encryption] Vault unlocked successfully');
       return true;
     } catch {
@@ -270,9 +247,7 @@ async function tryUnlockVault(vaultPath: string, password: string): Promise<bool
  * Clear the master key from memory
  */
 function lockVault(): void {
-  if (activeMasterKey) {
-    sodium.sodium_memzero(activeMasterKey);
-    activeMasterKey = null;
+  if (vaultState.clearMasterKey()) {
     safeLog('[Encryption] Vault locked');
   }
 }
@@ -1200,7 +1175,7 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
   // Check if encryption is enabled for current vault
   ipcMain.handle('encryption:is-enabled', async () => {
     if (!activeVaultPath) return false;
-    return isEncryptionEnabled(activeVaultPath);
+    return vaultState.isEncryptionEnabled(activeVaultPath);
   });
 
   // Unlock vault with password
@@ -1475,7 +1450,7 @@ export async function openVaultPath(vaultPath: string, mainWindow: BrowserWindow
     safeWarn('Failed to reset in-memory indexer state during vault switch:', err);
   }
 
-  activeVaultPath = vaultPath;
+  vaultState.setVaultPath(vaultPath);
 
   // Initialize MRU for this vault
   try {
@@ -1510,7 +1485,7 @@ export async function openVaultPath(vaultPath: string, mainWindow: BrowserWindow
 
   // send cached graph if available
   try {
-    const cachePath = path.join(activeVaultPath, '.phosphor', 'graph.json');
+    const cachePath = path.join(vaultPath, '.phosphor', 'graph.json');
     try {
       const raw = await fsp.readFile(cachePath, 'utf-8');
       const graph = JSON.parse(raw);
@@ -1535,18 +1510,18 @@ export async function openVaultPath(vaultPath: string, mainWindow: BrowserWindow
 
   // start background indexing for this vault
   try {
-    startIndexing(activeVaultPath, mainWindow);
+    startIndexing(vaultPath, mainWindow);
     // persist choice
-    await saveLastVault(activeVaultPath);
+    await saveLastVault(vaultPath);
     // notify UI that vault opened
     try {
       if (!mainWindow.isDestroyed()) {
         mainWindow.webContents.send('phosphor:status', {
           type: 'vault-opened',
-          message: `Opened vault ${path.basename(activeVaultPath)}`
+          message: `Opened vault ${path.basename(vaultPath)}`
         });
         // Inform renderer that a new vault was opened so it can reload UI state
-        mainWindow.webContents.send('phosphor:vault-opened', path.basename(activeVaultPath));
+        mainWindow.webContents.send('phosphor:vault-opened', path.basename(vaultPath));
       }
     } catch (e) {
       safeWarn('Could not send vault-opened status', e);
@@ -1567,9 +1542,9 @@ export async function getSavedVaultPath(): Promise<string | null> {
 }
 
 export function getActiveVaultPath(): string | null {
-  return activeVaultPath;
+  return vaultState.getVaultPath();
 }
 
 export function getActiveMasterKey(): Buffer | null {
-  return activeMasterKey;
+  return vaultState.getMasterKey();
 }

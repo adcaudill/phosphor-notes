@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import Holidays from 'date-holidays';
 import { useSettings } from '../hooks/useSettings';
+import { McpSettingsPanel } from './McpSettingsPanel';
 import '../styles/SettingsModal.css';
 
 interface SettingsModalProps {
@@ -10,9 +11,9 @@ interface SettingsModalProps {
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   const { settings, updateSetting } = useSettings();
-  const [activeTab, setActiveTab] = useState<'editor' | 'appearance' | 'grammar' | 'keybindings'>(
-    'editor'
-  );
+  const [activeTab, setActiveTab] = useState<
+    'editor' | 'appearance' | 'grammar' | 'keybindings' | 'mcp'
+  >('editor');
 
   /**
    * Get sorted list of supported countries from the Holidays library
@@ -77,6 +78,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               onClick={() => setActiveTab('keybindings')}
             >
               Key Bindings
+            </button>
+            <button
+              className={`settings-tab ${activeTab === 'mcp' ? 'active' : ''}`}
+              onClick={() => setActiveTab('mcp')}
+            >
+              AI Access
             </button>
           </div>
 
@@ -392,6 +399,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                 </div>
               </>
             )}
+
+            {activeTab === 'mcp' && <McpSettingsPanel />}
           </div>
         </div>
       </div>

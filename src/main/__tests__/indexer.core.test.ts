@@ -73,12 +73,14 @@ describe('indexer core helpers', () => {
 
     vi.doMock('fs', () => ({ promises: fspMock, existsSync }));
 
-    // Mock encryption helpers
-    vi.doMock('../ipc', () => ({
-      isEncryptionEnabled: vi.fn().mockResolvedValue(true),
-      getActiveMasterKey: vi.fn().mockReturnValue('master')
+    // Mock encryption helpers: vaultReader (used by indexer.readMarkdownFile)
+    // checks the buffer's own magic header via `isEncrypted`, then reads the
+    // master key from `vaultState`.
+    vi.doMock('../vaultState', () => ({
+      getMasterKey: vi.fn().mockReturnValue(Buffer.from('master-key'))
     }));
     vi.doMock('../crypto', () => ({
+      isEncrypted: vi.fn().mockReturnValue(true),
       decryptBuffer: vi.fn().mockReturnValue(Buffer.from('decrypted content'))
     }));
 
@@ -115,7 +117,7 @@ describe('indexer core helpers', () => {
     expect(worker.terminated).toBe(true);
   });
 
-  it('startIndexing should fallback to plaintext when decryption fails', async () => {
+  it('startIndexing should send empty content (not raw ciphertext) when decryption fails', async () => {
     vi.doMock('electron', () => ({ app: { getPath: () => '/tmp' } }));
 
     class FakeWorker2 {
@@ -150,7 +152,7 @@ describe('indexer core helpers', () => {
     const existsSync = vi.fn().mockReturnValue(true);
     const fspMock: Partial<typeof import('fs').promises> = {
       readdir: vi.fn().mockResolvedValue([{ name: 'note.md', isDirectory: () => false }]),
-      readFile: vi.fn().mockResolvedValue(Buffer.from('plain text')),
+      readFile: vi.fn().mockResolvedValue(Buffer.from('ciphertext-bytes')),
       mkdir: vi.fn(),
       writeFile: vi.fn(),
       rename: vi.fn()
@@ -158,11 +160,11 @@ describe('indexer core helpers', () => {
 
     vi.doMock('fs', () => ({ promises: fspMock, existsSync }));
 
-    vi.doMock('../ipc', () => ({
-      isEncryptionEnabled: vi.fn().mockResolvedValue(true),
-      getActiveMasterKey: vi.fn().mockReturnValue('master')
+    vi.doMock('../vaultState', () => ({
+      getMasterKey: vi.fn().mockReturnValue(Buffer.from('master-key'))
     }));
     vi.doMock('../crypto', () => ({
+      isEncrypted: vi.fn().mockReturnValue(true),
       decryptBuffer: vi.fn().mockImplementation(() => {
         throw new Error('bad');
       })
@@ -183,7 +185,10 @@ describe('indexer core helpers', () => {
       terminated?: boolean;
     };
     expect(worker.posted).toBeDefined();
-    expect(worker.posted![0].content).toBe('plain text');
+    // Regression guard: a file that looks encrypted but fails to decrypt
+    // (wrong/missing key, corruption) must never be indexed as if its raw
+    // ciphertext bytes were plaintext content.
+    expect(worker.posted![0].content).toBe('');
 
     worker.emitMessage?.({ type: 'graph-complete', data: { graph: {}, tasks: [] } });
     stopIndexing();
@@ -234,12 +239,8 @@ describe('indexer core helpers', () => {
 
     vi.doMock('fs', () => ({ promises: fspMock, existsSync }));
 
-    // Ensure encryption disabled for simplicity
-    vi.doMock('../ipc', () => ({
-      isEncryptionEnabled: vi.fn().mockResolvedValue(false),
-      getActiveMasterKey: vi.fn()
-    }));
-
+    // Plain, unencrypted content: vaultReader's real `isEncrypted` check on
+    // the actual crypto module will see no magic header and skip decryption.
     const mainWindow = {
       isDestroyed: () => false,
       webContents: { send: vi.fn() }
