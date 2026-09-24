@@ -184,6 +184,9 @@ export interface UserSettings {
   // Persist last-used task view filters
   lastTasksStatusFilter?: 'all' | 'todo' | 'doing' | 'done';
   lastTasksDateFilter?: 'all' | 'overdue' | 'today' | 'upcoming' | 'no-date';
+  /** How the Tasks view groups its list. 'smart' = urgency buckets (the default), 'file' = by source note, 'priority' = by priority level. */
+  lastTasksGroupMode?: 'smart' | 'file' | 'priority';
+  lastTasksPriorityFilter?: Array<'high' | 'medium' | 'low' | 'none'>;
 }
 
 declare global {

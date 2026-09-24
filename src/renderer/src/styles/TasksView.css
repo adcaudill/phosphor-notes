@@ -28,37 +28,159 @@
   font-weight: 600;
 }
 
-.tasks-stats {
+.tasks-group-toggle {
   display: flex;
-  gap: 16px;
-  font-size: 14px;
+  gap: 4px;
+  background: var(--color-surface);
+  border-radius: 8px;
+  padding: 3px;
 }
 
-.stat {
+.group-mode-btn {
+  padding: 5px 12px;
+  border: none;
+  background: none;
+  color: var(--color-text-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.group-mode-btn.active {
+  background: var(--color-background);
+  color: var(--color-text-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.tasks-toolbar {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border);
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tasks-search-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: 13px;
+}
+
+.tasks-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
   align-items: center;
-  gap: 6px;
 }
 
-.stat-icon {
-  font-size: 16px;
-  font-weight: bold;
+.overdue-toggle.active {
+  background-color: rgba(var(--color-error-rgb), 0.16);
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+.priority-filter-group {
+  gap: 4px;
+}
+
+.priority-chip {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  vertical-align: middle;
+  gap: 4px;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-text-secondary);
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 12px;
 }
 
-.stat-icon.todo {
-  color: var(--color-secondary);
+.priority-chip.active.priority-chip-high {
+  background-color: rgba(var(--color-error-rgb), 0.16);
+  border-color: var(--color-error);
+  color: var(--color-error);
 }
 
-.stat-icon.doing {
+.priority-chip.active.priority-chip-medium {
+  background-color: rgba(var(--color-warning-rgb), 0.18);
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+}
+
+.priority-chip.active.priority-chip-low,
+.priority-chip.active.priority-chip-none {
+  background-color: rgba(var(--color-primary-rgb), 0.14);
+  border-color: var(--color-primary);
   color: var(--color-primary);
 }
 
-.stat-icon.done {
-  color: #4a7c59;
+.priority-chip-count {
+  opacity: 0.7;
+}
+
+.tasks-quick-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+.tasks-quick-add input {
+  flex: 1;
+  border: none;
+  background: none;
+  color: var(--color-text-primary);
+  font-size: 14px;
+  outline: none;
+}
+
+.task-group {
+  padding: 0 16px 4px;
+}
+
+.task-group-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 0;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.task-group-chevron {
+  font-size: 18px;
+  transition: transform 0.12s ease;
+  color: var(--color-text-secondary);
+}
+
+.task-group-chevron.open {
+  transform: rotate(90deg);
+}
+
+.task-group-label {
+  flex: 1;
+}
+
+.task-group-count {
+  color: var(--color-text-secondary);
+  font-weight: 400;
+  font-size: 12px;
 }
 
 .tasks-filter {
@@ -128,31 +250,6 @@
 
 .empty-state p {
   margin: 8px 0;
-}
-
-.task-file-group {
-  padding: 0 16px 12px;
-}
-
-.task-file-header {
-  padding: 8px 0;
-  margin-bottom: 8px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid var(--color-border);
-  opacity: 0.7;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.file-name {
-  color: var(--color-primary);
-}
-
-.file-count {
-  color: var(--color-text-secondary);
-  font-size: 12px;
 }
 
 .task-items {
@@ -227,17 +324,11 @@
   color: var(--color-text-primary);
 }
 
-.task-due-date-icon {
-  font-size: 12px;
-  min-width: 16px;
-  text-align: center;
-}
-
-.task-due-date {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  opacity: 0.7;
-  font-family: 'Menlo', 'Monaco', monospace;
+.task-pills {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .task-completed-time {

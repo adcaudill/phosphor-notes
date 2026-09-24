@@ -125,6 +125,13 @@ export function createMenu(mainWindow: BrowserWindow | null): void {
       },
       { type: 'separator' },
       {
+        label: 'Tasks View',
+        accelerator: 'Cmd+T',
+        click: () => {
+          mainWindow?.webContents.send('menu:tasks');
+        }
+      },
+      {
         label: 'Graph Information',
         click: () => {
           mainWindow?.webContents.send('menu:graph-stats');

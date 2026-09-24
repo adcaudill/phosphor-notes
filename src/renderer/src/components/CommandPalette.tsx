@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 
 interface SearchResult {
   id: string;
@@ -7,15 +7,41 @@ interface SearchResult {
   snippet?: string;
 }
 
+interface CommandEntry {
+  type: 'command';
+  id: string;
+  title: string;
+  snippet: string;
+}
+
+interface FileEntry extends SearchResult {
+  type: 'file';
+}
+
+type PaletteEntry = CommandEntry | FileEntry;
+
 interface CommandPaletteProps {
   isOpen: boolean;
   onClose: () => void;
   onSelect: (filename: string) => void;
+  /** Static app commands (Open Tasks View, etc.) - kept as a minimal addition to file search rather than redesigning this into a full two-mode palette. */
+  onCommand?: (commandId: string) => void;
 }
 
-export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose, onSelect }) => {
+const STATIC_COMMANDS: Omit<CommandEntry, 'type'>[] = [
+  { id: 'open-tasks', title: 'Open Tasks View', snippet: 'Switch to the Tasks view' },
+  { id: 'open-graph', title: 'Open Graph View', snippet: 'Switch to the Graph view' },
+  { id: 'new-task', title: 'New Task', snippet: "Add a task to today's daily note" }
+];
+
+export const CommandPalette: React.FC<CommandPaletteProps> = ({
+  isOpen,
+  onClose,
+  onSelect,
+  onCommand
+}) => {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SearchResult[]>([]);
+  const [fileResults, setFileResults] = useState<SearchResult[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceTimer = useRef<number | null>(null);
@@ -27,19 +53,38 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
       // Use queueMicrotask to defer state updates and avoid cascading renders
       queueMicrotask(() => {
         setQuery('');
-        setResults([]);
+        setFileResults([]);
         setSelectedIndex(0);
         inputRef.current?.focus();
       });
     }
   }, [isOpen]);
 
+  const matchingCommands = useMemo((): CommandEntry[] => {
+    if (!onCommand) return [];
+    const q = query.trim().toLowerCase();
+    return STATIC_COMMANDS.filter((c) => !q || c.title.toLowerCase().includes(q)).map((c) => ({
+      ...c,
+      type: 'command' as const
+    }));
+  }, [query, onCommand]);
+
+  const results: PaletteEntry[] = [
+    ...matchingCommands,
+    ...fileResults.map((r): FileEntry => ({ ...r, type: 'file' }))
+  ];
+
+  // Commands recompute synchronously on every keystroke, so reset selection
+  // immediately rather than waiting for the debounced file search below.
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [query]);
+
   // 2. Handle Typing (Search)
   useEffect(() => {
     if (!query) {
-      // Defer clearing results to avoid cascading renders
       queueMicrotask(() => {
-        setResults([]);
+        setFileResults([]);
       });
       return;
     }
@@ -51,11 +96,10 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
     debounceTimer.current = window.setTimeout(async () => {
       try {
         const hits = await window.phosphor.search(query);
-        setResults(hits || []);
-        setSelectedIndex(0);
+        setFileResults(hits || []);
       } catch (err) {
         console.error('Search failed:', err);
-        setResults([]);
+        setFileResults([]);
       }
     }, 150);
 
@@ -76,6 +120,15 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
     }
   }, [selectedIndex]);
 
+  const activate = (entry: PaletteEntry): void => {
+    if (entry.type === 'command') {
+      onCommand?.(entry.id);
+    } else {
+      onSelect(entry.filename);
+    }
+    onClose();
+  };
+
   // 4. Handle Keyboard Navigation
   const handleKeyDown = (e: React.KeyboardEvent): void => {
     if (e.key === 'ArrowDown') {
@@ -87,9 +140,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (results[selectedIndex]) {
-        const filename = results[selectedIndex].filename;
-        onSelect(filename);
-        onClose();
+        activate(results[selectedIndex]);
       }
     } else if (e.key === 'Escape') {
       e.preventDefault();
@@ -108,27 +159,28 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Search files..."
+          placeholder="Search files or type a command..."
           className="command-palette-search-input"
         />
         <ul className="result-list">
-          {results &&
-            results.map((res, i) => (
-              <li
-                ref={(el) => {
-                  resultItemsRef.current[i] = el;
-                }}
-                key={res.id}
-                className={i === selectedIndex ? 'result-item selected' : 'result-item'}
-                onClick={() => {
-                  onSelect(res.filename);
-                  onClose();
-                }}
-              >
-                <div className="result-title">{res.title}</div>
-                {res.snippet && <div className="result-snippet">{res.snippet}</div>}
-              </li>
-            ))}
+          {results.map((entry, i) => (
+            <li
+              ref={(el) => {
+                resultItemsRef.current[i] = el;
+              }}
+              key={entry.type === 'command' ? `cmd-${entry.id}` : entry.id}
+              className={i === selectedIndex ? 'result-item selected' : 'result-item'}
+              onClick={() => activate(entry)}
+            >
+              <div className="result-title">
+                {entry.type === 'command' && (
+                  <span className="material-symbols-outlined result-command-icon">bolt</span>
+                )}
+                {entry.title}
+              </div>
+              {entry.snippet && <div className="result-snippet">{entry.snippet}</div>}
+            </li>
+          ))}
         </ul>
       </div>
     </div>

@@ -12,78 +12,89 @@ import { toggleTaskLine } from '../../../../shared/tasks';
 class TaskCheckboxWidget extends WidgetType {
   constructor(
     readonly status: 'todo' | 'doing' | 'done',
-    readonly lineStart: number,
-    readonly matchStart: number,
-    readonly matchEnd: number,
-    readonly dashStart: number,
-    readonly onToggle: () => void
+    readonly lineNumber: number,
+    readonly widthCh: number,
+    readonly view: EditorView
   ) {
     super();
+  }
+
+  eq(other: TaskCheckboxWidget): boolean {
+    return (
+      other.status === this.status &&
+      other.lineNumber === this.lineNumber &&
+      other.widthCh === this.widthCh
+    );
   }
 
   toDOM(): HTMLElement {
     const wrap = document.createElement('span');
     wrap.className = `cm-task-checkbox cm-task-${this.status}`;
     wrap.setAttribute('data-task-status', this.status);
-    wrap.style.alignItems = 'center';
-    wrap.style.lineHeight = '1';
+    wrap.setAttribute('data-task-line', String(this.lineNumber));
     // Reserve the same horizontal space as the replaced characters so the
-    // following text doesn't shift left when we replace the marker with the widget.
-    try {
-      const replacedChars = Math.max(1, this.matchEnd - this.dashStart);
-      wrap.style.width = `${replacedChars}ch`;
-      // Nudge the widget slightly right to better match the visual position
-      // of the original list marker in CodeMirror's indented layout.
-      wrap.style.marginLeft = '0.6ch';
-    } catch {
-      // Fallback: don't set width if measurements fail
-    }
+    // following text doesn't shift when we replace the marker with the
+    // widget - structural/measured, so it stays inline rather than moving
+    // to the stylesheet like everything else here.
+    wrap.style.width = `${this.widthCh}ch`;
 
+    // Two nested elements rather than one: the outer box's own size (set in
+    // CSS as a fixed em value, independent of its content) is what
+    // CodeMirror/the browser uses to size this line, while the inner glyph
+    // can have a bigger font-size purely for its own painted appearance.
+    // A single element sized via a bigger font-size (the original
+    // approach) grows the LINE's rendered height to match; a `transform:
+    // scale()` on that single element avoided the height problem but
+    // scales from the box's own center, and since the box sits left-
+    // aligned inside the wider reserved "- [ ] " space (not centered in
+    // it), scaling made it drift further left rather than growing
+    // symmetrically around where it visually belongs.
     const indicator = document.createElement('span');
-    indicator.className = 'material-symbols-outlined';
-    // Map statuses to Material Symbols icon names
-    const iconName =
+    indicator.className = 'cm-task-checkbox-icon';
+
+    const glyph = document.createElement('span');
+    glyph.className = 'material-symbols-outlined cm-task-checkbox-glyph';
+    glyph.textContent =
       this.status === 'todo'
         ? 'check_box_outline_blank'
         : this.status === 'doing'
           ? 'indeterminate_check_box'
           : 'check_box';
-    indicator.textContent = iconName;
-    indicator.style.display = 'inline-flex';
-    indicator.style.alignItems = 'center';
-    indicator.style.justifyContent = 'center';
-    indicator.style.verticalAlign = 'middle';
-    indicator.style.marginRight = '0.5ch';
-    indicator.style.marginLeft = '0';
-    indicator.style.width = '1.4em';
-    indicator.style.textAlign = 'center';
-    indicator.style.cursor = 'pointer';
-    indicator.style.fontSize = '1.4em';
-    indicator.style.lineHeight = '1';
-    indicator.style.color = 'var(--color-primary)';
-    indicator.style.userSelect = 'none';
+    indicator.appendChild(glyph);
 
-    // Use pointerdown to intercept before CodeMirror processes cursor movement
+    // This decoration is hidden whenever the cursor is on this line (see
+    // buildDecorations below - deliberate, so raw markdown is editable on
+    // focus). That means a plain click routed through Editor.tsx's
+    // centralized domEventHandlers arrives too late: CodeMirror's own
+    // mousedown handling places the cursor here first, which synchronously
+    // triggers a decoration rebuild that removes this widget before the
+    // click event even fires. pointerdown interception (stopping the event
+    // before CodeMirror's default cursor-placement runs) is the only
+    // reliable fix, so - unlike every other clickable widget in this
+    // editor - the checkbox has to handle its own click rather than go
+    // through the shared click router.
     indicator.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
-      // Capture the pointer to ensure we get the full sequence
       if (indicator instanceof HTMLElement) {
         indicator.setPointerCapture((e as PointerEvent).pointerId);
       }
     });
-
     indicator.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
-      this.onToggle();
+      dispatchTaskToggle(this.view, this.lineNumber);
     });
 
     wrap.appendChild(indicator);
 
     return wrap;
+  }
+
+  ignoreEvent(): boolean {
+    return false;
   }
 }
 
@@ -106,7 +117,6 @@ export const taskCheckboxPlugin = ViewPlugin.fromClass(
       const cursorLine = view.state.doc.lineAt(view.state.selection.main.from).number;
       const taskRegex = /^\s*-\s*\[([ x/])\]\s*(.*?)$/;
 
-      // Iterate through all lines in the document
       for (let lineNum = 1; lineNum <= view.state.doc.lines; lineNum++) {
         const line = view.state.doc.line(lineNum);
         const lineText = line.text;
@@ -116,35 +126,21 @@ export const taskCheckboxPlugin = ViewPlugin.fromClass(
           continue;
         }
 
-        // Use exec to get the match index
         taskRegex.lastIndex = 0;
         const match = taskRegex.exec(lineText);
         if (!match) continue;
 
-        // Calculate bracket position within the matched text
         const bracketIndex = match[0].indexOf('[');
         const taskStart = line.from + match.index + bracketIndex;
         const taskEnd = taskStart + 3; // Length of "[ ]", "[x]", or "[/]"
 
-        // Also find the leading dash in the matched text and include it in the
-        // decoration range so the `-` is hidden beneath the widget.
         const dashIndex = match[0].indexOf('-');
         const dashStart = dashIndex !== -1 ? line.from + match.index + dashIndex : taskStart;
 
         const status = match[1] === ' ' ? 'todo' : match[1] === '/' ? 'doing' : 'done';
+        const widthCh = Math.max(1, taskEnd - dashStart);
 
-        const onToggle = (): void => {
-          dispatchTaskToggle(view, line.from, line.to);
-        };
-
-        const widget = new TaskCheckboxWidget(
-          status,
-          line.from,
-          taskStart,
-          taskEnd,
-          dashStart,
-          onToggle
-        );
+        const widget = new TaskCheckboxWidget(status, lineNum, widthCh, view);
         decorations.push(
           Decoration.replace({
             widget,
@@ -164,21 +160,24 @@ export const taskCheckboxPlugin = ViewPlugin.fromClass(
 /**
  * The single call site that talks to the shared task-toggle logic
  * (todo -> doing -> done -> todo, including recurring-task completion) -
- * both the checkbox widget's click handler and the `Mod-Enter` keyboard
- * shortcut go through this, so they can never drift into two different
- * behaviors the way they used to.
+ * the checkbox widget's own click handler, the editor's `toggleTaskAtLine`
+ * imperative handle (used by the Tasks view/daily rollup for the currently
+ * open file), and the `Mod-Enter` keyboard shortcut all call this, so they
+ * can never drift into different behaviors the way three separate
+ * implementations used to.
  */
-function dispatchTaskToggle(view: EditorView, lineFrom: number, lineTo: number): void {
-  const lineText = view.state.doc.sliceString(lineFrom, lineTo);
-  const [firstLine, ...restLines] = toggleTaskLine(lineText);
+export function dispatchTaskToggle(view: EditorView, lineNumber: number): void {
+  if (lineNumber < 1 || lineNumber > view.state.doc.lines) return;
+  const line = view.state.doc.line(lineNumber);
+  const [firstLine, ...restLines] = toggleTaskLine(line.text);
 
   view.dispatch({
     changes:
       restLines.length === 0
-        ? { from: lineFrom, to: lineTo, insert: firstLine }
+        ? { from: line.from, to: line.to, insert: firstLine }
         : [
-            { from: lineFrom, to: lineTo, insert: firstLine },
-            { from: lineTo, insert: '\n' + restLines.join('\n') }
+            { from: line.from, to: line.to, insert: firstLine },
+            { from: line.to, insert: '\n' + restLines.join('\n') }
           ]
   });
 }
@@ -190,6 +189,6 @@ export function cycleTaskStatus(view: EditorView): boolean {
 
   if (!/^\s*-\s*\[([ x/])\]/.test(line.text)) return false;
 
-  dispatchTaskToggle(view, line.from, line.to);
+  dispatchTaskToggle(view, line.number);
   return true;
 }

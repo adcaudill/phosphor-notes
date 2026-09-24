@@ -1594,6 +1594,13 @@ body {
   letter-spacing: -0.3px;
 }
 
+.result-command-icon {
+  font-size: 15px;
+  vertical-align: -2px;
+  margin-right: 4px;
+  color: var(--color-primary);
+}
+
 .result-snippet {
   font-size: 13px;
   color: var(--color-text-secondary);

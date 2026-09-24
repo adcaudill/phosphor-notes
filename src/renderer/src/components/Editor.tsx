@@ -18,8 +18,15 @@ import { tags as t } from '@lezer/highlight';
 import { wikiLinkPlugin } from '../editor/extensions/wikiLinks';
 import { wikiLinkHoverTooltip } from '../editor/extensions/wikiLinkPreview';
 import { imagePreviewPlugin } from '../editor/extensions/imagePreview';
-import { taskCheckboxPlugin, cycleTaskStatus } from '../editor/extensions/taskCheckbox';
-import { dateIndicatorPlugin } from '../editor/extensions/dateIndicator';
+import {
+  taskCheckboxPlugin,
+  cycleTaskStatus,
+  dispatchTaskToggle
+} from '../editor/extensions/taskCheckbox';
+import { taskMetadataWidgetsPlugin } from '../editor/extensions/taskMetadataWidgets';
+import { taskAddMetadataGutter } from '../editor/extensions/taskAddMetadataGutter';
+import { TaskMetadataPopover, type TaskMetadataValue } from './TaskMetadataPopover';
+import { parseTaskLine, serializeTaskLine, TASK_LINE_RE } from '../../../shared/tasks';
 import { admonitionWidget } from '../editor/extensions/admonitionWidget';
 import { typewriterScrollPlugin } from '../editor/extensions/typewriter';
 import { dimmingPlugin, suppressDimmingEffect } from '../editor/extensions/dimming';
@@ -47,6 +54,7 @@ import {
 import { createQuickTypeExtension } from '../editor/extensions/quickType';
 import { PredictionEngine } from '../utils/predictionEngine';
 import type { PredictionModelSnapshot } from '../../../shared/predictionModel';
+import '../styles/EditorTaskWidgets.css';
 
 // Dark mode highlight style with proper color contrast
 const darkModeHighlightStyle = HighlightStyle.define([
@@ -84,6 +92,10 @@ interface EditorProps {
 export interface EditorHandle {
   scrollToLine: (lineNumber: number) => void;
   replaceSelection: (text: string) => void;
+  /** Toggles the task on the given line via the live buffer (not a disk write) - returns false if that line isn't a task line, so callers know to fall back. */
+  toggleTaskAtLine: (lineNumber: number) => boolean;
+  /** Rewrites the given task line's metadata via the live buffer - returns false if that line isn't a task line. */
+  updateTaskMetadataAtLine: (lineNumber: number, value: TaskMetadataValue) => boolean;
 }
 
 export const Editor = forwardRef<EditorHandle, EditorProps>(
@@ -118,6 +130,30 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
             effects: EditorView.scrollIntoView(pos, { y: 'center' })
           });
         },
+        toggleTaskAtLine: (lineNumber: number) => {
+          const view = viewRef.current;
+          if (!view || lineNumber < 1 || lineNumber > view.state.doc.lines) return false;
+          const line = view.state.doc.line(lineNumber);
+          if (!TASK_LINE_RE.test(line.text)) return false;
+          dispatchTaskToggle(view, lineNumber);
+          return true;
+        },
+        updateTaskMetadataAtLine: (lineNumber: number, value: TaskMetadataValue) => {
+          const view = viewRef.current;
+          if (!view || lineNumber < 1 || lineNumber > view.state.doc.lines) return false;
+          const line = view.state.doc.line(lineNumber);
+          const match = TASK_LINE_RE.exec(line.text);
+          const parsed = parseTaskLine(line.text);
+          if (!match || !parsed) return false;
+          const newLine = serializeTaskLine(match[1], parsed.status, parsed.text, {
+            due: value.due,
+            recurrence: value.recurrence,
+            priority: value.priority,
+            completedAt: parsed.completedAt
+          });
+          view.dispatch({ changes: { from: line.from, to: line.to, insert: newLine } });
+          return true;
+        },
         replaceSelection: (text: string) => {
           if (!viewRef.current) return;
           try {
@@ -140,6 +176,50 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
     const [searchAPI, setSearchAPI] = useState<ReturnType<typeof createSearchAPI> | null>(null);
     const [imageViewerOpen, setImageViewerOpen] = useState(false);
     const [imageViewerUrl, setImageViewerUrl] = useState('');
+    const [taskPopover, setTaskPopover] = useState<{
+      lineNumber: number;
+      anchorRect: DOMRect;
+    } | null>(null);
+
+    const handleTaskMetadataChange = useCallback(
+      (value: TaskMetadataValue) => {
+        const view = viewRef.current;
+        if (!view || !taskPopover) return;
+        const { lineNumber } = taskPopover;
+        if (lineNumber < 1 || lineNumber > view.state.doc.lines) return;
+
+        const line = view.state.doc.line(lineNumber);
+        const match = TASK_LINE_RE.exec(line.text);
+        const parsed = parseTaskLine(line.text);
+        if (!match || !parsed) return;
+
+        const newLine = serializeTaskLine(match[1], parsed.status, parsed.text, {
+          due: value.due,
+          recurrence: value.recurrence,
+          priority: value.priority,
+          completedAt: parsed.completedAt
+        });
+
+        view.dispatch({ changes: { from: line.from, to: line.to, insert: newLine } });
+      },
+      [taskPopover]
+    );
+
+    const taskPopoverInitial = useMemo((): TaskMetadataValue => {
+      if (!taskPopover || !viewRef.current) return {};
+      const { lineNumber } = taskPopover;
+      if (lineNumber < 1 || lineNumber > viewRef.current.state.doc.lines) return {};
+      const parsed = parseTaskLine(viewRef.current.state.doc.line(lineNumber).text);
+      if (!parsed) return {};
+      return {
+        due: parsed.dueDate,
+        recurrence: parsed.recurrence?.supported
+          ? { amount: parsed.recurrence.amount, unit: parsed.recurrence.unit }
+          : undefined,
+        priority: parsed.priority
+      };
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- re-derive whenever the popover (re)opens on a line
+    }, [taskPopover]);
 
     // Extract frontmatter and content, memoized to avoid re-extraction on every render
     const { frontmatter, content } = useMemo(() => extractFrontmatter(initialDoc), [initialDoc]);
@@ -218,7 +298,8 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
           history(), // Undo/Redo stack
           syntaxHighlighting(darkModeHighlightStyle), // Use custom dark mode colors
           taskCheckboxPlugin, // Task checkboxes
-          dateIndicatorPlugin, // Date pill indicators
+          taskMetadataWidgetsPlugin, // Due date / recurrence / priority pills
+          taskAddMetadataGutter, // "+" gutter marker for a bare task on the cursor's line
           admonitionWidget, // Admonition/Callout rendering
           typewriterScrollPlugin, // Typewriter scrolling (cursor centered)
           createGrammarLint({
@@ -384,6 +465,29 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
               try {
                 const target = event.target as HTMLElement | null;
 
+                // Note: the task checkbox handles its own click/pointerdown
+                // directly in taskCheckbox.ts rather than going through this
+                // centralized router - see the comment on TaskCheckboxWidget
+                // for why (its decoration is hidden while the cursor is on
+                // that line, so it needs to intercept before CodeMirror's
+                // own default cursor-placement handling runs).
+
+                // Task metadata pill: open the popover (the "+" add-metadata
+                // affordance lives in the gutter instead - see
+                // taskAddMetadataGutter.ts - and reaches this component via
+                // the phosphor-task-add-metadata listener below)
+                const metaEl =
+                  target?.closest && (target.closest('.cm-task-pill') as HTMLElement | null);
+                if (metaEl) {
+                  const lineNumber = Number(metaEl.getAttribute('data-task-line'));
+                  if (lineNumber) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setTaskPopover({ lineNumber, anchorRect: metaEl.getBoundingClientRect() });
+                    return true;
+                  }
+                }
+
                 // Handle image clicks
                 const imgEl =
                   target?.closest &&
@@ -502,6 +606,22 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
         document.removeEventListener('phosphor-image-viewer-open', handleImageViewerRequest);
     }, []);
 
+    // Listen for "+" gutter marker clicks (taskAddMetadataGutter.ts) - a
+    // gutter's own domEventHandlers config has no reach into React state,
+    // so it hands off via this same CustomEvent pattern.
+    useEffect(() => {
+      const handleAddMetadataRequest = (e: Event): void => {
+        const { lineNumber, anchorRect } = (e as CustomEvent).detail ?? {};
+        if (lineNumber && anchorRect) {
+          setTaskPopover({ lineNumber, anchorRect });
+        }
+      };
+
+      document.addEventListener('phosphor-task-add-metadata', handleAddMetadataRequest);
+      return () =>
+        document.removeEventListener('phosphor-task-add-metadata', handleAddMetadataRequest);
+    }, []);
+
     // Notify parent about search panel visibility
     useEffect(() => {
       if (onSearchOpen) {
@@ -541,6 +661,15 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
           imageUrl={imageViewerUrl}
           onClose={() => setImageViewerOpen(false)}
         />
+        {taskPopover && (
+          <TaskMetadataPopover
+            key={taskPopover.lineNumber}
+            anchorRect={taskPopover.anchorRect}
+            initial={taskPopoverInitial}
+            onChange={handleTaskMetadataChange}
+            onClose={() => setTaskPopover(null)}
+          />
+        )}
       </div>
     );
   }

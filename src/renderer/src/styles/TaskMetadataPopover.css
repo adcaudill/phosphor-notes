@@ -1,0 +1,172 @@
+.task-metadata-popover {
+  z-index: 10000;
+  background-color: var(--color-background-secondary, var(--color-background));
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  padding: 14px;
+  width: 264px;
+  max-height: 80vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+.task-metadata-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.task-metadata-label {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.task-metadata-priority-row {
+  display: flex;
+  gap: 6px;
+}
+
+.task-metadata-priority-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.task-metadata-priority-btn:hover {
+  filter: brightness(0.97);
+}
+
+.task-metadata-priority-btn.priority-high.active {
+  background-color: rgba(var(--color-error-rgb), 0.16);
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+.task-metadata-priority-btn.priority-medium.active {
+  background-color: rgba(var(--color-warning-rgb), 0.18);
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+}
+
+.task-metadata-priority-btn.priority-low.active {
+  background-color: rgba(var(--color-primary-rgb), 0.14);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.task-metadata-due-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.task-metadata-clear-btn {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.task-metadata-clear-btn:hover {
+  text-decoration: underline;
+}
+
+.task-metadata-repeats-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.task-metadata-recur-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 20px;
+}
+
+.task-metadata-recur-row input[type='number'] {
+  width: 48px;
+  padding: 3px 5px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+.task-metadata-recur-row select {
+  padding: 3px 5px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+.task-metadata-hint {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* react-datepicker theming, matching the overrides already applied for
+   EditorHeader's calendar button (see main.css .react-datepicker*),
+   scoped here so the inline calendar inside the popover matches too. */
+.task-metadata-popover .react-datepicker {
+  border: none;
+  font-family: inherit;
+  background: transparent;
+  width: 100%;
+}
+
+.task-metadata-popover .react-datepicker__month-container {
+  width: 100%;
+}
+
+.task-metadata-popover .react-datepicker__header {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.task-metadata-popover .react-datepicker__day-name,
+.task-metadata-popover .react-datepicker__current-month {
+  color: var(--color-text-primary);
+}
+
+.task-metadata-popover .react-datepicker__day {
+  color: var(--color-text-primary);
+}
+
+.task-metadata-popover .react-datepicker__day:hover {
+  background-color: rgba(var(--color-primary-rgb), 0.15);
+}
+
+.task-metadata-popover .react-datepicker__day--selected,
+.task-metadata-popover .react-datepicker__day--keyboard-selected {
+  background-color: var(--color-primary);
+  color: #fff;
+}
+
+.task-metadata-popover .react-datepicker__day--today {
+  font-weight: 700;
+  color: var(--color-primary);
+}

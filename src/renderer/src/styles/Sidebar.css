@@ -155,6 +155,7 @@
 }
 
 .nav-btn {
+  position: relative;
   flex: 1;
   padding: var(--spacing-md);
   background-color: transparent;
@@ -169,6 +170,22 @@
   justify-content: center;
   -webkit-user-select: none;
   user-select: none;
+}
+
+.nav-btn-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 8px;
+  background-color: var(--color-error);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
 }
 
 .nav-btn:hover {

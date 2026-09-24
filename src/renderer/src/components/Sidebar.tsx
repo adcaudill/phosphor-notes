@@ -11,6 +11,8 @@ interface SidebarProps {
   isDirty: boolean;
   refreshSignal?: number;
   viewMode?: 'editor' | 'tasks' | 'graph';
+  /** Count of overdue + due-today tasks, shown as a badge on the Tasks nav button - the most direct nudge toward a feature that's otherwise easy to forget to open. */
+  taskAlertCount?: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -21,7 +23,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeFile,
   isDirty,
   refreshSignal,
-  viewMode = 'editor'
+  viewMode = 'editor',
+  taskAlertCount = 0
 }) => {
   const [files, setFiles] = useState<string[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
@@ -188,9 +191,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               className={`nav-btn ${viewMode === 'tasks' ? 'active' : ''}`}
               onClick={onTasksClick}
-              title="Tasks view"
+              title={
+                taskAlertCount > 0
+                  ? `Tasks view (${taskAlertCount} overdue or due today)`
+                  : 'Tasks view'
+              }
             >
               <span className="material-symbols-outlined">task</span>
+              {taskAlertCount > 0 && (
+                <span className="nav-btn-badge">{taskAlertCount > 99 ? '99+' : taskAlertCount}</span>
+              )}
             </button>
             <button
               className={`nav-btn ${viewMode === 'graph' ? 'active' : ''}`}

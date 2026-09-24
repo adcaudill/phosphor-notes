@@ -11,6 +11,7 @@ import { FrontmatterModal } from './components/FrontmatterModal';
 import { GraphStatsModal } from './components/GraphStatsModal';
 import DailyNav from './components/DailyNav';
 import Holiday from './components/Holiday';
+import { DailyTaskRollup } from './components/DailyTaskRollup';
 import { TasksView } from './components/TasksView';
 import { EncryptionModal } from './components/EncryptionModal';
 import { AboutModal } from './components/AboutModal';
@@ -20,6 +21,18 @@ import { SettingsProvider } from './contexts/SettingsContext';
 import { useSettings } from './hooks/useSettings';
 import { extractFrontmatter, generateDefaultFrontmatter } from './utils/frontmatterUtils';
 import type { PredictionModelSnapshot } from '../../shared/predictionModel';
+import type { Task } from '../../shared/tasks';
+import {
+  formatTaskLine,
+  serializeTaskLine,
+  toggleTaskLine,
+  TASK_LINE_RE,
+  todayString,
+  isPastDate,
+  isTodayDate
+} from '../../shared/tasks';
+import { formatAppend, detectNoteMode } from '../../shared/noteFormat';
+import type { TaskMetadataValue } from './components/TaskMetadataPopover';
 
 /**
  * Extract title from markdown frontmatter, or fallback to filename
@@ -52,6 +65,8 @@ function AppContent(): React.JSX.Element {
   const debounceTimer = useRef<number | null>(null);
   const [graph, setGraph] = useState<Record<string, string[]>>({});
   const [backlinks, setBacklinks] = useState<Record<string, string[]>>({});
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasksLoaded, setTasksLoaded] = useState(false);
   const skipSaveRef = useRef<boolean>(false);
   const [status, setStatus] = useState<{ type: string; message: string } | null>(null);
   const statusTimerRef = useRef<number | null>(null);
@@ -97,6 +112,12 @@ function AppContent(): React.JSX.Element {
     });
     return Array.from(unique).sort((a, b) => a.localeCompare(b));
   }, [graph]);
+  const taskAlertCount = useMemo(() => {
+    const today = todayString();
+    return tasks.filter(
+      (t) => t.status !== 'done' && t.dueDate && (isPastDate(t.dueDate, today) || isTodayDate(t.dueDate, today))
+    ).length;
+  }, [tasks]);
 
   useEffect(() => {
     let cancelled = false;
@@ -222,6 +243,17 @@ function AppContent(): React.JSX.Element {
       } catch (e) {
         console.warn('Failed to load cached graph', e);
       }
+
+      // Load cached tasks (fast path before the background reindex completes)
+      try {
+        const cachedTasks = await window.phosphor.getCachedTasks?.();
+        if (cachedTasks) {
+          setTasks(cachedTasks);
+          setTasksLoaded(true);
+        }
+      } catch (e) {
+        console.warn('Failed to load cached tasks', e);
+      }
     };
     init();
 
@@ -238,6 +270,12 @@ function AppContent(): React.JSX.Element {
       });
       setBacklinks(bl);
       console.debug('Backlinks keys:', Object.keys(bl).slice(0, 50));
+    });
+
+    // subscribe to task updates (full reindex or per-file incremental)
+    const unsubscribeTasks = window.phosphor.onTasksUpdate((taskData) => {
+      setTasks(taskData);
+      setTasksLoaded(true);
     });
 
     // subscribe to status updates
@@ -412,6 +450,10 @@ function AppContent(): React.JSX.Element {
       setGraphStatsModalOpen(true);
     });
 
+    const unsubscribeTasksView = window.phosphor.onMenuEvent?.('menu:tasks', () => {
+      setViewMode('tasks');
+    });
+
     // File change watchers - external file modifications
     const unsubscribeFileChanged = window.phosphor.onFileChanged?.((filename: string) => {
       console.debug('[FileWatcher] File changed externally:', filename);
@@ -467,6 +509,7 @@ function AppContent(): React.JSX.Element {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       if (unsubscribe) unsubscribe();
+      if (unsubscribeTasks) unsubscribeTasks();
       if (unsubscribeStatus) unsubscribeStatus();
       if (unsubscribePrediction) unsubscribePrediction();
       if (unsubscribeVaultOpened) unsubscribeVaultOpened();
@@ -487,6 +530,7 @@ function AppContent(): React.JSX.Element {
       if (unsubscribeImportLogseq) unsubscribeImportLogseq();
       if (unsubscribeReplaceSelection) unsubscribeReplaceSelection();
       if (unsubscribeGraphStats) unsubscribeGraphStats();
+      if (unsubscribeTasksView) unsubscribeTasksView();
       if (statusTimerRef.current) window.clearTimeout(statusTimerRef.current);
     };
   }, []);
@@ -633,6 +677,96 @@ function AppContent(): React.JSX.Element {
       await loadFile(filename, { ensureFrontmatter: true, addToHistory: true });
     } catch (err) {
       console.error('Failed to read note', filename, err);
+    }
+  };
+
+  /**
+   * Writes one or more replacement lines for a task via the targeted
+   * IPC path (not the live editor buffer) - the Tasks view (and the daily
+   * note rollup, for tasks in a file other than the one currently open)
+   * always go through this, since there's no live CodeMirror buffer to
+   * splice into for a file that isn't the open editor. The main process
+   * reindexes the file afterward and pushes a fresh `tasks` update, so
+   * there's no need to optimistically patch local state here.
+   */
+  const writeTaskLines = async (task: Task, newLines: string[]): Promise<void> => {
+    try {
+      const result = await window.phosphor.updateTaskLine(task.file, task.line, task.rawText, newLines);
+      if (!result.ok) {
+        setStatus({ type: 'error', message: `Couldn't update task: ${result.error}` });
+      }
+    } catch (err) {
+      console.error('Failed to update task line:', err);
+      setStatus({ type: 'error', message: 'Failed to update task.' });
+    }
+  };
+
+  // Prefer the live editor buffer when the task's file is the one currently
+  // open - writing straight to disk instead would be based on possibly-stale
+  // on-disk content and wouldn't touch the live buffer, so a subsequent
+  // autosave of in-progress edits could silently clobber the change (or
+  // vice versa). Only tasks in some other file (or when the Tasks view is
+  // open and the editor itself is unmounted) go through the disk write.
+  const handleTaskToggleStatus = (task: Task): void => {
+    if (task.file === currentFile && editorRef.current?.toggleTaskAtLine(task.line)) {
+      return;
+    }
+    writeTaskLines(task, toggleTaskLine(task.rawText));
+  };
+
+  const handleTaskUpdateMetadata = (task: Task, value: TaskMetadataValue): void => {
+    if (task.file === currentFile && editorRef.current?.updateTaskMetadataAtLine(task.line, value)) {
+      return;
+    }
+    const match = TASK_LINE_RE.exec(task.rawText);
+    if (!match) return;
+    const newLine = serializeTaskLine(match[1], task.status, task.text, {
+      due: value.due,
+      recurrence: value.recurrence,
+      priority: value.priority,
+      completedAt: task.completedAt
+    });
+    writeTaskLines(task, [newLine]);
+  };
+
+  /**
+   * Quick-capture from the Tasks view: appends a new task to the given
+   * file (today's daily note by default, auto-created with default
+   * frontmatter if it doesn't exist yet - same convention `loadFile` uses
+   * for opening a not-yet-created daily note). Reuses the same
+   * `formatAppend` the MCP write tools use, so freeform vs. outliner
+   * notes are formatted identically regardless of which surface wrote to
+   * them.
+   */
+  const handleQuickAddTask = async (text: string, targetFile?: string): Promise<void> => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    try {
+      const target = targetFile ?? (await window.phosphor.getDailyNoteFilename());
+      let noteContent = await window.phosphor.readNote(target);
+
+      const hasFrontmatter = extractFrontmatter(noteContent).frontmatter !== null;
+      if (!hasFrontmatter) {
+        noteContent = generateDefaultFrontmatter(target, settings.defaultJournalMode) + '\n' + noteContent;
+      }
+
+      const mode = detectNoteMode(noteContent);
+      const taskLine = formatTaskLine({ text: trimmed });
+      const { doc: newDoc } = formatAppend(noteContent, taskLine, mode);
+
+      await window.phosphor.saveNote(target, newDoc);
+      if (target === currentFile) {
+        skipSaveRef.current = true;
+        setContent(newDoc);
+        setTimeout(() => {
+          skipSaveRef.current = false;
+        }, 100);
+      }
+      await window.phosphor.updateTasksForFile(target);
+    } catch (err) {
+      console.error('Failed to quick-add task:', err);
+      setStatus({ type: 'error', message: 'Failed to add task.' });
     }
   };
 
@@ -900,6 +1034,7 @@ function AppContent(): React.JSX.Element {
                 isDirty={isDirty}
                 refreshSignal={filesVersion}
                 viewMode={viewMode}
+                taskAlertCount={taskAlertCount}
               />
               <main className="main-content">
                 <EditorHeader
@@ -937,6 +1072,28 @@ function AppContent(): React.JSX.Element {
                   />
                 )}
                 {viewMode === 'editor' && <Holiday currentFile={currentFile} content={content} />}
+                {viewMode === 'editor' && (
+                  <DailyTaskRollup
+                    // Remounts (resetting any dismissal) each time a
+                    // different file is loaded - dismissing it is only
+                    // meant to last until the next time this file is opened.
+                    key={currentFile}
+                    currentFile={currentFile}
+                    tasks={tasks}
+                    onToggleStatus={handleTaskToggleStatus}
+                    onTaskClick={(filename, lineNumber) => {
+                      if (filename === currentFile) {
+                        editorRef.current?.scrollToLine(lineNumber);
+                      } else {
+                        handleFileSelect(filename).then(() => {
+                          setTimeout(() => {
+                            editorRef.current?.scrollToLine(lineNumber);
+                          }, 100);
+                        });
+                      }
+                    }}
+                  />
+                )}
                 {conflict && (
                   <div className="conflict-banner">
                     ⚠️ File changed on disk. You have unsaved changes.
@@ -989,17 +1146,26 @@ function AppContent(): React.JSX.Element {
                   <>
                     {viewMode === 'tasks' ? (
                       <TasksView
-                        onTaskClick={(filename) => {
-                          // Switch to editor view and open file
+                        tasks={tasks}
+                        tasksLoaded={tasksLoaded}
+                        onToggleStatus={handleTaskToggleStatus}
+                        onUpdateMetadata={handleTaskUpdateMetadata}
+                        onQuickAdd={(text) => handleQuickAddTask(text)}
+                        onNavigateToDate={(dateStr) => {
                           setViewMode('editor');
-                          handleFileSelect(filename);
-                          // Scroll to line after a brief delay to ensure file is loaded
-                          setTimeout(() => {
-                            const view = document.querySelector('.cm-editor');
-                            if (view) {
-                              view.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                            }
-                          }, 100);
+                          handleFileSelect(`${dateStr}.md`);
+                        }}
+                        onTaskClick={(filename, lineNumber) => {
+                          // Switch to editor view and open the file, then scroll to
+                          // the task's exact line once it's loaded - editorRef only
+                          // becomes available once the Editor (re)mounts for this
+                          // file, hence the brief delay.
+                          setViewMode('editor');
+                          handleFileSelect(filename).then(() => {
+                            setTimeout(() => {
+                              editorRef.current?.scrollToLine(lineNumber);
+                            }, 100);
+                          });
                         }}
                       />
                     ) : (
@@ -1042,6 +1208,20 @@ function AppContent(): React.JSX.Element {
             isOpen={commandPaletteOpen}
             onClose={() => setCommandPaletteOpen(false)}
             onSelect={handleFileSelect}
+            onCommand={(commandId) => {
+              if (commandId === 'open-graph') {
+                setViewMode('graph');
+                return;
+              }
+              // 'open-tasks' and 'new-task' both land in the Tasks view;
+              // 'new-task' additionally focuses its quick-add input.
+              setViewMode('tasks');
+              if (commandId === 'new-task') {
+                setTimeout(() => {
+                  document.querySelector<HTMLInputElement>('.tasks-quick-add input')?.focus();
+                }, 50);
+              }
+            }}
           />
 
           <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />

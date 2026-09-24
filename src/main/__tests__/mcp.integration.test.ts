@@ -754,8 +754,9 @@ describe('MCP server (integration)', () => {
         arguments: { file: 'CompleteTest.md', line: 3, rawText: '- [ ] One-off 📅 2026-01-15' }
       });
       expect(oneOff.isError).toBeFalsy();
-      expect(oneOff.structuredContent?.nextLine).toBeUndefined();
-      expect(oneOff.structuredContent?.nextLineNumber).toBeUndefined();
+      const oneOffContent = oneOff.structuredContent as { nextLine?: string; nextLineNumber?: number };
+      expect(oneOffContent.nextLine).toBeUndefined();
+      expect(oneOffContent.nextLineNumber).toBeUndefined();
       const afterOneOff = fs.readFileSync(path.join(vault, 'CompleteTest.md'), 'utf-8');
       expect(afterOneOff).toContain('- [x] One-off 📅 2026-01-15 ✓');
 

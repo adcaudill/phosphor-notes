@@ -373,6 +373,15 @@ export const outlinerHangingIndentExtension: Extension = ViewPlugin.fromClass(
     }
 
     hangingIndentColumns(text: string): number {
+      // Task lines are skipped here (see the task-widgets comment above
+      // outlinerNestingGuidesExtension) - their checkbox/metadata pills are
+      // rendered as inline atomic (Decoration.replace) widgets, and this
+      // negative-text-indent/padding-left combination measurably
+      // mispositions atomic inline widgets within the affected line (the
+      // checkbox and metadata pills have both shown up shifted/overlapping
+      // when this applied) even though it renders plain text correctly.
+      if (/^\s*-\s*\[[ x/]\]/.test(text)) return 0;
+
       // Bullet lines indent by their leading spaces plus the marker width
       const bulletMatch = text.match(/^(\s*)-\s/);
       if (bulletMatch) return bulletMatch[1].length + 2;
@@ -411,7 +420,13 @@ export const outlinerNestingGuidesExtension: Extension = ViewPlugin.fromClass(
         let pos = from;
         while (pos <= to) {
           const line = view.state.doc.lineAt(pos);
-          const isBulletLine = /^(\s*)-\s/.test(line.text);
+          // Task lines are excluded (see the comment on hangingIndentColumns
+          // above) - their checkbox/metadata pills are inline atomic widgets
+          // that render incorrectly when this background-gradient line
+          // decoration and the hanging-indent line decoration compound on
+          // the same line.
+          const isBulletLine =
+            /^(\s*)-\s/.test(line.text) && !/^\s*-\s*\[[ x/]\]/.test(line.text);
 
           if (isBulletLine) {
             // Get the indentation level (number of spaces before the dash)

@@ -180,6 +180,62 @@ export function parseTaskLine(lineText: string): ParsedTaskLine | null {
   return { status, rawText: lineText, ...meta };
 }
 
+export interface TaskMetadataSpan {
+  field: 'priority' | 'due' | 'recurrence' | 'completedAt';
+  start: number;
+  end: number;
+}
+
+/**
+ * Finds the character ranges of each metadata token within a raw task line
+ * (absolute offsets into `lineText`), for UI layers that need to replace
+ * each token with a rich widget (a pill, an icon) rather than just knowing
+ * its parsed value. Mirrors `extractMetadata`'s own precedence (so the span
+ * found here is always the same occurrence `parseTaskLine` resolved), but
+ * is presentation plumbing, not parsing - it does not strip or interpret
+ * anything itself.
+ */
+export function findMetadataSpans(lineText: string): TaskMetadataSpan[] {
+  const spans: TaskMetadataSpan[] = [];
+
+  const completeMatch = /✓\s*\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}/.exec(lineText);
+  if (completeMatch) {
+    spans.push({
+      field: 'completedAt',
+      start: completeMatch.index,
+      end: completeMatch.index + completeMatch[0].length
+    });
+  }
+
+  for (const emoji of Object.keys(PRIORITY_BY_EMOJI)) {
+    const idx = lineText.indexOf(emoji);
+    if (idx !== -1) {
+      spans.push({ field: 'priority', start: idx, end: idx + emoji.length });
+      break;
+    }
+  }
+
+  const recurMatch =
+    /@repeat\(\d+[ymwdhMS]\)/.exec(lineText) ?? /🔁\s?\+\d+[dwmy]/i.exec(lineText);
+  if (recurMatch) {
+    spans.push({
+      field: 'recurrence',
+      start: recurMatch.index,
+      end: recurMatch.index + recurMatch[0].length
+    });
+  }
+
+  const dueMatch =
+    /@due\(\d{4}-\d{2}-\d{2}\)/.exec(lineText) ??
+    /📅\s*\d{4}-\d{2}-\d{2}/.exec(lineText) ??
+    /DEADLINE:\s*<\d{4}-\d{2}-\d{2}/i.exec(lineText);
+  if (dueMatch) {
+    spans.push({ field: 'due', start: dueMatch.index, end: dueMatch.index + dueMatch[0].length });
+  }
+
+  return spans.sort((a, b) => a.start - b.start);
+}
+
 /** Extracts every task from a whole file's content, in document order with 1-indexed line numbers. */
 export function extractTasksFromContent(content: string, filename: string): Task[] {
   const tasks: Task[] = [];

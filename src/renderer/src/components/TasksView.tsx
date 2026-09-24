@@ -1,238 +1,317 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { Task } from '../../../types/phosphor';
+import { todayString, isPastDate, isTodayDate, formatTimestamp, type Priority } from '../../../shared/tasks';
+import { PRIORITY_ICON, PRIORITY_LABEL, dueDateLabel, recurrenceLabel } from '../utils/taskDisplay';
+import { TaskMetadataPopover, type TaskMetadataValue } from './TaskMetadataPopover';
+import '../styles/EditorTaskWidgets.css';
 import '../styles/TasksView.css';
 
+type GroupMode = 'smart' | 'file' | 'priority';
+type StatusFilter = 'all' | 'todo' | 'doing' | 'done';
+type PriorityFilterValue = 'high' | 'medium' | 'low' | 'none';
+type SmartBucket = 'overdue' | 'today' | 'upcoming' | 'later' | 'no-date';
+
 interface TasksViewProps {
+  tasks: Task[];
+  /** True once the vault's task index has resolved at least once (cache or live) - distinguishes "still loading" from "genuinely empty." */
+  tasksLoaded: boolean;
   onTaskClick: (filename: string, line: number) => void;
+  onToggleStatus: (task: Task) => void;
+  onUpdateMetadata: (task: Task, value: TaskMetadataValue) => void;
+  onQuickAdd: (text: string) => void;
+  onNavigateToDate?: (dateStr: string) => void;
 }
 
-interface GroupedTasks {
-  [filename: string]: Task[];
+function daysFromTodayLocal(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
 }
 
-type DateFilter = 'all' | 'overdue' | 'today' | 'upcoming' | 'no-date';
-
-/**
- * Get today's date in YYYY-MM-DD format
- */
-function getTodayString(): string {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+const PRIORITY_WEIGHT: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
+function priorityWeight(p?: Priority): number {
+  return p ? PRIORITY_WEIGHT[p] : 3;
 }
 
-/**
- * Check if a date is in the past
- */
-function isPast(dateStr: string): boolean {
-  return dateStr < getTodayString();
-}
-
-/**
- * Check if a date is today
- */
-function isToday(dateStr: string): boolean {
-  return dateStr === getTodayString();
-}
-
-/**
- * Get urgency category for a task
- */
-function getUrgencyCategory(task: Task): 'overdue' | 'today' | 'upcoming' | 'no-date' {
-  if (!task.dueDate) return 'no-date';
-  if (isPast(task.dueDate)) return 'overdue';
-  if (isToday(task.dueDate)) return 'today';
-  return 'upcoming';
-}
-
-/**
- * Format a completion timestamp for display
- */
-function formatCompletionTime(timestampStr: string): string {
-  const [dateStr, timeStr] = timestampStr.split(' ');
-  const [year, month, day] = dateStr.split('-').map(Number);
-  const [hours, minutes] = timeStr.split(':').map(Number);
-
-  const date = new Date(year, month - 1, day, hours, minutes);
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
+function sortTasks(tasks: Task[]): Task[] {
+  return [...tasks].sort((a, b) => {
+    const pw = priorityWeight(a.priority) - priorityWeight(b.priority);
+    if (pw !== 0) return pw;
+    if (a.dueDate && b.dueDate) {
+      const dc = a.dueDate.localeCompare(b.dueDate);
+      if (dc !== 0) return dc;
+    } else if (a.dueDate && !b.dueDate) {
+      return -1;
+    } else if (!a.dueDate && b.dueDate) {
+      return 1;
+    }
+    if (a.file !== b.file) return a.file.localeCompare(b.file);
+    return a.line - b.line;
   });
 }
 
-export const TasksView: React.FC<TasksViewProps> = ({ onTaskClick }) => {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [groupedTasks, setGroupedTasks] = useState<GroupedTasks>({});
-  const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'todo' | 'doing' | 'done'>('all');
-  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+function smartBucket(task: Task, today: string, weekOut: string): SmartBucket {
+  if (!task.dueDate) return 'no-date';
+  if (isPastDate(task.dueDate, today)) return 'overdue';
+  if (isTodayDate(task.dueDate, today)) return 'today';
+  if (task.dueDate <= weekOut) return 'upcoming';
+  return 'later';
+}
+
+const SMART_GROUP_ORDER: { key: SmartBucket; label: string }[] = [
+  { key: 'overdue', label: 'Overdue' },
+  { key: 'today', label: 'Today' },
+  { key: 'upcoming', label: 'Upcoming (7 days)' },
+  { key: 'later', label: 'Later' },
+  { key: 'no-date', label: 'No date' }
+];
+
+const PRIORITY_FILTER_LEVELS: PriorityFilterValue[] = ['high', 'medium', 'low', 'none'];
+
+interface TaskGroup {
+  key: string;
+  label: string;
+  items: Task[];
+}
+
+function TaskRow({
+  task,
+  onNavigate,
+  onToggleStatus,
+  onOpenMetadata
+}: {
+  task: Task;
+  onNavigate: () => void;
+  onToggleStatus: () => void;
+  onOpenMetadata: (rect: DOMRect) => void;
+}): React.JSX.Element {
+  const statusIcon =
+    task.status === 'todo'
+      ? 'check_box_outline_blank'
+      : task.status === 'doing'
+        ? 'indeterminate_check_box'
+        : 'check_box';
+
+  const hasMetadata = Boolean(task.priority || task.dueDate || task.recurrence);
+
+  return (
+    <div className={`task-item task-${task.status}`} onClick={onNavigate}>
+      <span
+        className="task-status-icon"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleStatus();
+        }}
+        title="Cycle status"
+      >
+        <span className="material-symbols-outlined">{statusIcon}</span>
+      </span>
+      <span className="task-text">{task.text}</span>
+      <div className="task-pills" onClick={(e) => e.stopPropagation()}>
+        {task.priority && (
+          <span
+            className={`cm-task-pill cm-task-pill-priority-${task.priority}`}
+            onClick={(e) => onOpenMetadata((e.currentTarget as HTMLElement).getBoundingClientRect())}
+            title={PRIORITY_LABEL[task.priority]}
+          >
+            <span className="material-symbols-outlined cm-task-pill-icon">
+              {PRIORITY_ICON[task.priority]}
+            </span>
+          </span>
+        )}
+        {task.dueDate &&
+          (() => {
+            const { text, status } = dueDateLabel(task.dueDate);
+            return (
+              <span
+                className={`cm-task-pill cm-task-pill-date-${status}`}
+                onClick={(e) => onOpenMetadata((e.currentTarget as HTMLElement).getBoundingClientRect())}
+              >
+                <span className="material-symbols-outlined cm-task-pill-icon">calendar_today</span>
+                <span className="cm-task-pill-label">{text}</span>
+              </span>
+            );
+          })()}
+        {task.recurrence && (
+          <span
+            className={`cm-task-pill cm-task-pill-recurrence ${task.recurrence.supported ? '' : 'cm-task-pill-unsupported'}`}
+            onClick={(e) => onOpenMetadata((e.currentTarget as HTMLElement).getBoundingClientRect())}
+          >
+            <span className="material-symbols-outlined cm-task-pill-icon">repeat</span>
+            <span className="cm-task-pill-label">
+              {recurrenceLabel(task.recurrence.amount, task.recurrence.unit, task.recurrence.supported)}
+            </span>
+          </span>
+        )}
+        {!hasMetadata && (
+          <button
+            type="button"
+            className="cm-task-add-metadata"
+            onClick={(e) => onOpenMetadata((e.currentTarget as HTMLElement).getBoundingClientRect())}
+            title="Add due date, recurrence, or priority"
+          >
+            <span className="material-symbols-outlined">add_circle</span>
+          </button>
+        )}
+      </div>
+      {task.status === 'done' && task.completedAt && (
+        <span className="task-completed-time">Completed {formatTimestamp(task.completedAt)}</span>
+      )}
+      <span className="task-line">L{task.line}</span>
+    </div>
+  );
+}
+
+export const TasksView: React.FC<TasksViewProps> = ({
+  tasks,
+  tasksLoaded,
+  onTaskClick,
+  onToggleStatus,
+  onUpdateMetadata,
+  onQuickAdd,
+  onNavigateToDate
+}) => {
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilterValue[]>([]);
+  const [groupMode, setGroupMode] = useState<GroupMode>('smart');
+  const [search, setSearch] = useState('');
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({
+    done: true,
+    later: true,
+    'no-date': true
+  });
   const [filtersLoaded, setFiltersLoaded] = useState(false);
+  const [quickAddText, setQuickAddText] = useState('');
+  const [popover, setPopover] = useState<{ task: Task; anchorRect: DOMRect } | null>(null);
 
-  useEffect(() => {
-    const loadTasks = async (): Promise<void> => {
-      try {
-        setLoading(true);
-        const taskIndex = await window.phosphor.getTaskIndex();
-        setTasks(taskIndex || []);
-      } catch (err) {
-        console.error('Failed to load tasks:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadTasks();
-
-    // Listen for task updates
-    const unsubscribe = window.phosphor.onTasksUpdate((updatedTasks: Task[]) => {
-      setTasks(updatedTasks);
-    });
-
-    return () => unsubscribe();
-  }, []);
-  // Load saved filter settings (last used) on mount
+  // Load saved filter/group preferences on mount.
   useEffect(() => {
     let mounted = true;
-    const loadSettings = async (): Promise<void> => {
+    const load = async (): Promise<void> => {
       try {
         const settings = await window.phosphor.getSettings();
         if (!mounted) return;
-        if (settings.lastTasksStatusFilter !== undefined) {
-          setStatusFilter(settings.lastTasksStatusFilter as 'all' | 'todo' | 'doing' | 'done');
-        }
-        if (settings.lastTasksDateFilter !== undefined) {
-          setDateFilter(settings.lastTasksDateFilter as DateFilter);
-        }
+        if (settings.lastTasksStatusFilter) setStatusFilter(settings.lastTasksStatusFilter);
+        if (settings.lastTasksGroupMode) setGroupMode(settings.lastTasksGroupMode);
+        if (settings.lastTasksPriorityFilter) setPriorityFilter(settings.lastTasksPriorityFilter);
       } catch (err) {
-        console.error('Failed to load settings for TasksView:', err);
+        console.error('Failed to load TasksView settings:', err);
       } finally {
         if (mounted) setFiltersLoaded(true);
       }
     };
-
-    loadSettings();
+    load();
     return () => {
       mounted = false;
     };
   }, []);
 
-  // Persist status/date filter changes to app settings so they are remembered.
-  // Only persist after we've loaded existing settings to avoid overwriting
-  // saved values with initial defaults on mount.
+  // Persist filter/group preferences (not search text) once loaded.
   useEffect(() => {
     if (!filtersLoaded) return;
+    window.phosphor
+      .setMultipleSettings({
+        lastTasksStatusFilter: statusFilter,
+        lastTasksGroupMode: groupMode,
+        lastTasksPriorityFilter: priorityFilter
+      })
+      .catch((err) => console.error('Failed to save TasksView settings:', err));
+  }, [statusFilter, groupMode, priorityFilter, filtersLoaded]);
 
-    const persist = async (): Promise<void> => {
-      try {
-        await window.phosphor.setMultipleSettings({
-          lastTasksStatusFilter: statusFilter,
-          lastTasksDateFilter: dateFilter
-        });
-      } catch (err) {
-        console.error('Failed to save TasksView filter settings:', err);
+  const today = todayString();
+  const weekOut = daysFromTodayLocal(7);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return tasks.filter((t) => {
+      if (statusFilter !== 'all' && t.status !== statusFilter) return false;
+      if (overdueOnly && !(t.dueDate && t.status !== 'done' && isPastDate(t.dueDate, today))) {
+        return false;
       }
-    };
-
-    persist();
-  }, [statusFilter, dateFilter, filtersLoaded]);
-
-  // Group tasks by file and sort by urgency (always)
-  useEffect(() => {
-    const grouped: GroupedTasks = {};
-
-    const tasksToGroup = [...tasks];
-
-    // Always sort by urgency
-    const urgencyOrder = { overdue: 0, today: 1, upcoming: 2, 'no-date': 3 };
-    tasksToGroup.sort((a, b) => {
-      const urgencyA = urgencyOrder[getUrgencyCategory(a)];
-      const urgencyB = urgencyOrder[getUrgencyCategory(b)];
-      if (urgencyA !== urgencyB) return urgencyA - urgencyB;
-      // Within same urgency, sort by date, then by line
-      if (a.dueDate && b.dueDate) {
-        return a.dueDate.localeCompare(b.dueDate);
+      if (priorityFilter.length > 0) {
+        const key: PriorityFilterValue = t.priority ?? 'none';
+        if (!priorityFilter.includes(key)) return false;
       }
-      return a.line - b.line;
+      if (q && !t.text.toLowerCase().includes(q)) return false;
+      return true;
     });
+  }, [tasks, statusFilter, overdueOnly, priorityFilter, search, today]);
 
-    tasksToGroup.forEach((task) => {
-      if (!grouped[task.file]) {
-        grouped[task.file] = [];
+  const counts = useMemo(() => {
+    const c = { todo: 0, doing: 0, done: 0, overdue: 0, high: 0, medium: 0, low: 0, none: 0 };
+    for (const t of tasks) {
+      c[t.status] += 1;
+      if (t.dueDate && t.status !== 'done' && isPastDate(t.dueDate, today)) c.overdue += 1;
+      c[t.priority ?? 'none'] += 1;
+    }
+    return c;
+  }, [tasks, today]);
+
+  const groups = useMemo((): TaskGroup[] => {
+    if (groupMode === 'file') {
+      const byFile = new Map<string, Task[]>();
+      for (const t of filtered) {
+        if (!byFile.has(t.file)) byFile.set(t.file, []);
+        byFile.get(t.file)!.push(t);
       }
-      grouped[task.file].push(task);
-    });
+      return Array.from(byFile.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, items]) => ({ key, label: key, items: sortTasks(items) }));
+    }
 
-    setGroupedTasks(grouped);
-  }, [tasks]);
+    if (groupMode === 'priority') {
+      const levels: { key: PriorityFilterValue; label: string }[] = [
+        { key: 'high', label: 'High priority' },
+        { key: 'medium', label: 'Medium priority' },
+        { key: 'low', label: 'Low priority' },
+        { key: 'none', label: 'No priority' }
+      ];
+      return levels
+        .map(({ key, label }) => ({
+          key,
+          label,
+          items: sortTasks(filtered.filter((t) => (t.priority ?? 'none') === key))
+        }))
+        .filter((g) => g.items.length > 0);
+    }
 
-  const getStatusIcon = (status: 'todo' | 'doing' | 'done'): React.ReactNode => {
-    const name =
-      status === 'todo'
-        ? 'check_box_outline_blank'
-        : status === 'doing'
-          ? 'indeterminate_check_box'
-          : 'check_box';
-    return <span className="material-symbols-outlined">{name}</span>;
+    // 'smart' (default): urgency buckets, with Done as a separate trailing section.
+    const done = sortTasks(filtered.filter((t) => t.status === 'done')).sort((a, b) =>
+      (b.completedAt ?? '').localeCompare(a.completedAt ?? '')
+    );
+    const open = filtered.filter((t) => t.status !== 'done');
+    const buckets = new Map<SmartBucket, Task[]>();
+    for (const t of open) {
+      const bucket = smartBucket(t, today, weekOut);
+      if (!buckets.has(bucket)) buckets.set(bucket, []);
+      buckets.get(bucket)!.push(t);
+    }
+    const result: TaskGroup[] = SMART_GROUP_ORDER.filter(
+      (g) => (buckets.get(g.key)?.length ?? 0) > 0
+    ).map((g) => ({ key: g.key, label: g.label, items: sortTasks(buckets.get(g.key) ?? []) }));
+    if (done.length > 0) result.push({ key: 'done', label: 'Done', items: done });
+    return result;
+  }, [filtered, groupMode, today, weekOut]);
+
+  const toggleCollapsed = (key: string): void => {
+    setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const getDueDateIcon = (urgency: 'overdue' | 'today' | 'upcoming' | 'no-date'): string => {
-    switch (urgency) {
-      case 'overdue':
-        return '🔴';
-      case 'today':
-        return '🟠';
-      case 'upcoming':
-        return '🔵';
-      case 'no-date':
-        return '⚪';
-    }
-  };
+  const popoverInitial: TaskMetadataValue = popover
+    ? {
+        due: popover.task.dueDate,
+        recurrence: popover.task.recurrence?.supported
+          ? { amount: popover.task.recurrence.amount, unit: popover.task.recurrence.unit }
+          : undefined,
+        priority: popover.task.priority
+      }
+    : {};
 
-  const filteredTasks = Object.entries(groupedTasks).reduce((acc, [filename, fileTasks]) => {
-    let filtered = fileTasks;
-
-    // Apply status filter
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter((t) => t.status === statusFilter);
-    }
-
-    // Apply date filter
-    if (dateFilter !== 'all') {
-      filtered = filtered.filter((t) => getUrgencyCategory(t) === dateFilter);
-    }
-
-    if (filtered.length > 0) {
-      acc[filename] = filtered;
-    }
-    return acc;
-  }, {} as GroupedTasks);
-
-  const totalTasks = Object.values(groupedTasks).reduce(
-    (sum, fileTasks) => sum + fileTasks.length,
-    0
-  );
-  const todoCount = tasks.filter((t) => t.status === 'todo').length;
-  const doingCount = tasks.filter((t) => t.status === 'doing').length;
-  const doneCount = tasks.filter((t) => t.status === 'done').length;
-
-  // For due-date filter counts, respect the active status filter so
-  // the Due Date options only reflect tasks for the selected status.
-  const tasksForDueCounts =
-    statusFilter === 'all' ? tasks : tasks.filter((t) => t.status === statusFilter);
-
-  const overdueCount = tasksForDueCounts.filter((t) => getUrgencyCategory(t) === 'overdue').length;
-  const todayCount = tasksForDueCounts.filter((t) => getUrgencyCategory(t) === 'today').length;
-  const upcomingCount = tasksForDueCounts.filter(
-    (t) => getUrgencyCategory(t) === 'upcoming'
-  ).length;
-  const noDueCount = tasksForDueCounts.filter((t) => getUrgencyCategory(t) === 'no-date').length;
-
-  if (loading) {
+  if (!tasksLoaded) {
     return <div className="tasks-view loading">Loading tasks...</div>;
   }
 
@@ -240,148 +319,172 @@ export const TasksView: React.FC<TasksViewProps> = ({ onTaskClick }) => {
     <div className="tasks-view">
       <div className="tasks-header">
         <h2>Tasks</h2>
-        <div className="tasks-stats">
-          <span className="stat">
-            <span className="stat-icon todo material-symbols-outlined">
-              check_box_outline_blank
-            </span>
-            {todoCount}
-          </span>
-          <span className="stat">
-            <span className="stat-icon doing material-symbols-outlined">
-              indeterminate_check_box
-            </span>
-            {doingCount}
-          </span>
-          <span className="stat">
-            <span className="stat-icon done material-symbols-outlined">check_box</span>
-            {doneCount}
-          </span>
+        <div className="tasks-group-toggle">
+          {(
+            [
+              { mode: 'smart', label: 'Due' },
+              { mode: 'file', label: 'By File' },
+              { mode: 'priority', label: 'By Priority' }
+            ] as { mode: GroupMode; label: string }[]
+          ).map(({ mode, label }) => (
+            <button
+              key={mode}
+              type="button"
+              className={`group-mode-btn ${groupMode === mode ? 'active' : ''}`}
+              onClick={() => setGroupMode(mode)}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="tasks-filter">
-        <div className="filter-group">
-          <h4>Status</h4>
+      <div className="tasks-toolbar">
+        <input
+          type="text"
+          className="tasks-search-input"
+          placeholder="Search tasks..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <div className="tasks-filter-row">
+          <div className="filter-group">
+            <button
+              className={`filter-btn ${statusFilter === 'all' ? 'active' : ''}`}
+              onClick={() => setStatusFilter('all')}
+            >
+              All ({tasks.length})
+            </button>
+            <button
+              className={`filter-btn ${statusFilter === 'todo' ? 'active' : ''}`}
+              onClick={() => setStatusFilter('todo')}
+            >
+              Todo ({counts.todo})
+            </button>
+            <button
+              className={`filter-btn ${statusFilter === 'doing' ? 'active' : ''}`}
+              onClick={() => setStatusFilter('doing')}
+            >
+              Doing ({counts.doing})
+            </button>
+            <button
+              className={`filter-btn ${statusFilter === 'done' ? 'active' : ''}`}
+              onClick={() => setStatusFilter('done')}
+            >
+              Done ({counts.done})
+            </button>
+          </div>
           <button
-            className={`filter-btn ${statusFilter === 'all' ? 'active' : ''}`}
-            onClick={() => setStatusFilter('all')}
+            className={`filter-btn overdue-toggle ${overdueOnly ? 'active' : ''}`}
+            onClick={() => setOverdueOnly((v) => !v)}
           >
-            All ({totalTasks})
+            🔴 Overdue only ({counts.overdue})
           </button>
-          <button
-            className={`filter-btn ${statusFilter === 'todo' ? 'active' : ''}`}
-            onClick={() => setStatusFilter('todo')}
-          >
-            Todo ({todoCount})
-          </button>
-          <button
-            className={`filter-btn ${statusFilter === 'doing' ? 'active' : ''}`}
-            onClick={() => setStatusFilter('doing')}
-          >
-            Doing ({doingCount})
-          </button>
-          <button
-            className={`filter-btn ${statusFilter === 'done' ? 'active' : ''}`}
-            onClick={() => setStatusFilter('done')}
-          >
-            Done ({doneCount})
-          </button>
-        </div>
-
-        <div className="filter-group">
-          <h4>Due Date</h4>
-          <button
-            className={`filter-btn ${dateFilter === 'all' ? 'active' : ''}`}
-            onClick={() => setDateFilter('all')}
-          >
-            All
-          </button>
-          <button
-            className={`filter-btn overdue ${dateFilter === 'overdue' ? 'active' : ''}`}
-            onClick={() => setDateFilter('overdue')}
-          >
-            🔴 Overdue ({overdueCount})
-          </button>
-          <button
-            className={`filter-btn today ${dateFilter === 'today' ? 'active' : ''}`}
-            onClick={() => setDateFilter('today')}
-          >
-            🟠 Today ({todayCount})
-          </button>
-          <button
-            className={`filter-btn upcoming ${dateFilter === 'upcoming' ? 'active' : ''}`}
-            onClick={() => setDateFilter('upcoming')}
-          >
-            🔵 Upcoming ({upcomingCount})
-          </button>
-          <button
-            className={`filter-btn no-date ${dateFilter === 'no-date' ? 'active' : ''}`}
-            onClick={() => setDateFilter('no-date')}
-          >
-            ⚪ No Date ({noDueCount})
-          </button>
+          <div className="filter-group priority-filter-group">
+            {PRIORITY_FILTER_LEVELS.map((level) => (
+              <button
+                key={level}
+                type="button"
+                className={`priority-chip priority-chip-${level} ${priorityFilter.includes(level) ? 'active' : ''}`}
+                title={level === 'none' ? 'No priority' : PRIORITY_LABEL[level]}
+                onClick={() =>
+                  setPriorityFilter((prev) =>
+                    prev.includes(level) ? prev.filter((p) => p !== level) : [...prev, level]
+                  )
+                }
+              >
+                {level === 'none' ? (
+                  <span>—</span>
+                ) : (
+                  <span className="material-symbols-outlined">{PRIORITY_ICON[level]}</span>
+                )}
+                <span className="priority-chip-count">{counts[level]}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
+
+      <form
+        className="tasks-quick-add"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const text = quickAddText.trim();
+          if (!text) return;
+          onQuickAdd(text);
+          setQuickAddText('');
+        }}
+      >
+        <span className="material-symbols-outlined">add_task</span>
+        <input
+          type="text"
+          placeholder="Add a task to today's journal..."
+          value={quickAddText}
+          onChange={(e) => setQuickAddText(e.target.value)}
+        />
+      </form>
 
       <div className="tasks-list">
-        {Object.entries(filteredTasks).length === 0 ? (
+        {groups.length === 0 ? (
           <div className="empty-state">
-            {statusFilter === 'done' && doneCount === 0 ? (
+            {tasks.length === 0 ? (
               <>
-                <p>✨ No completed tasks yet</p>
-                <p style={{ fontSize: '14px', opacity: 0.6 }}>
-                  Mark tasks as done to see them here
-                </p>
-              </>
-            ) : (
-              <>
-                <p>📋 No tasks found</p>
+                <p>📋 No tasks in this vault yet</p>
                 <p style={{ fontSize: '14px', opacity: 0.6 }}>
                   Add tasks using GFM syntax: - [ ] Task text
                 </p>
               </>
+            ) : (
+              <p>No tasks match these filters</p>
             )}
           </div>
         ) : (
-          Object.entries(filteredTasks).map(([filename, fileTasks]) => (
-            <div key={filename} className="task-file-group">
-              <div className="task-file-header">
-                <span className="file-name">{filename}</span>
-                <span className="file-count">{fileTasks.length} task(s)</span>
-              </div>
-              <div className="task-items">
-                {fileTasks.map((task, idx) => (
-                  <div
-                    key={`${filename}-${idx}`}
-                    className={`task-item task-${task.status}`}
-                    onClick={() => {
-                      onTaskClick(filename, task.line);
-                    }}
+          groups.map((group) => {
+            const isOpen = !collapsed[group.key];
+            return (
+              <div key={group.key} className="task-group">
+                <button
+                  type="button"
+                  className="task-group-header"
+                  onClick={() => toggleCollapsed(group.key)}
+                >
+                  <span
+                    className={`material-symbols-outlined task-group-chevron ${isOpen ? 'open' : ''}`}
                   >
-                    <span className="task-status-icon">{getStatusIcon(task.status)}</span>
-                    <span className="task-text">{task.text}</span>
-                    {task.status === 'done' && task.completedAt && (
-                      <span className="task-completed-time">
-                        Completed {formatCompletionTime(task.completedAt)}
-                      </span>
-                    )}
-                    {task.dueDate && (
-                      <>
-                        <span className="task-due-date-icon">
-                          {getDueDateIcon(getUrgencyCategory(task))}
-                        </span>
-                        <span className="task-due-date">{task.dueDate}</span>
-                      </>
-                    )}
-                    <span className="task-line">L{task.line}</span>
+                    chevron_right
+                  </span>
+                  <span className="task-group-label">{group.label}</span>
+                  <span className="task-group-count">{group.items.length}</span>
+                </button>
+                {isOpen && (
+                  <div className="task-items">
+                    {group.items.map((task) => (
+                      <TaskRow
+                        key={`${task.file}-${task.line}`}
+                        task={task}
+                        onNavigate={() => onTaskClick(task.file, task.line)}
+                        onToggleStatus={() => onToggleStatus(task)}
+                        onOpenMetadata={(rect) => setPopover({ task, anchorRect: rect })}
+                      />
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
+
+      {popover && (
+        <TaskMetadataPopover
+          key={`${popover.task.file}-${popover.task.line}`}
+          anchorRect={popover.anchorRect}
+          initial={popoverInitial}
+          onChange={(value) => onUpdateMetadata(popover.task, value)}
+          onClose={() => setPopover(null)}
+          onNavigateToDate={onNavigateToDate}
+        />
+      )}
     </div>
   );
 };

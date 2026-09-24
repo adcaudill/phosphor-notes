@@ -1,0 +1,117 @@
+.daily-task-rollup {
+  margin: 0 auto;
+  max-width: 800px;
+  padding: 0 40px;
+  margin-top: 8px;
+}
+
+.daily-task-rollup-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 12px;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  /* A plain 1px border in --color-border can be indistinguishable from
+     the editor background in some palettes, making this look like part
+     of the note rather than a separate panel - the accent-colored bottom
+     border is there specifically to read as a distinct component. */
+  border-bottom: 2px solid var(--color-warning);
+  border-radius: 8px;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.daily-task-rollup-summary {
+  flex: 1;
+  text-align: left;
+}
+
+.daily-task-rollup-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.daily-task-rollup-dismiss:hover {
+  background-color: rgba(var(--color-primary-rgb), 0.12);
+  color: var(--color-text-primary);
+}
+
+.daily-task-rollup-dismiss .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.daily-task-rollup-chevron {
+  font-size: 18px;
+  color: var(--color-text-secondary);
+  transition: transform 0.12s ease;
+}
+
+.daily-task-rollup-chevron.open {
+  transform: rotate(90deg);
+}
+
+.daily-task-rollup-icon {
+  font-size: 18px;
+  color: var(--color-warning);
+}
+
+.daily-task-rollup-list {
+  margin-top: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.daily-task-rollup-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 13px;
+}
+
+.daily-task-rollup-item:last-child {
+  border-bottom: none;
+}
+
+.daily-task-rollup-item:hover {
+  background-color: var(--color-surface);
+}
+
+.daily-task-rollup-item .task-status-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.daily-task-rollup-item.task-doing .task-status-icon {
+  color: var(--color-primary);
+}
+
+.daily-task-rollup-item.overdue .task-status-icon {
+  color: var(--color-error);
+}
+
+.daily-task-rollup-text {
+  flex: 1;
+  color: var(--color-text-primary);
+}
+
+.daily-task-rollup-file {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  opacity: 0.7;
+}
