@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeOutlinerPaste } from '../smartPaste';
+import { normalizeOutlinerPaste, shouldNormalizeOutlinerPaste } from '../smartPaste';
 
 describe('outliner paste normalization', () => {
+  it('leaves plain single-line text as inline content', () => {
+    expect(shouldNormalizeOutlinerPaste('cloud')).toBe(false);
+  });
+
+  it('normalizes single-line markdown structure', () => {
+    expect(shouldNormalizeOutlinerPaste('# Heading')).toBe(true);
+    expect(shouldNormalizeOutlinerPaste('- Item')).toBe(true);
+  });
+
   it('removes blank lines and makes headings and paragraphs list items', () => {
     const markdown = '# Introductions\n\n- Adam\n\n# Scope';
 

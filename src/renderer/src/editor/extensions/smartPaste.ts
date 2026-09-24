@@ -59,6 +59,11 @@ export const normalizeOutlinerPaste = (text: string, baseIndent: string): string
     .join('\n');
 };
 
+export const shouldNormalizeOutlinerPaste = (text: string): boolean => {
+  if (text.includes('\n')) return true;
+  return /^\s*(?:#{1,6}\s|[-+*]\s|\d+[.)]\s)/.test(text);
+};
+
 export const createSmartPaste = (isOutlinerMode = false) =>
   EditorView.domEventHandlers({
     paste: (event, view) => {
@@ -102,7 +107,7 @@ export const createSmartPaste = (isOutlinerMode = false) =>
         }
       }
 
-      if (isOutlinerMode && pasteText.trim()) {
+      if (isOutlinerMode && pasteText.trim() && shouldNormalizeOutlinerPaste(pasteText)) {
         event.preventDefault();
         const normalized = normalizeOutlinerPaste(pasteText, getCurrentBulletIndent(view));
         const range = getOutlinerPasteRange(view);
