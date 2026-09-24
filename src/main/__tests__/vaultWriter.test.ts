@@ -158,7 +158,9 @@ describe('vaultWriter', () => {
         // No plaintext (or any file at all) anywhere under the target path.
         expect(fs.existsSync(path.join(vault, 'Projects/Foo.md'))).toBe(false);
         expect(fs.existsSync(path.join(vault, 'Projects.md'))).toBe(false);
-        const allFiles = listAllFiles(vault).map((f) => path.relative(vault, f));
+        const allFiles = listAllFiles(vault).map((f) =>
+          path.relative(vault, f).split(path.sep).join('/')
+        );
         expect(allFiles).toEqual(['.phosphor/security.json']);
       });
     });
