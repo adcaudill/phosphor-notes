@@ -6,7 +6,7 @@
 import { ViewPlugin, Decoration, DecorationSet, WidgetType } from '@codemirror/view';
 import type { EditorView, ViewUpdate } from '@codemirror/view';
 import type { Range } from '@codemirror/state';
-import { isPast, isToday } from '../../utils/taskParser';
+import { isPastDate, isTodayDate } from '../../../../shared/tasks';
 
 class DatePillWidget extends WidgetType {
   constructor(
@@ -82,13 +82,12 @@ export const dateIndicatorPlugin = ViewPlugin.fromClass(
         const matches = [...lineText.matchAll(dateRegex)];
         for (const match of matches) {
           const dateStr = match[1];
-          const dateObj = new Date(dateStr + 'T00:00:00Z');
 
           // Determine status
           let status: 'overdue' | 'today' | 'future' = 'future';
-          if (isPast(dateObj)) {
+          if (isPastDate(dateStr)) {
             status = 'overdue';
-          } else if (isToday(dateObj)) {
+          } else if (isTodayDate(dateStr)) {
             status = 'today';
           }
 

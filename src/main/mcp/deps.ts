@@ -59,6 +59,12 @@ export interface McpDeps {
     ctx: { generation: number },
     opts?: { occurrence?: number }
   ): Promise<vaultWriter.InsertUnderBulletResult>;
+  replaceLines(
+    relPath: string,
+    target: { line: number; expectedText: string },
+    newLines: string[],
+    ctx: { generation: number }
+  ): Promise<vaultWriter.ReplaceLinesResult>;
 }
 
 function requireVaultPath(): string {
@@ -172,6 +178,16 @@ export function buildDefaultDeps(opts: BuildDepsOptions): McpDeps {
       const result = await vaultWriter.insertUnderBullet(vp, relPath, matchText, addition, {
         expectedGeneration: ctx.generation,
         occurrence: insertOpts?.occurrence
+      });
+      // Never creates the note or any parent stubs.
+      await afterNoteWritten(vp, relPath, { created: false, parentsCreated: [] }, opts.getMainWindow());
+      return result;
+    },
+
+    replaceLines: async (relPath, target, newLines, ctx) => {
+      const vp = requireVaultPath();
+      const result = await vaultWriter.replaceLines(vp, relPath, target, newLines, {
+        expectedGeneration: ctx.generation
       });
       // Never creates the note or any parent stubs.
       await afterNoteWritten(vp, relPath, { created: false, parentsCreated: [] }, opts.getMainWindow());

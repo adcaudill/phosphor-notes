@@ -7,12 +7,7 @@ import {
   WidgetType
 } from '@codemirror/view';
 import { Range } from '@codemirror/state';
-import {
-  parseTaskMetadata,
-  formatDate,
-  addInterval,
-  getCurrentTimestamp
-} from '../../utils/taskParser';
+import { toggleTaskLine } from '../../../../shared/tasks';
 
 class TaskCheckboxWidget extends WidgetType {
   constructor(
@@ -139,93 +134,7 @@ export const taskCheckboxPlugin = ViewPlugin.fromClass(
         const status = match[1] === ' ' ? 'todo' : match[1] === '/' ? 'doing' : 'done';
 
         const onToggle = (): void => {
-          // Get the full line text to check for recurrence
-          const fullLineText = view.state.doc.sliceString(line.from, line.to);
-          const metadata = parseTaskMetadata(fullLineText);
-
-          if (metadata.recurrence && metadata.dueDate) {
-            // Handle recurring task
-            const nextDate = addInterval(metadata.dueDate, metadata.recurrence);
-            const nextDateStr = formatDate(nextDate);
-            const currentDateStr = formatDate(metadata.dueDate);
-
-            // Mark current line as done with timestamp
-            const timestamp = getCurrentTimestamp();
-            const nextBracket = '[x]';
-            const currentLineReplacement = fullLineText
-              .replace(/\[[ /x]\]/, nextBracket)
-              .replace(/✓\s?\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}/, '') // Remove old timestamp if exists
-              .replace(/(.)$/, `✓ ${timestamp}$1`); // Add new timestamp at end
-
-            // Create next occurrence
-            let nextLineContent = fullLineText
-              .replace(/\[[ x/]\]/, '[ ]')
-              .replace(currentDateStr, nextDateStr)
-              .replace(/✓\s?\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}\s?/, ''); // Remove completion timestamp from new occurrence
-
-            // Ensure it's reset to todo
-            nextLineContent = nextLineContent.replace(/\[x\]/, '[ ]');
-
-            // Dispatch changes: replace current line and insert new line below
-            view.dispatch({
-              changes: [
-                {
-                  from: line.from,
-                  to: line.to,
-                  insert: currentLineReplacement
-                },
-                {
-                  from: line.to,
-                  insert: '\n' + nextLineContent
-                }
-              ]
-            });
-          } else {
-            // Regular task toggle: todo → doing → done → todo
-            const nextBracket = status === 'todo' ? '[/]' : status === 'doing' ? '[x]' : '[ ]';
-            let replacement = nextBracket;
-
-            // Add timestamp when marking as done
-            if (status === 'doing' && nextBracket === '[x]') {
-              const timestamp = getCurrentTimestamp();
-              replacement = `[x] ✓ ${timestamp}`;
-              // Also update the line text to include the timestamp
-              const lineText = view.state.doc.sliceString(line.from, line.to);
-              const updated = lineText.replace(/\[[ /x]\]/, replacement);
-              view.dispatch({
-                changes: {
-                  from: line.from,
-                  to: line.to,
-                  insert: updated
-                }
-              });
-              return;
-            }
-
-            // If transitioning from done to todo, remove the timestamp
-            if (status === 'done' && nextBracket === '[ ]') {
-              const lineText = view.state.doc.sliceString(line.from, line.to);
-              const updated = lineText
-                .replace(/\[x\]\s*✓\s?\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}/, '[ ]')
-                .replace(/✓\s?\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}/, '');
-              view.dispatch({
-                changes: {
-                  from: line.from,
-                  to: line.to,
-                  insert: updated
-                }
-              });
-              return;
-            }
-
-            view.dispatch({
-              changes: {
-                from: taskStart,
-                to: taskEnd,
-                insert: replacement
-              }
-            });
-          }
+          dispatchTaskToggle(view, line.from, line.to);
         };
 
         const widget = new TaskCheckboxWidget(
@@ -252,66 +161,35 @@ export const taskCheckboxPlugin = ViewPlugin.fromClass(
   }
 );
 
-// Task toggle command and keyboard shortcut handler
-export function cycleTaskStatus(view: EditorView): boolean {
-  const { from } = view.state.selection.main;
-  const lineStart = view.state.doc.lineAt(from).from;
-  const lineEnd = view.state.doc.lineAt(from).to;
-  const lineText = view.state.doc.sliceString(lineStart, lineEnd);
-
-  // Check if this line contains a task checkbox
-  const taskMatch = lineText.match(/^\s*-\s*\[([ x/])\]/);
-  if (!taskMatch) return false;
-
-  // Check if this is a recurring task
-  const metadata = parseTaskMetadata(lineText);
-  if (metadata.recurrence && metadata.dueDate) {
-    // Handle recurring task completion
-    const nextDate = addInterval(metadata.dueDate, metadata.recurrence);
-    const nextDateStr = formatDate(nextDate);
-    const currentDateStr = formatDate(metadata.dueDate);
-
-    // Mark current line as done
-    const currentLineReplacement = lineText.replace(/\[[ /x]\]/, '[x]');
-
-    // Create next occurrence
-    let nextLineContent = lineText.replace(/\[[ x/]\]/, '[ ]').replace(currentDateStr, nextDateStr);
-
-    nextLineContent = nextLineContent.replace(/\[x\]/, '[ ]');
-
-    // Dispatch changes: replace current line and insert new line below
-    view.dispatch({
-      changes: [
-        {
-          from: lineStart,
-          to: lineEnd,
-          insert: currentLineReplacement
-        },
-        {
-          from: lineEnd,
-          insert: '\n' + nextLineContent
-        }
-      ]
-    });
-
-    return true;
-  }
-
-  // Regular task toggle: todo → doing → done → todo
-  const currentStatus = taskMatch[1];
-  const nextBracket = currentStatus === ' ' ? '[/]' : currentStatus === '/' ? '[x]' : '[ ]';
-
-  // Find the bracket position
-  const bracketStart = lineStart + lineText.indexOf('[');
-  const bracketEnd = bracketStart + 3;
+/**
+ * The single call site that talks to the shared task-toggle logic
+ * (todo -> doing -> done -> todo, including recurring-task completion) -
+ * both the checkbox widget's click handler and the `Mod-Enter` keyboard
+ * shortcut go through this, so they can never drift into two different
+ * behaviors the way they used to.
+ */
+function dispatchTaskToggle(view: EditorView, lineFrom: number, lineTo: number): void {
+  const lineText = view.state.doc.sliceString(lineFrom, lineTo);
+  const [firstLine, ...restLines] = toggleTaskLine(lineText);
 
   view.dispatch({
-    changes: {
-      from: bracketStart,
-      to: bracketEnd,
-      insert: nextBracket
-    }
+    changes:
+      restLines.length === 0
+        ? { from: lineFrom, to: lineTo, insert: firstLine }
+        : [
+            { from: lineFrom, to: lineTo, insert: firstLine },
+            { from: lineTo, insert: '\n' + restLines.join('\n') }
+          ]
   });
+}
 
+// Task toggle command and keyboard shortcut handler (Mod-Enter)
+export function cycleTaskStatus(view: EditorView): boolean {
+  const { from } = view.state.selection.main;
+  const line = view.state.doc.lineAt(from);
+
+  if (!/^\s*-\s*\[([ x/])\]/.test(line.text)) return false;
+
+  dispatchTaskToggle(view, line.from, line.to);
   return true;
 }

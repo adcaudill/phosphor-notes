@@ -372,56 +372,6 @@ export function buildNewNoteDoc(relPath: string, body: string, mode?: NoteMode):
   return normalizedBody === '' ? frontmatter + '\n' : frontmatter + '\n' + normalizedBody + '\n';
 }
 
-export interface FormatTaskLineOptions {
-  text: string;
-  due?: string;
-  recurrence?: string;
-  status?: 'todo' | 'doing';
-}
-
-const DUE_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const RECURRENCE_RE = /^\+\d+[dwmy]$/i;
-
-function isValidCalendarDate(dateStr: string): boolean {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
-}
-
-/** Builds one `- [ ] text 📅 due 🔁 recurrence` task line, validating date/recurrence syntax up front. */
-export function formatTaskLine(opts: FormatTaskLineOptions): string {
-  const { due, recurrence, status } = opts;
-
-  if (typeof opts.text !== 'string' || opts.text.trim() === '') {
-    throw new InvalidArgumentError('text must be a non-empty string');
-  }
-  if (opts.text.includes('\n')) {
-    throw new InvalidArgumentError('text must be a single line');
-  }
-
-  // Tolerate a caller that already included a checkbox marker.
-  let text = opts.text.trim().replace(/^-?\s*\[[ x/]\]\s*/i, '');
-  if (text === '') {
-    throw new InvalidArgumentError('text must be a non-empty string');
-  }
-  if (/📅|🔁/.test(text)) {
-    throw new InvalidArgumentError('pass due/recurrence as separate options, not embedded in text');
-  }
-
-  if (due !== undefined && (!DUE_DATE_RE.test(due) || !isValidCalendarDate(due))) {
-    throw new InvalidArgumentError(`invalid due date: ${due} (expected YYYY-MM-DD)`);
-  }
-  if (recurrence !== undefined && !RECURRENCE_RE.test(recurrence)) {
-    throw new InvalidArgumentError(`invalid recurrence: ${recurrence} (expected e.g. +1d, +2w, +1m, +1y)`);
-  }
-
-  const marker = status === 'doing' ? '/' : ' ';
-  let line = `- [${marker}] ${text}`;
-  if (due) line += ` 📅 ${due}`;
-  if (recurrence) line += ` 🔁 ${recurrence.toLowerCase()}`;
-  return line;
-}
-
 /** `YYYY-MM-DD.md` from local date parts - matches the app's own daily-note convention (not UTC). */
 export function localDailyNoteFilename(now: Date = new Date()): string {
   const year = now.getFullYear();

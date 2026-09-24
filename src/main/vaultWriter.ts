@@ -48,6 +48,19 @@ export class VaultStateChangedError extends Error {
   }
 }
 
+/** Distinct from VaultStateChangedError (vault-level staleness): this is a single addressed line that no longer reads as expected - typically a concurrent edit to that specific task. */
+export class LineMismatchError extends Error {
+  constructor(
+    public readonly relPath: string,
+    public readonly line: number
+  ) {
+    super(
+      `Line ${line} in ${relPath} no longer matches the expected text - it may have been edited since it was last read.`
+    );
+    this.name = 'LineMismatchError';
+  }
+}
+
 const MAX_CREATE_BODY_CHARS = 200_000;
 const MAX_APPEND_CHARS = 100_000;
 
@@ -325,6 +338,73 @@ export async function appendToNote(
     const endLine = nextDoc.replace(/\n$/, '').split('\n').length;
 
     return { path: relPath, created, mode, appended, parentsCreated, endLine };
+  });
+}
+
+export interface ReplaceLinesResult {
+  path: string;
+  line: number;
+  /** newLines.length - 1: positive when the replacement grew the file (e.g. a recurring task's completion inserting a next-occurrence line), negative if it shrank it. */
+  linesAdded: number;
+}
+
+export interface ReplaceLinesOptions {
+  expectedGeneration: number;
+}
+
+/**
+ * Replaces a single line (1-based line number) with one or more new lines,
+ * after verifying the line's current exact text matches `expectedText`
+ * (optimistic concurrency - throws `LineMismatchError` otherwise). This is
+ * the one generalization of append/insert-only editing this module offers
+ * for an in-place edit; used for task status/metadata writes that
+ * originate outside the currently-open editor buffer (e.g. inline
+ * quick-edit from a Tasks list, or an MCP `complete_task`/`update_task`
+ * call), where the caller only has a stale-by-nature (file, line, text)
+ * triple rather than a live document to splice directly.
+ */
+export async function replaceLines(
+  vaultPath: string,
+  relPath: string,
+  target: { line: number; expectedText: string },
+  newLines: string[],
+  opts: ReplaceLinesOptions
+): Promise<ReplaceLinesResult> {
+  const absPath = await resolveWritableNotePath(vaultPath, relPath);
+
+  return withFileLock(absPath, async () => {
+    let raw: Buffer;
+    try {
+      raw = await fsp.readFile(absPath);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        throw new NoteNotFoundError(relPath);
+      }
+      throw err;
+    }
+
+    const wasEncrypted = isEncrypted(raw);
+    // Decode synchronously right after the read - no `await` in between -
+    // so a concurrent lock can't zero the key mid-decrypt.
+    const decoded = decodeBuffer(raw, absPath);
+    const doc = decoded.toString('utf-8');
+    const lines = doc.split('\n');
+
+    const idx = target.line - 1;
+    if (idx < 0 || idx >= lines.length || lines[idx] !== target.expectedText) {
+      throw new LineMismatchError(relPath, target.line);
+    }
+
+    const nextLines = [...lines.slice(0, idx), ...newLines, ...lines.slice(idx + 1)];
+    const nextDoc = nextLines.join('\n');
+
+    const buf = await encodeForVault(vaultPath, Buffer.from(nextDoc, 'utf-8'), {
+      forceEncrypt: wasEncrypted,
+      expectedGeneration: opts.expectedGeneration
+    });
+    await fsp.writeFile(absPath, buf);
+
+    return { path: relPath, line: target.line, linesAdded: newLines.length - 1 };
   });
 }
 

@@ -14,11 +14,14 @@ import {
   updateTasksForFile,
   updateGraphForFile,
   updateGraphForChangedFile,
-  resetIndexState
+  resetIndexState,
+  TASKS_CACHE_VERSION
 } from './indexer';
 import { getBacklinks, getGraphStats } from './graphBuilder';
 import { setupWatcher, stopWatcher, markInternalSave } from './watcher';
 import { deriveMasterKey, encryptBuffer, decryptBuffer, isEncrypted, generateSalt } from './crypto';
+import { TASK_LINE_RE, type Task } from '../shared/tasks';
+import * as vaultWriter from './vaultWriter';
 import {
   initializeMRU,
   getMRUFiles,
@@ -482,6 +485,60 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
   ipcMain.handle('tasks:get', async () => {
     return getLastTasks();
   });
+
+  // Fast-path read of the on-disk tasks cache (mirrors graph:load-cache),
+  // for an initial paint before the background reindex completes.
+  ipcMain.handle('tasks:load-cache', async () => {
+    if (!activeVaultPath) return null;
+    try {
+      const cachePath = path.join(activeVaultPath, '.phosphor', 'tasks.json');
+      const raw = await fsp.readFile(cachePath, 'utf-8');
+      const parsed = JSON.parse(raw) as { version?: number; tasks?: Task[] };
+      if (parsed.version !== TASKS_CACHE_VERSION || !Array.isArray(parsed.tasks)) return null;
+      return parsed.tasks;
+    } catch {
+      return null;
+    }
+  });
+
+  // Replaces one task line in place (e.g. inline metadata quick-edit from
+  // the Tasks view, for a file other than the one currently open in the
+  // editor), verifying the line's current text first.
+  ipcMain.handle(
+    'tasks:update-line',
+    async (_, filename: string, line: number, expectedText: string, newLines: string[]) => {
+      if (!activeVaultPath || !mainWindow) {
+        return { ok: false, error: 'No vault selected' };
+      }
+      if (!Array.isArray(newLines) || newLines.length === 0) {
+        return { ok: false, error: 'newLines must be a non-empty array' };
+      }
+      for (const l of newLines) {
+        if (!TASK_LINE_RE.test(l)) {
+          return { ok: false, error: 'Each replacement line must itself be a task checkbox line' };
+        }
+      }
+
+      const normalizedFilename = filename.endsWith('.md') ? filename : `${filename}.md`;
+
+      try {
+        await vaultWriter.replaceLines(
+          activeVaultPath,
+          normalizedFilename,
+          { line, expectedText },
+          newLines,
+          { expectedGeneration: vaultState.getGeneration() }
+        );
+        markInternalSave(); // Mark this as an internal save to avoid false conflict detection
+        await updateTasksForFile(activeVaultPath, normalizedFilename, mainWindow);
+        await updateGraphForFile(activeVaultPath, normalizedFilename, mainWindow);
+        return { ok: true };
+      } catch (err) {
+        safeError('Failed to update task line:', err);
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+  );
 
   // Search handler
   ipcMain.handle('vault:search', async (_, query: string) => {

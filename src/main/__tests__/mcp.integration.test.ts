@@ -59,9 +59,16 @@ describe('MCP server (integration)', () => {
         line: 3,
         status: 'todo',
         text: 'Overdue task',
+        rawText: '- [ ] Overdue task 📅 2020-01-01',
         dueDate: '2020-01-01'
       },
-      { file: 'tagged.md', line: 4, status: 'done', text: 'Done task' }
+      {
+        file: 'tagged.md',
+        line: 4,
+        status: 'done',
+        text: 'Done task',
+        rawText: '- [x] Done task'
+      }
     ];
 
     token = generateToken();
@@ -98,6 +105,10 @@ describe('MCP server (integration)', () => {
         vaultWriter.insertUnderBullet(vault, relPath, matchText, addition, {
           expectedGeneration: ctx.generation,
           occurrence: insertOpts?.occurrence
+        }),
+      replaceLines: (relPath, target, newLines, ctx) =>
+        vaultWriter.replaceLines(vault, relPath, target, newLines, {
+          expectedGeneration: ctx.generation
         }),
       searchNotes: async (query: string) => [
         { filename: 'top.md', title: 'Top', snippet: `...${query}...` }
@@ -441,6 +452,10 @@ describe('MCP server (integration)', () => {
           'create_note',
           'append_to_note',
           'add_task',
+          'complete_task',
+          'update_task',
+          'reschedule_task',
+          'delete_task',
           'insert_under_bullet'
         ])
       );
@@ -705,6 +720,145 @@ describe('MCP server (integration)', () => {
         ? fs.readFileSync(path.join(vault, TODAY), 'utf-8')
         : null;
       expect(after).toBe(before);
+      await client.close();
+    });
+
+    it('complete_task marks a task done and inserts the next occurrence for a recurring task', async () => {
+      // A far-future due date keeps this deterministic regardless of the
+      // real current date: completeTask always advances from "now" (no
+      // deterministic override in the MCP tool surface), and a recurring
+      // task's catch-up clamp would otherwise skip ahead past a near-past
+      // due date to the day after the real today.
+      fs.writeFileSync(
+        path.join(vault, 'CompleteTest.md'),
+        '- [ ] Daily standup 📅 2099-01-15 🔁 +1d\n- [ ] One-off 📅 2026-01-15\n'
+      );
+      const client = await makeClient(token);
+
+      const recurring = await client.callTool({
+        name: 'complete_task',
+        arguments: {
+          file: 'CompleteTest.md',
+          line: 1,
+          rawText: '- [ ] Daily standup 📅 2099-01-15 🔁 +1d'
+        }
+      });
+      expect(recurring.isError).toBeFalsy();
+      expect(recurring.structuredContent).toMatchObject({ nextLineNumber: 2 });
+      const afterRecurring = fs.readFileSync(path.join(vault, 'CompleteTest.md'), 'utf-8');
+      expect(afterRecurring).toContain('- [x] Daily standup 📅 2099-01-15 🔁 +1d ✓');
+      expect(afterRecurring).toContain('- [ ] Daily standup 📅 2099-01-16 🔁 +1d');
+
+      const oneOff = await client.callTool({
+        name: 'complete_task',
+        arguments: { file: 'CompleteTest.md', line: 3, rawText: '- [ ] One-off 📅 2026-01-15' }
+      });
+      expect(oneOff.isError).toBeFalsy();
+      expect(oneOff.structuredContent?.nextLine).toBeUndefined();
+      expect(oneOff.structuredContent?.nextLineNumber).toBeUndefined();
+      const afterOneOff = fs.readFileSync(path.join(vault, 'CompleteTest.md'), 'utf-8');
+      expect(afterOneOff).toContain('- [x] One-off 📅 2026-01-15 ✓');
+
+      await client.close();
+    });
+
+    it('complete_task refuses with LINE_MISMATCH when the line has changed since it was read', async () => {
+      fs.writeFileSync(path.join(vault, 'MismatchTest.md'), '- [ ] Real text\n');
+      const client = await makeClient(token);
+      const result = await client.callTool({
+        name: 'complete_task',
+        arguments: { file: 'MismatchTest.md', line: 1, rawText: '- [ ] Stale text' }
+      });
+      expect(result.isError).toBe(true);
+      expect((result.content as Array<{ text: string }>)[0].text).toContain('LINE_MISMATCH');
+      expect(fs.readFileSync(path.join(vault, 'MismatchTest.md'), 'utf-8')).toBe('- [ ] Real text\n');
+      await client.close();
+    });
+
+    it('update_task edits text, due date, recurrence, priority, and status without embedded syntax', async () => {
+      fs.writeFileSync(path.join(vault, 'UpdateTest.md'), '- [ ] Draft the proposal\n');
+      const client = await makeClient(token);
+
+      const result = await client.callTool({
+        name: 'update_task',
+        arguments: {
+          file: 'UpdateTest.md',
+          line: 1,
+          rawText: '- [ ] Draft the proposal',
+          newText: 'Send the proposal',
+          due: '2026-03-01',
+          recurrence: '+1w',
+          priority: 'high'
+        }
+      });
+      expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toMatchObject({
+        taskLine: '- [ ] Send the proposal 🔺 📅 2026-03-01 🔁 +1w'
+      });
+      expect(fs.readFileSync(path.join(vault, 'UpdateTest.md'), 'utf-8')).toBe(
+        '- [ ] Send the proposal 🔺 📅 2026-03-01 🔁 +1w\n'
+      );
+
+      const cleared = await client.callTool({
+        name: 'update_task',
+        arguments: {
+          file: 'UpdateTest.md',
+          line: 1,
+          rawText: '- [ ] Send the proposal 🔺 📅 2026-03-01 🔁 +1w',
+          due: '',
+          recurrence: '',
+          priority: 'none',
+          status: 'done'
+        }
+      });
+      expect(cleared.isError).toBeFalsy();
+      const finalText = fs.readFileSync(path.join(vault, 'UpdateTest.md'), 'utf-8');
+      expect(finalText).toMatch(/^- \[x\] Send the proposal ✓ \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\n$/);
+
+      await client.close();
+    });
+
+    it('reschedule_task sets and clears the due date only', async () => {
+      fs.writeFileSync(path.join(vault, 'RescheduleTest.md'), '- [/] In progress 🔼 📅 2026-01-01\n');
+      const client = await makeClient(token);
+
+      const rescheduled = await client.callTool({
+        name: 'reschedule_task',
+        arguments: {
+          file: 'RescheduleTest.md',
+          line: 1,
+          rawText: '- [/] In progress 🔼 📅 2026-01-01',
+          due: '2026-05-05'
+        }
+      });
+      expect(rescheduled.structuredContent).toMatchObject({
+        taskLine: '- [/] In progress 🔼 📅 2026-05-05'
+      });
+
+      const cleared = await client.callTool({
+        name: 'reschedule_task',
+        arguments: {
+          file: 'RescheduleTest.md',
+          line: 1,
+          rawText: '- [/] In progress 🔼 📅 2026-05-05',
+          due: ''
+        }
+      });
+      expect(cleared.structuredContent).toMatchObject({ taskLine: '- [/] In progress 🔼' });
+      await client.close();
+    });
+
+    it('delete_task removes the line and nothing else', async () => {
+      fs.writeFileSync(path.join(vault, 'DeleteTest.md'), '- [ ] keep me\n- [ ] delete me\n- [ ] also keep\n');
+      const client = await makeClient(token);
+      const result = await client.callTool({
+        name: 'delete_task',
+        arguments: { file: 'DeleteTest.md', line: 2, rawText: '- [ ] delete me' }
+      });
+      expect(result.isError).toBeFalsy();
+      expect(fs.readFileSync(path.join(vault, 'DeleteTest.md'), 'utf-8')).toBe(
+        '- [ ] keep me\n- [ ] also keep\n'
+      );
       await client.close();
     });
 

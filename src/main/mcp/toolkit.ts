@@ -53,6 +53,8 @@ function errorCodeFor(err: unknown): string {
         return 'BULLET_NOT_FOUND';
       case 'AmbiguousMatchError':
         return 'AMBIGUOUS_MATCH';
+      case 'LineMismatchError':
+        return 'LINE_MISMATCH';
       default:
         return 'INTERNAL_ERROR';
     }

@@ -5,7 +5,6 @@ import {
   formatAppend,
   buildNewNoteFrontmatter,
   buildNewNoteDoc,
-  formatTaskLine,
   localDailyNoteFilename,
   insertUnderBullet,
   InvalidArgumentError,
@@ -241,62 +240,9 @@ describe('buildNewNoteFrontmatter / buildNewNoteDoc', () => {
   });
 });
 
-describe('formatTaskLine', () => {
-  it('formats a basic task', () => {
-    expect(formatTaskLine({ text: 'Write report' })).toBe('- [ ] Write report');
-  });
-
-  it('formats with a due date', () => {
-    expect(formatTaskLine({ text: 'Renew passport', due: '2026-11-01' })).toBe(
-      '- [ ] Renew passport 📅 2026-11-01'
-    );
-  });
-
-  it('formats with due date and recurrence, date before recurrence', () => {
-    expect(
-      formatTaskLine({ text: 'Renew passport', due: '2026-11-01', recurrence: '+1y' })
-    ).toBe('- [ ] Renew passport 📅 2026-11-01 🔁 +1y');
-  });
-
-  it('formats a "doing" task with [/]', () => {
-    expect(formatTaskLine({ text: 'Draft spec', status: 'doing' })).toBe('- [/] Draft spec');
-  });
-
-  it('produces output matching the app\'s own task-line regex', () => {
-    const line = formatTaskLine({ text: 'x', due: '2026-01-01', recurrence: '+2w' });
-    expect(/^\s*-\s*\[([ x/])\]\s*(.*?)$/.test(line)).toBe(true);
-  });
-
-  it('strips a leading checkbox marker the caller already included', () => {
-    expect(formatTaskLine({ text: '- [ ] Already bulleted' })).toBe('- [ ] Already bulleted');
-    expect(formatTaskLine({ text: '[x] Done already' })).toBe('- [ ] Done already');
-  });
-
-  it('rejects multi-line text', () => {
-    expect(() => formatTaskLine({ text: 'a\nb' })).toThrow(InvalidArgumentError);
-  });
-
-  it('rejects empty text', () => {
-    expect(() => formatTaskLine({ text: '   ' })).toThrow(InvalidArgumentError);
-  });
-
-  it('rejects an impossible calendar date', () => {
-    expect(() => formatTaskLine({ text: 'x', due: '2026-02-30' })).toThrow(InvalidArgumentError);
-  });
-
-  it('rejects a malformed recurrence', () => {
-    expect(() => formatTaskLine({ text: 'x', recurrence: 'weekly' })).toThrow(InvalidArgumentError);
-    expect(() => formatTaskLine({ text: 'x', recurrence: '1w' })).toThrow(InvalidArgumentError);
-    expect(() => formatTaskLine({ text: 'x', recurrence: '+1x' })).toThrow(InvalidArgumentError);
-  });
-
-  it('rejects text that already embeds a due-date or recurrence emoji', () => {
-    expect(() => formatTaskLine({ text: 'x 📅 2026-01-01', due: '2026-01-01' })).toThrow(
-      InvalidArgumentError
-    );
-    expect(() => formatTaskLine({ text: 'x 🔁 +1w' })).toThrow(InvalidArgumentError);
-  });
-});
+// formatTaskLine has moved to src/shared/tasks.ts (see tasks.test.ts) -
+// task-line formatting is now part of the canonical task module, not
+// general note formatting.
 
 describe('localDailyNoteFilename', () => {
   it('formats YYYY-MM-DD.md from local date parts, not UTC', () => {

@@ -2,14 +2,7 @@
 
 import type { PredictionModelSnapshot } from '../shared/predictionModel';
 
-export interface Task {
-  file: string;
-  line: number;
-  status: 'todo' | 'doing' | 'done';
-  text: string;
-  dueDate?: string; // ISO date string (YYYY-MM-DD)
-  completedAt?: string; // ISO datetime string (YYYY-MM-DD HH:MM:SS)
-}
+export type { Task, Priority, Recurrence, RecurrenceUnit, Status as TaskStatus } from '../shared/tasks';
 
 export interface McpStatus {
   enabled: boolean;
@@ -111,6 +104,21 @@ export interface PhosphorAPI {
   // Tasks
   getTaskIndex: () => Promise<Task[]>;
   onTasksUpdate: (cb: (tasks: Task[]) => void) => () => void;
+  /** Fast-path: the last full reindex's tasks, read straight from the on-disk `.phosphor/tasks.json` cache (like `getCachedGraph`). Null if no cache exists yet. */
+  getCachedTasks: () => Promise<Task[] | null>;
+  /**
+   * Replaces one task line in place, verifying its current raw text first
+   * (optimistic concurrency - throws if the line has since changed) and
+   * updating the task index afterward. Used by inline metadata quick-edit
+   * (e.g. the Tasks view) for files other than the one currently open in
+   * the editor.
+   */
+  updateTaskLine: (
+    filename: string,
+    line: number,
+    expectedText: string,
+    newLines: string[]
+  ) => Promise<{ ok: true } | { ok: false; error: string }>;
 
   // Settings
   getSettings: () => Promise<UserSettings>;

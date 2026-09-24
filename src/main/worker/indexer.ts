@@ -1,5 +1,6 @@
 import { parentPort } from 'worker_threads';
 import { extractWikilinks, getImplicitPathLinks } from '../../shared/wikilinks';
+import { extractTasksFromContent, type Task } from '../../shared/tasks';
 
 // MiniSearch can have import issues in worker context
 // Load it dynamically to handle both ESM and CommonJS contexts
@@ -24,14 +25,7 @@ let MiniSearch: unknown = null;
 
 type Graph = Record<string, string[]>;
 
-export interface Task {
-  file: string;
-  line: number;
-  status: 'todo' | 'doing' | 'done';
-  text: string;
-  dueDate?: string; // ISO date string (YYYY-MM-DD)
-  completedAt?: string; // ISO datetime string (YYYY-MM-DD HH:MM:SS)
-}
+export type { Task };
 
 // Minimal interface for the subset of MiniSearch used by this worker
 interface SearchEngine {
@@ -78,63 +72,6 @@ function extractTags(content: string): string[] {
   }
 
   return Array.from(tags).sort();
-}
-
-// Extract tasks from markdown content
-function extractTasks(content: string, filename: string): Task[] {
-  const tasks: Task[] = [];
-  const taskRegex = /^\s*-\s*\[([ x/])\]\s*(.*)$/gm;
-
-  let match;
-  while ((match = taskRegex.exec(content)) !== null) {
-    const status = match[1] === ' ' ? 'todo' : match[1] === '/' ? 'doing' : 'done';
-    const text = match[2].trim();
-    // Calculate line number (1-indexed)
-    const line = content.substring(0, match.index).split('\n').length;
-
-    // Extract due date from task text
-    let dueDate: string | undefined;
-
-    // Try Phosphor @-notation style: @due(YYYY-MM-DD)
-    const atDueMatch = text.match(/@due\((\d{4}-\d{2}-\d{2})\)/);
-    if (atDueMatch) {
-      dueDate = atDueMatch[1];
-    }
-
-    // Try emoji style: 📅 YYYY-MM-DD
-    if (!dueDate) {
-      const emojiDateMatch = text.match(/📅\s*(\d{4}-\d{2}-\d{2})/);
-      if (emojiDateMatch) {
-        dueDate = emojiDateMatch[1];
-      }
-    }
-
-    // Try Org-mode style: DEADLINE: <YYYY-MM-DD ...>
-    if (!dueDate) {
-      const orgDateMatch = text.match(/DEADLINE:\s*<(\d{4}-\d{2}-\d{2})/i);
-      if (orgDateMatch) {
-        dueDate = orgDateMatch[1];
-      }
-    }
-
-    // Extract completion timestamp from task text
-    let completedAt: string | undefined;
-    const completeMatch = text.match(/✓\s*(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})/);
-    if (completeMatch) {
-      completedAt = completeMatch[1];
-    }
-
-    tasks.push({
-      file: filename,
-      line,
-      status,
-      text,
-      dueDate,
-      completedAt
-    });
-  }
-
-  return tasks;
 }
 
 /**
@@ -381,7 +318,7 @@ parentPort?.on(
             }
 
             // Extract tasks from this file
-            const fileTasks = extractTasks(content, filename);
+            const fileTasks = extractTasksFromContent(content, filename);
             tasks.push(...fileTasks);
 
             // Add to search index

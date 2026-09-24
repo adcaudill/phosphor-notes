@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import { promises as fsp } from 'fs';
 import { isDailyNote, extractDateHierarchy } from './graphBuilder';
 import { extractWikilinks, getImplicitPathLinks } from '../shared/wikilinks';
+import { extractTasksFromContent, type Task } from '../shared/tasks';
 import * as vaultReader from './vaultReader';
 import {
   buildSnapshotFromCounts,
@@ -44,15 +45,6 @@ interface WorkerMessage {
   data?: unknown;
   error?: unknown;
   requestId?: string;
-}
-
-interface Task {
-  file: string;
-  line: number;
-  status: 'todo' | 'doing' | 'done';
-  text: string;
-  dueDate?: string;
-  completedAt?: string;
 }
 
 interface FileContent {
@@ -390,6 +382,47 @@ async function readMarkdownFile(filePath: string, _vaultPath: string): Promise<s
   }
 }
 
+export const TASKS_CACHE_VERSION = 1;
+
+/**
+ * Persists the task index to `<vault>/.phosphor/tasks.json`, atomically
+ * (tmp-write-then-rename), mirroring the graph-cache pattern used
+ * throughout this file. Derived/disposable by construction - a version
+ * mismatch or read failure just means the cache is treated as absent and
+ * repopulated by the next full reindex, never migrated in place. Swallows
+ * its own errors (fire-and-forget), same as the existing graph-persist
+ * blocks this is modeled on.
+ */
+function persistTasksCache(vaultPath: string, tasks: Task[]): void {
+  (async () => {
+    try {
+      if (!vaultPath) return;
+      const cacheDir = join(vaultPath, '.phosphor');
+      await fsp.mkdir(cacheDir, { recursive: true });
+      const uniqueTmpPath = join(
+        cacheDir,
+        `tasks.json.tmp.${Date.now()}.${Math.random().toString(36).slice(2)}`
+      );
+      const outPath = join(cacheDir, 'tasks.json');
+      const payload = JSON.stringify({ version: TASKS_CACHE_VERSION, tasks });
+      await fsp.writeFile(uniqueTmpPath, payload, 'utf-8');
+      try {
+        await fsp.rename(uniqueTmpPath, outPath);
+      } catch (renameErr) {
+        try {
+          await fsp.unlink(uniqueTmpPath);
+        } catch {
+          // Silently ignore cleanup errors
+        }
+        throw renameErr;
+      }
+      safeLog('Tasks cache saved to', outPath);
+    } catch (err) {
+      safeError('Failed to persist tasks cache:', err);
+    }
+  })();
+}
+
 async function tryStartWorkerFromFile(
   workerPath: string,
   vaultPath: string,
@@ -464,6 +497,7 @@ async function tryStartWorkerFromFile(
           safeError('Failed to persist graph cache:', err);
         }
       })();
+      persistTasksCache(vaultPath, tasks);
     } else if (msg?.type === 'prediction-model') {
       const model = msg.data as PredictionModelSnapshot | null;
       lastPredictionModel = model;
@@ -561,27 +595,64 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
       try {
         safeLog('Indexer: compiled worker missing, using runtime TS fallback from', possibleSrc);
         let tsCode = fs.readFileSync(possibleSrc, 'utf-8');
-        // Attempt to inline shared util so the eval worker can resolve it
+        // Attempt to inline shared utils so the eval worker can resolve them
+        // (worker_threads' `eval: true` mode can't resolve a normal module
+        // import, so each shared module used by the worker is wrapped in an
+        // IIFE and prepended instead). Any shared module the worker imports
+        // needs this same treatment - it's easy to add a new import above
+        // without remembering to extend this block, so check here first if
+        // task/graph extraction silently breaks only in this dev fallback.
         try {
-          const sharedPath = resolve(process.cwd(), 'src', 'shared', 'wikilinks.ts');
-          if (fs.existsSync(sharedPath)) {
+          const sharedModules = [
+            { path: 'wikilinks.ts', symbols: ['extractWikilinks', 'getImplicitPathLinks'] },
+            {
+              path: 'tasks.ts',
+              symbols: ['extractTasksFromContent'],
+              // tasks.ts imports InvalidArgumentError from noteFormat.ts, which in
+              // turn imports from renderer/src/utils/frontmatterUtils - not worth
+              // inlining transitively for a dev-only fallback, and extractTasksFromContent
+              // (the only symbol the worker actually calls) never touches that code path.
+              stubImports: [{ from: './noteFormat', names: ['InvalidArgumentError'] }]
+            }
+          ];
+
+          let prelude = '';
+          for (const mod of sharedModules) {
+            const sharedPath = resolve(process.cwd(), 'src', 'shared', mod.path);
+            if (!fs.existsSync(sharedPath)) continue;
             let sharedCode = fs.readFileSync(sharedPath, 'utf-8');
-            // Remove top-level export keywords so functions are available when wrapped
+
+            // Strip this module's own imports of other shared modules (they're
+            // either inlined separately above/below, or stubbed - see stubImports).
+            sharedCode = sharedCode.replace(/(^|\n)import\s+[^;]*from\s+['"]\.\/[^'"]+['"];?/g, '$1');
+            // Remove top-level export keywords so declarations are available when wrapped
             sharedCode = sharedCode.replace(
               /(^|\n)export\s+(?=(async\s+function|function|const|let|var|class|interface|type|enum))/g,
               '$1'
             );
-            // Wrap the shared code in an IIFE and expose the known symbols
-            const wrapped = `(function(){\n${sharedCode}\nreturn { extractWikilinks: typeof extractWikilinks !== 'undefined' ? extractWikilinks : undefined, getImplicitPathLinks: typeof getImplicitPathLinks !== 'undefined' ? getImplicitPathLinks : undefined };\n})()`;
 
-            // Remove import line(s) that reference the shared util from the worker source
-            tsCode = tsCode.replace(/import\s+[^;]*shared\/wikilinks[^;]*;?\n?/g, '');
+            const stubs = (mod.stubImports ?? [])
+              .flatMap((s) => s.names)
+              .map((name) => `class ${name} extends Error {}`)
+              .join('\n');
 
-            // Prepend the wrapped shared module and destructure the functions for the worker code
-            tsCode =
-              `const __phosphor_shared = ${wrapped};\nconst { extractWikilinks, getImplicitPathLinks } = __phosphor_shared;\n\n` +
-              tsCode;
+            const returnedSymbols = mod.symbols
+              .map((s) => `${s}: typeof ${s} !== 'undefined' ? ${s} : undefined`)
+              .join(', ');
+            const wrapped = `(function(){\n${stubs}\n${sharedCode}\nreturn { ${returnedSymbols} };\n})()`;
+
+            // Remove the worker's own import line(s) for this shared module
+            const importRe = new RegExp(
+              `import\\s+[^;]*shared/${mod.path.replace('.ts', '')}[^;]*;?\\n?`,
+              'g'
+            );
+            tsCode = tsCode.replace(importRe, '');
+
+            const varName = `__phosphor_shared_${mod.path.replace(/\W/g, '_')}`;
+            prelude += `const ${varName} = ${wrapped};\nconst { ${mod.symbols.join(', ')} } = ${varName};\n`;
           }
+
+          tsCode = prelude + '\n' + tsCode;
         } catch (inlineErr) {
           safeError('Failed to inline shared util for runtime worker:', inlineErr);
         }
@@ -691,6 +762,7 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
                 console.error('Failed to persist graph cache:', err);
               }
             })();
+            persistTasksCache(vaultPath, tasks);
           } else if (msg?.type === 'prediction-model') {
             const model = msg.data as PredictionModelSnapshot | null;
 
@@ -890,23 +962,10 @@ export async function updateTasksForFile(
     // Use shared reader so encrypted vaults are handled the same way as the worker
     const content = await readMarkdownFile(filePath, vaultPath);
 
-    // Extract tasks from this file using the same regex as the worker
-    const taskRegex = /^\s*-\s*\[([ x/])\]\s*(.*?)$/gm;
-    const fileTasks: Task[] = [];
-
-    let match;
-    while ((match = taskRegex.exec(content)) !== null) {
-      const status = match[1] === ' ' ? 'todo' : match[1] === '/' ? 'doing' : 'done';
-      const text = match[2].trim();
-      const line = content.substring(0, match.index).split('\n').length;
-
-      fileTasks.push({
-        file: filename,
-        line,
-        status,
-        text
-      });
-    }
+    // Same extraction function the full-vault worker scan uses, so this
+    // incremental path can never again drop fields (dueDate/recurrence/
+    // priority/completedAt) the full scan populates.
+    const fileTasks = extractTasksFromContent(content, filename);
 
     // Update the task index: remove old tasks for this file, add new ones
     if (lastTasks) {
@@ -920,6 +979,7 @@ export async function updateTasksForFile(
     if (!mainWindow.isDestroyed()) {
       mainWindow.webContents.send('phosphor:tasks-update', lastTasks);
     }
+    persistTasksCache(vaultPath, lastTasks);
     try {
       safeDebug(`Updated tasks for ${filename}: ${fileTasks.length} tasks`);
     } catch {

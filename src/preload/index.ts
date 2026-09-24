@@ -169,6 +169,9 @@ const api = {
       ipcRenderer.removeListener('phosphor:tasks-update', handler);
     };
   },
+  getCachedTasks: () => ipcRenderer.invoke('tasks:load-cache'),
+  updateTaskLine: (filename: string, line: number, expectedText: string, newLines: string[]) =>
+    ipcRenderer.invoke('tasks:update-line', filename, line, expectedText, newLines),
 
   // Settings API
   getSettings: () => ipcRenderer.invoke('settings:get'),
