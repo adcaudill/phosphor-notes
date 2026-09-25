@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, protocol, ipcMain, screen, Menu } from 'electron';
+import { app, shell, BrowserWindow, protocol, ipcMain, screen, Menu, dialog } from 'electron';
 import { join, extname } from 'path';
 import { readFile } from 'fs/promises';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
@@ -340,13 +340,46 @@ function createWindow(settings?: UserSettings): BrowserWindow {
 
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.
+  loadRendererContent(mainWindow);
+
+  // If the renderer crashes (e.g. it runs out of memory), Electron leaves the
+  // last painted frame on screen with no way to interact with it - the window
+  // just looks blank/frozen and the only way out is to force-quit. Recover by
+  // reloading the renderer instead. Any unsaved edits to the note that was
+  // open are lost either way (the renderer holding them is gone), so we
+  // surface that to the user rather than silently reloading underneath them.
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    if (details.reason === 'clean-exit') return;
+
+    console.error('Renderer process gone:', details.reason, details.exitCode);
+
+    dialog
+      .showMessageBox(mainWindow, {
+        type: 'error',
+        title: 'Phosphor Notes crashed',
+        message: 'The editor crashed and needs to restart.',
+        detail:
+          details.reason === 'oom'
+            ? 'The editor ran out of memory. Any unsaved changes to the note you had open have been lost. The window will now reload.'
+            : `The editor stopped unexpectedly (${details.reason}). Any unsaved changes to the note you had open have been lost. The window will now reload.`,
+        buttons: ['OK']
+      })
+      .finally(() => {
+        if (!mainWindow.isDestroyed()) {
+          loadRendererContent(mainWindow);
+        }
+      });
+  });
+
+  return mainWindow;
+}
+
+function loadRendererContent(mainWindow: BrowserWindow): void {
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL']);
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
   }
-
-  return mainWindow;
 }
 
 // Only one instance of the app should run at a time: two instances would
