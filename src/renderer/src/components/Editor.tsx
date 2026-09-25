@@ -275,6 +275,16 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
         } as KeyBinding
       ];
 
+      const grammarLint = createGrammarLint({
+        checkPassiveVoice: settings.checkPassiveVoice,
+        checkSimplification: settings.checkSimplification,
+        checkInclusiveLanguage: settings.checkInclusiveLanguage,
+        checkReadability: settings.checkReadability,
+        checkProfanities: settings.checkProfanities,
+        checkCliches: settings.checkCliches,
+        checkIntensify: settings.checkIntensify
+      });
+
       // 1. Define the Initial State (use only the content, without frontmatter)
       const startState = EditorState.create({
         doc: initialContent,
@@ -302,15 +312,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
           taskAddMetadataGutter, // "+" gutter marker for a bare task on the cursor's line
           admonitionWidget, // Admonition/Callout rendering
           typewriterScrollPlugin, // Typewriter scrolling (cursor centered)
-          createGrammarLint({
-            checkPassiveVoice: settings.checkPassiveVoice,
-            checkSimplification: settings.checkSimplification,
-            checkInclusiveLanguage: settings.checkInclusiveLanguage,
-            checkReadability: settings.checkReadability,
-            checkProfanities: settings.checkProfanities,
-            checkCliches: settings.checkCliches,
-            checkIntensify: settings.checkIntensify
-          }), // Grammar and style checking
+          grammarLint.extension, // Grammar and style checking
           ...(enableDimming ? [dimmingPlugin] : []), // Paragraph dimming (optional)
           createSearchExtension(), // Search functionality
           createCombinedAutocompleteExtension(wikiPageSuggestions), // Autocomplete for wiki links and slash commands
@@ -560,6 +562,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
       // Cleanup on unmount
       return () => {
         view.destroy();
+        grammarLint.destroy();
       };
       // eslint-disable-next-line react-hooks/exhaustive-deps -- omit initialContent to avoid remounting on every keystroke
     }, [

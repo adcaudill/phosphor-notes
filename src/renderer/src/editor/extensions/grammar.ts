@@ -11,11 +11,19 @@ interface GrammarSettings {
   checkIntensify: boolean;
 }
 
-export function createGrammarLint(settings: GrammarSettings): ReturnType<typeof linter> {
+export interface GrammarLint {
+  extension: ReturnType<typeof linter>;
+  // Terminates the backing worker. Must be called by the owner when the
+  // editor view that uses this lint is torn down - the worker's lifetime
+  // isn't tied to the CodeMirror view, so nothing else will release it.
+  destroy: () => void;
+}
+
+export function createGrammarLint(settings: GrammarSettings): GrammarLint {
   // Create a new worker instance for this editor instance
   const grammarWorker = new grammarWorkerModule();
 
-  return linter(
+  const extension = linter(
     async (view) => {
       const doc = view.state.doc.toString();
 
@@ -42,4 +50,9 @@ export function createGrammarLint(settings: GrammarSettings): ReturnType<typeof 
       delay: 750 // Debounce: Wait 750ms after typing stops before checking
     }
   );
+
+  return {
+    extension,
+    destroy: () => grammarWorker.terminate()
+  };
 }
