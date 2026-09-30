@@ -16,9 +16,22 @@ export function wikiLinkCompletionSource(
     const match = context.matchBefore(/\[\[[^\]\n]*$/);
     if (!match) return null;
 
-    const query = match.text.slice(2); // Drop the leading [[
+    let query = match.text.slice(2); // Drop the leading [[
     const from = match.from + 2;
-    const to = context.pos;
+    let to = context.pos;
+
+    // When text is selected and wrapped with [[ (closeBrackets keeps the inner text
+    // selected), CodeMirror positions the context at the selection start. Treat the
+    // selected text as part of the query so suggestions filter on it.
+    const selection = context.state.selection.main;
+    if (!selection.empty && selection.from === context.pos) {
+      const selectedText = context.state.sliceDoc(selection.from, selection.to);
+      if (!/[\]\n]/.test(selectedText)) {
+        query += selectedText;
+        to = selection.to;
+      }
+    }
+
     const lowered = query.toLowerCase();
 
     const options: Completion[] = normalizedPages
