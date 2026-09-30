@@ -28,7 +28,7 @@ import { taskAddMetadataGutter } from '../editor/extensions/taskAddMetadataGutte
 import { TaskMetadataPopover, type TaskMetadataValue } from './TaskMetadataPopover';
 import { parseTaskLine, serializeTaskLine, TASK_LINE_RE } from '../../../shared/tasks';
 import { admonitionWidget } from '../editor/extensions/admonitionWidget';
-import { typewriterScrollPlugin } from '../editor/extensions/typewriter';
+import { typewriterScroll } from '../editor/extensions/typewriter';
 import { dimmingPlugin, suppressDimmingEffect } from '../editor/extensions/dimming';
 import { createGrammarLint } from '../editor/extensions/grammar';
 import { smartTypographyExtension } from '../editor/extensions/smartTypography';
@@ -311,7 +311,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
           taskMetadataWidgetsPlugin, // Due date / recurrence / priority pills
           taskAddMetadataGutter, // "+" gutter marker for a bare task on the cursor's line
           admonitionWidget, // Admonition/Callout rendering
-          typewriterScrollPlugin, // Typewriter scrolling (cursor centered)
+          ...(settings.enableTypewriterScrolling ? [typewriterScroll] : []), // Typewriter scrolling (cursor centered)
           grammarLint.extension, // Grammar and style checking
           ...(enableDimming ? [dimmingPlugin] : []), // Paragraph dimming (optional)
           createSearchExtension(), // Search functionality
@@ -576,6 +576,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
       settings.checkCliches,
       settings.checkIntensify,
       settings.enableSmartTypography,
+      settings.enableTypewriterScrolling,
       currentFile,
       wikiPageSuggestions
     ]); // Re-create editor when file, mode, or grammar settings change (intentionally omit content to avoid resets on every keystroke)
