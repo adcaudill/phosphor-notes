@@ -7,6 +7,7 @@ import {
   updateGraphForFile,
   updateGraphForChangedFile,
   updateTasksForFile,
+  updateSearchIndexForFile,
   schedulePredictionModelUpdate
 } from '../indexer';
 import * as vaultReader from '../vaultReader';
@@ -110,6 +111,12 @@ async function afterNoteWritten(
     }
   } catch (err) {
     console.error('[MCP] post-write index refresh failed:', err);
+  }
+
+  // The search index has no readiness guard to respect: an update sent
+  // before the initial full index completes is queued by the worker.
+  for (const p of [...info.parentsCreated, rel]) {
+    await updateSearchIndexForFile(vaultPath, p);
   }
 
   try {

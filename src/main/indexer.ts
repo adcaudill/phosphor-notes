@@ -945,6 +945,47 @@ export function registerSearchResponseHandler(): void {
   });
 }
 /**
+ * Refresh a single note in the worker's full-text search index from disk
+ * (efficient incremental update). If the file no longer exists, its entry is
+ * removed instead, so search never returns a path that can't be read. Safe
+ * to call before the initial full index completes - the worker queues the
+ * update and applies it once the batch has been indexed.
+ */
+export async function updateSearchIndexForFile(vaultPath: string, filename: string): Promise<void> {
+  try {
+    if (!filename.endsWith('.md')) return;
+    if (!indexerWorker) return;
+    let content: string;
+    try {
+      content = await readMarkdownFile(join(vaultPath, filename), vaultPath);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') {
+        removeFromSearchIndex(filename);
+        return;
+      }
+      throw err;
+    }
+    indexerWorker?.postMessage({ type: 'index-file', filename, content });
+  } catch (err) {
+    safeError(`Failed to update search index for file: ${filename}`, err);
+  }
+}
+
+/**
+ * Remove a single note from the worker's full-text search index (on delete,
+ * or for the old path of a rename/move).
+ */
+export function removeFromSearchIndex(filename: string): void {
+  if (!filename.endsWith('.md')) return;
+  if (!indexerWorker) return;
+  try {
+    indexerWorker.postMessage({ type: 'remove-file', filename });
+  } catch (err) {
+    safeError(`Failed to remove file from search index: ${filename}`, err);
+  }
+}
+
+/**
  * Update tasks for a single changed file (efficient incremental update)
  */
 export async function updateTasksForFile(

@@ -14,6 +14,8 @@ import {
   updateTasksForFile,
   updateGraphForFile,
   updateGraphForChangedFile,
+  updateSearchIndexForFile,
+  removeFromSearchIndex,
   resetIndexState,
   TASKS_CACHE_VERSION
 } from './indexer';
@@ -59,6 +61,9 @@ const safeWarn = (msg: string, err?: unknown): void => {
     // Ignore EPIPE errors that occur during shutdown
   }
 };
+
+// Watcher paths use the platform separator; index ids always use '/'.
+const toVaultRelative = (filename: string): string => filename.replace(/\\/g, '/');
 
 // Local mirrors of the canonical vault state now owned by `vaultState.ts`,
 // kept in sync via its change event. This avoids having to rewrite the many
@@ -532,6 +537,7 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
         markInternalSave(); // Mark this as an internal save to avoid false conflict detection
         await updateTasksForFile(activeVaultPath, normalizedFilename, mainWindow);
         await updateGraphForFile(activeVaultPath, normalizedFilename, mainWindow);
+        await updateSearchIndexForFile(activeVaultPath, normalizedFilename);
         return { ok: true };
       } catch (err) {
         safeError('Failed to update task line:', err);
@@ -685,6 +691,11 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
       }
 
       await fsp.writeFile(filePath, buffer);
+
+      void updateSearchIndexForFile(
+        activeVaultPath,
+        toVaultRelative(path.relative(activeVaultPath, filePath))
+      );
 
       // If we created parent files, trigger a graph re-index
       if (parentFilesCreated.length > 0 && mainWindow && !mainWindow.isDestroyed()) {
@@ -883,6 +894,8 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
         await fsp.unlink(filePath);
       }
 
+      removeFromSearchIndex(normalized);
+
       // Notify renderer that the file was deleted
       try {
         if (mainWindow && !mainWindow.isDestroyed()) {
@@ -995,6 +1008,7 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
             try {
               await updateGraphForChangedFile(activeVaultPath, back, mainWindow);
               await updateTasksForFile(activeVaultPath, back, mainWindow);
+              await updateSearchIndexForFile(activeVaultPath, back);
             } catch (err) {
               safeWarn('Failed to update graph/tasks for backlink after move', err);
             }
@@ -1032,6 +1046,8 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
       try {
         await updateGraphForFile(activeVaultPath, newRelative, mainWindow);
         await updateTasksForFile(activeVaultPath, newRelative, mainWindow);
+        removeFromSearchIndex(normalized);
+        await updateSearchIndexForFile(activeVaultPath, newRelative);
       } catch (err) {
         safeWarn('Failed to update graph/tasks for moved file', err);
       }
@@ -1124,6 +1140,7 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
             try {
               await updateGraphForChangedFile(activeVaultPath, back, mainWindow);
               await updateTasksForFile(activeVaultPath, back, mainWindow);
+              await updateSearchIndexForFile(activeVaultPath, back);
             } catch (err) {
               safeWarn('Failed to update graph/tasks for backlink after rename', err);
             }
@@ -1161,6 +1178,8 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
       try {
         await updateGraphForFile(activeVaultPath, normalizedNew, mainWindow);
         await updateTasksForFile(activeVaultPath, normalizedNew, mainWindow);
+        removeFromSearchIndex(normalizedOld);
+        await updateSearchIndexForFile(activeVaultPath, normalizedNew);
       } catch (err) {
         safeWarn('Failed to update graph/tasks for renamed file', err);
       }
@@ -1477,15 +1496,18 @@ export async function openVaultPath(vaultPath: string, mainWindow: BrowserWindow
       (filename) => {
         // Update tasks for only the changed file (efficient incremental update)
         updateTasksForFile(vaultPath, filename, mainWindow);
+        updateSearchIndexForFile(vaultPath, toVaultRelative(filename));
         schedulePredictionModelUpdate(vaultPath, filename, mainWindow);
       },
       (filename) => {
         // Update graph for newly added files (efficient incremental update)
         updateGraphForFile(vaultPath, filename, mainWindow);
+        updateSearchIndexForFile(vaultPath, toVaultRelative(filename));
         schedulePredictionModelUpdate(vaultPath, filename, mainWindow);
       },
       (filename) => {
-        // Drop prediction stats for deleted files
+        // Drop prediction stats and search entries for deleted files
+        removeFromSearchIndex(toVaultRelative(filename));
         schedulePredictionModelUpdate(vaultPath, filename, mainWindow);
       }
     );

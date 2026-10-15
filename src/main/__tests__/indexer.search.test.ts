@@ -120,3 +120,66 @@ describe('indexer.searchAsync', () => {
     }
   });
 });
+
+describe('indexer incremental search index updates', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    delete global.__LAST_FAKE_WORKER__;
+  });
+
+  async function setup(readFile: ReturnType<typeof vi.fn>): Promise<{
+    indexer: typeof import('../indexer');
+    worker: EchoingFakeWorker;
+  }> {
+    vi.doMock('electron', () => ({ app: { getPath: () => '/tmp' } }));
+    vi.doMock('worker_threads', () => ({ Worker: EchoingFakeWorker }));
+    const fspMock: Partial<typeof import('fs').promises> = {
+      readdir: vi.fn().mockResolvedValue([]),
+      readFile: readFile as unknown as typeof import('fs').promises.readFile
+    };
+    vi.doMock('fs', () => ({ promises: fspMock, existsSync: vi.fn().mockReturnValue(true) }));
+
+    const mainWindow = {
+      isDestroyed: () => false,
+      webContents: { send: vi.fn() }
+    } as unknown as BrowserWindow;
+
+    const indexer = await import('../indexer');
+    await indexer.startIndexing('/vault', mainWindow);
+    const worker = global.__LAST_FAKE_WORKER__ as unknown as EchoingFakeWorker;
+    worker.posted.length = 0; // drop the initial batch
+    return { indexer, worker };
+  }
+
+  it('posts the current file content to the worker', async () => {
+    const { indexer, worker } = await setup(
+      vi.fn().mockResolvedValue(Buffer.from('Freshservice call'))
+    );
+    await indexer.updateSearchIndexForFile('/vault', '2026-10-01.md');
+    expect(worker.posted).toEqual([
+      { type: 'index-file', filename: '2026-10-01.md', content: 'Freshservice call' }
+    ]);
+  });
+
+  it('posts a removal when the file no longer exists', async () => {
+    const enoent = Object.assign(new Error('missing'), { code: 'ENOENT' });
+    const { indexer, worker } = await setup(vi.fn().mockRejectedValue(enoent));
+    await indexer.updateSearchIndexForFile('/vault', 'MissionWire.md');
+    expect(worker.posted).toEqual([{ type: 'remove-file', filename: 'MissionWire.md' }]);
+  });
+
+  it('posts a removal for removeFromSearchIndex', async () => {
+    const { indexer, worker } = await setup(vi.fn());
+    indexer.removeFromSearchIndex('MissionWire.md');
+    expect(worker.posted).toEqual([{ type: 'remove-file', filename: 'MissionWire.md' }]);
+  });
+
+  it('ignores non-markdown files', async () => {
+    const readFile = vi.fn();
+    const { indexer, worker } = await setup(readFile);
+    await indexer.updateSearchIndexForFile('/vault', '_assets/image.png');
+    indexer.removeFromSearchIndex('_assets/image.png');
+    expect(readFile).not.toHaveBeenCalled();
+    expect(worker.posted).toEqual([]);
+  });
+});

@@ -6,8 +6,10 @@ import { extractTasksFromContent, type Task } from '../../shared/tasks';
 // Load it dynamically to handle both ESM and CommonJS contexts
 let MiniSearch: unknown = null;
 
-// Dynamically import minisearch to avoid require() in ESM contexts
-(async () => {
+// Dynamically import minisearch to avoid require() in ESM contexts. Message
+// handlers await this so a batch arriving before the import settles doesn't
+// build a null search engine.
+const miniSearchLoaded = (async () => {
   try {
     const imported = await import('minisearch');
     if (typeof imported === 'object' && imported !== null && 'default' in imported) {
@@ -28,12 +30,23 @@ type Graph = Record<string, string[]>;
 export type { Task };
 
 // Minimal interface for the subset of MiniSearch used by this worker
-interface SearchEngine {
+export interface SearchEngine {
   search(query: string, options?: Record<string, unknown>): Array<Record<string, unknown>>;
   add(doc: Record<string, unknown>): void;
+  has(id: unknown): boolean;
+  replace(doc: Record<string, unknown>): void;
+  discard(id: unknown): void;
 }
 
 let searchEngine: SearchEngine | null = null;
+
+// Incremental updates (`index-file` / `remove-file`) that arrive before the
+// initial full batch has been indexed. The batch rebuilds the engine from
+// scratch, so applying these earlier would lose them; instead they're held
+// here (latest op per file wins) and replayed once the batch completes.
+// `null` content means "remove".
+let initialBatchIndexed = false;
+const pendingSearchUpdates = new Map<string, string | null>();
 
 /**
  * Extract tags from YAML frontmatter
@@ -170,6 +183,48 @@ const initSearch = (): void => {
   });
 };
 
+function buildSearchDoc(filename: string, content: string): Record<string, unknown> {
+  return {
+    id: filename,
+    title: filename.replace('.md', ''),
+    filename: filename,
+    content: content,
+    tags: extractTags(content).join(' ')
+  };
+}
+
+/**
+ * Insert or replace a single note in the search index. Exported for direct
+ * unit testing against a real MiniSearch instance.
+ */
+export function upsertSearchDoc(engine: SearchEngine, filename: string, content: string): void {
+  const doc = buildSearchDoc(filename, content);
+  if (engine.has(filename)) {
+    engine.replace(doc);
+  } else {
+    engine.add(doc);
+  }
+}
+
+/**
+ * Remove a single note from the search index, if present. Exported for
+ * direct unit testing against a real MiniSearch instance.
+ */
+export function removeSearchDoc(engine: SearchEngine, filename: string): void {
+  if (engine.has(filename)) {
+    engine.discard(filename);
+  }
+}
+
+function applySearchUpdate(filename: string, content: string | null): void {
+  if (!searchEngine) return;
+  if (content === null) {
+    removeSearchDoc(searchEngine, filename);
+  } else {
+    upsertSearchDoc(searchEngine, filename, content);
+  }
+}
+
 // Splits a query the same simple way MiniSearch's default tokenizer does
 // (non-word-character boundaries), for finding a snippet line that actually
 // contains something the search matched on - not necessarily the full
@@ -196,8 +251,33 @@ parentPort?.on(
     msg:
       | string
       | { type: string; query: string; requestId?: string; combineWith?: 'OR' | 'AND' }
+      | { type: 'index-file'; filename: string; content: string }
+      | { type: 'remove-file'; filename: string }
       | { vaultPath?: string; masterKey?: string }
   ) => {
+    await miniSearchLoaded;
+
+    // Handle incremental search index updates for a single note
+    if (
+      typeof msg === 'object' &&
+      msg !== null &&
+      'type' in msg &&
+      (msg.type === 'index-file' || msg.type === 'remove-file')
+    ) {
+      const update = msg as { type: string; filename: string; content?: string };
+      const content = update.type === 'index-file' ? (update.content ?? '') : null;
+      if (!initialBatchIndexed) {
+        pendingSearchUpdates.set(update.filename, content);
+        return;
+      }
+      try {
+        applySearchUpdate(update.filename, content);
+      } catch (err) {
+        console.error('[IndexerWorker] failed to update search index for', update.filename, err);
+      }
+      return;
+    }
+
     // Handle search queries
     if (
       typeof msg === 'object' &&
@@ -323,14 +403,7 @@ parentPort?.on(
 
             // Add to search index
             if (searchEngine) {
-              const tags = extractTags(content);
-              searchEngine.add({
-                id: filename,
-                title: filename.replace('.md', ''),
-                filename: filename,
-                content: content,
-                tags: tags.join(' ')
-              });
+              searchEngine.add(buildSearchDoc(filename, content));
             }
           } catch (err) {
             // ignore file read errors for robustness
@@ -338,6 +411,17 @@ parentPort?.on(
           }
         })
       );
+
+      // Replay incremental updates that arrived while the batch was pending
+      initialBatchIndexed = true;
+      for (const [filename, content] of pendingSearchUpdates) {
+        try {
+          applySearchUpdate(filename, content);
+        } catch (err) {
+          console.error('[IndexerWorker] failed to replay search update for', filename, err);
+        }
+      }
+      pendingSearchUpdates.clear();
 
       // Generate virtual temporal nodes for daily notes
       const virtualNodes = generateVirtualTemporalNodes(fileContents.map((f) => f.filename));
