@@ -361,6 +361,20 @@ describe('MCP server (integration)', () => {
     await client.close();
   });
 
+  it('masks SSNs and card numbers in tool output end-to-end', async () => {
+    const client = await makeClient(token);
+    const result = await client.callTool({
+      name: 'search_notes',
+      arguments: { query: '123-45-6789 4111 1111 1111 1111' }
+    });
+    expect(result.isError).toBeFalsy();
+    expect(result.structuredContent).toMatchObject({
+      results: [{ snippet: '...[REDACTED SSN] [REDACTED CARD]...' }]
+    });
+    expect(JSON.stringify(result.content)).not.toMatch(/6789|1111/);
+    await client.close();
+  });
+
   it('lists tasks with status and overdue filters end-to-end', async () => {
     const client = await makeClient(token);
 

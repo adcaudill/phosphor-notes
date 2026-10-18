@@ -1,11 +1,14 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { McpDeps } from './deps';
 import { auditLog } from './audit';
+import { redactText, redactValue } from './redact';
 
+/** All tool output passes through here (or `toErrorResult`), so PII is masked before it leaves the app. */
 export function toCallToolResult<T extends Record<string, unknown>>(data: T): CallToolResult {
+  const redacted = redactValue(data);
   return {
-    content: [{ type: 'text', text: JSON.stringify(data) }],
-    structuredContent: data
+    content: [{ type: 'text', text: JSON.stringify(redacted) }],
+    structuredContent: redacted
   };
 }
 
@@ -20,7 +23,7 @@ export class IndexNotReadyError extends Error {
 
 export function toErrorResult(code: string, message: string): CallToolResult {
   return {
-    content: [{ type: 'text', text: `${code}: ${message}` }],
+    content: [{ type: 'text', text: redactText(`${code}: ${message}`) }],
     isError: true
   };
 }
