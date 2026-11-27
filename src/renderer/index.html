@@ -12,6 +12,8 @@
 
   <body>
     <div id="root"></div>
+    <!-- Shows a readable error instead of a blank window if the app fails before it renders. Must load before the app bundle. -->
+    <script src="/startup-error.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
