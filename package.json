@@ -101,5 +101,10 @@
     "electron-winstaller@5.4.0": true,
     "fsevents@2.3.3": true,
     "esbuild@0.28.2": true
+  },
+  "overrides": {
+    "eslint-plugin-react": {
+      "eslint": "$eslint"
+    }
   }
 }
