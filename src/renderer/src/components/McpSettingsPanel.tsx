@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import type { McpActivityEntry, McpClientConfig, McpStatus } from '../../../types/phosphor.d';
+import type {
+  McpActivityEntry,
+  McpClientConfig,
+  McpNoteVersion,
+  McpStatus
+} from '../../../types/phosphor.d';
 import '../styles/McpSettingsPanel.css';
 
 const PRIVACY_DISCLOSURE =
@@ -11,16 +16,35 @@ const PRIVACY_DISCLOSURE =
 
 const WRITE_DISCLOSURE =
   'This lets connected AI apps change your vault, not just read it. They will be able to:\n' +
-  '  - create new notes (and replace a note if they explicitly ask to - a .bak backup of the ' +
-  'old version is kept next to it),\n' +
-  '  - add text to the end of existing notes,\n' +
-  '  - add tasks (by default to today’s daily note).\n\n' +
-  'They cannot delete, rename, or move notes, edit text in the middle of a note, or unlock the ' +
-  'vault. Changes happen immediately without asking you each time; if you have unsaved edits open ' +
-  'in the same note, Phosphor will show its usual conflict prompt. Content written into an ' +
-  'encrypted vault is encrypted like any other note.\n\n' +
+  '  - create new notes (and replace a note if they explicitly ask to),\n' +
+  '  - add text to the end of existing notes or under an existing bullet,\n' +
+  '  - add, complete, update, and delete tasks (new tasks go to today’s daily note by default).\n\n' +
+  'They cannot delete, rename, or move notes, edit other text already in a note (unless you also ' +
+  'allow editing below), or unlock the vault. Changes happen immediately without asking you each ' +
+  'time, but Phosphor keeps the previous version of every note an AI app changes, so you can ' +
+  'revert it from "Recent AI changes" below. AI apps are refused if you have unsaved edits open ' +
+  'in the same note. Content written into an encrypted vault is encrypted like any other note.\n\n' +
   'AI apps that are already connected may need to be restarted to see the new tools.\n\n' +
   'Allow AI apps to create and edit notes?';
+
+const EDIT_DISCLOSURE =
+  'This additionally lets connected AI apps change text that is already in your notes, not just ' +
+  'add to it. They will be able to:\n' +
+  '  - replace or remove specific passages, sections, and bullets,\n' +
+  '  - move sections and bullets around within a note,\n' +
+  '  - change frontmatter (title, tags, and other properties),\n' +
+  '  - restore an earlier version of a note they changed.\n\n' +
+  'Phosphor keeps the previous version of every note an AI app changes (see "Recent AI changes" ' +
+  'below), so any change can be reverted. AI apps still cannot delete, rename, or move whole ' +
+  'notes, and they are refused if you have unsaved edits open in the same note.\n\n' +
+  'Allow AI apps to edit existing text?';
+
+function parseFolderList(text: string): string[] {
+  return text
+    .split(/[\n,]/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
 
 function formatClientSnippet(config: McpClientConfig): string {
   const mcpRemoteJson = JSON.stringify(
@@ -47,9 +71,13 @@ export const McpSettingsPanel: React.FC = () => {
   const [clientConfig, setClientConfig] = useState<McpClientConfig | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [allowDraft, setAllowDraft] = useState('');
+  const [denyDraft, setDenyDraft] = useState('');
+  const [versions, setVersions] = useState<McpNoteVersion[]>([]);
 
   const refreshActivity = useCallback(() => {
     window.phosphor.mcpGetActivity().then(setActivity).catch(console.error);
+    window.phosphor.mcpListVersions(20).then(setVersions).catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -58,13 +86,22 @@ export const McpSettingsPanel: React.FC = () => {
       .then((s) => {
         setStatus(s);
         setPortDraft(String(s.port));
+        setAllowDraft(s.writeAllowFolders.join('\n'));
+        setDenyDraft(s.writeDenyFolders.join('\n'));
       })
       .catch(console.error);
     refreshActivity();
 
     const unsubscribe = window.phosphor.onMcpStatusChange((s) => {
       setStatus(s);
-      setPortDraft((prev) => (document.activeElement?.id === 'mcp-port' ? prev : String(s.port)));
+      const focused = document.activeElement?.id;
+      setPortDraft((prev) => (focused === 'mcp-port' ? prev : String(s.port)));
+      setAllowDraft((prev) =>
+        focused === 'mcp-allow-folders' ? prev : s.writeAllowFolders.join('\n')
+      );
+      setDenyDraft((prev) =>
+        focused === 'mcp-deny-folders' ? prev : s.writeDenyFolders.join('\n')
+      );
     });
     return unsubscribe;
   }, [refreshActivity]);
@@ -107,6 +144,65 @@ export const McpSettingsPanel: React.FC = () => {
       console.error('Failed to toggle MCP write access:', err);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleEditToggle = async (checked: boolean): Promise<void> => {
+    if (checked && !window.confirm(EDIT_DISCLOSURE)) return;
+    setBusy(true);
+    try {
+      const next = await window.phosphor.mcpSetEditEnabled(checked);
+      setStatus(next);
+    } catch (err) {
+      console.error('Failed to toggle MCP edit access:', err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleScopeBlur = async (): Promise<void> => {
+    if (!status) return;
+    const allow = parseFolderList(allowDraft);
+    const deny = parseFolderList(denyDraft);
+    if (
+      allow.join('\n') === status.writeAllowFolders.join('\n') &&
+      deny.join('\n') === status.writeDenyFolders.join('\n')
+    ) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const next = await window.phosphor.mcpSetWriteScope(allow, deny);
+      setStatus(next);
+      // Show the normalized result (e.g. trailing slashes and duplicates removed).
+      setAllowDraft(next.writeAllowFolders.join('\n'));
+      setDenyDraft(next.writeDenyFolders.join('\n'));
+    } catch (err) {
+      console.error('Failed to update MCP write scope:', err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRevert = async (version: McpNoteVersion): Promise<void> => {
+    if (
+      !window.confirm(
+        `Revert "${version.path}" to how it was before this change (${version.tool}, ` +
+          `${new Date(version.ts).toLocaleString()})?\n\nIts current content will be saved first, so ` +
+          'you can undo the revert the same way.'
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await window.phosphor.mcpRestoreVersion(version.id);
+    } catch (err) {
+      console.error('Failed to revert note:', err);
+      window.alert('Could not revert the note. Is the vault open and unlocked?');
+    } finally {
+      setBusy(false);
+      refreshActivity();
     }
   };
 
@@ -174,9 +270,11 @@ export const McpSettingsPanel: React.FC = () => {
       <p className="setting-hint">
         Let AI apps that support the Model Context Protocol (Claude Desktop, Claude Code, etc.)
         connect to this vault over a local, token-authenticated connection. Off by default.{' '}
-        {status.writeEnabled
-          ? 'Read and write: connected AI apps can create notes and append to existing ones, but cannot delete, rename, or unlock anything.'
-          : 'Read-only: connected AI apps can read but not change your vault.'}
+        {status.editEnabled
+          ? 'Read, write, and edit: connected AI apps can create notes, add to them, and edit existing text, but cannot delete, rename, or move notes, or unlock anything.'
+          : status.writeEnabled
+            ? 'Read and write: connected AI apps can create notes and append to existing ones, but cannot edit existing text, delete, rename, or unlock anything.'
+            : 'Read-only: connected AI apps can read but not change your vault.'}
       </p>
 
       <div className="setting-item setting-checkbox">
@@ -206,6 +304,52 @@ export const McpSettingsPanel: React.FC = () => {
         {!status.enabled && <p className="setting-hint">Turn on the MCP server first.</p>}
       </div>
 
+      <div className="setting-item setting-checkbox mcp-subsetting mcp-subsetting-nested">
+        <label htmlFor="mcp-edit-enabled">
+          <input
+            id="mcp-edit-enabled"
+            type="checkbox"
+            checked={status.editEnabled}
+            disabled={busy || !status.writeEnabled}
+            onChange={(e) => handleEditToggle(e.target.checked)}
+          />
+          Also allow editing existing text (replace and remove passages, sections, and frontmatter)
+        </label>
+        {status.enabled && !status.writeEnabled && (
+          <p className="setting-hint">Allow creating and adding to notes first.</p>
+        )}
+      </div>
+
+      {status.writeEnabled && (
+        <div className="setting-item mcp-subsetting">
+          <label htmlFor="mcp-allow-folders">Only allow changes in these folders</label>
+          <textarea
+            id="mcp-allow-folders"
+            rows={2}
+            placeholder="One folder per line, e.g. Inbox. Leave empty for the whole vault."
+            value={allowDraft}
+            disabled={busy}
+            onChange={(e) => setAllowDraft(e.target.value)}
+            onBlur={() => void handleScopeBlur()}
+          />
+          <label htmlFor="mcp-deny-folders">Never allow changes in these folders</label>
+          <textarea
+            id="mcp-deny-folders"
+            rows={2}
+            placeholder="One folder per line, e.g. Private"
+            value={denyDraft}
+            disabled={busy}
+            onChange={(e) => setDenyDraft(e.target.value)}
+            onBlur={() => void handleScopeBlur()}
+          />
+          <p className="setting-hint">
+            A folder includes its subfolders and its own index note (e.g. People.md for People).
+            Excluded folders win over allowed ones. Today&apos;s daily note lives at the top of the
+            vault, so limiting changes to folders also stops AI apps adding tasks to it.
+          </p>
+        </div>
+      )}
+
       <div className="mcp-status-row">
         <span
           className={`mcp-status-dot ${status.listening ? 'ok' : status.enabled ? 'warn' : ''}`}
@@ -217,7 +361,14 @@ export const McpSettingsPanel: React.FC = () => {
       </div>
       {status.enabled && (
         <div className="mcp-status-row mcp-status-secondary">
-          <span>Access: {status.writeEnabled ? 'read and write' : 'read-only'}</span>
+          <span>
+            Access:{' '}
+            {status.editEnabled
+              ? 'read, write, and edit'
+              : status.writeEnabled
+                ? 'read and write'
+                : 'read-only'}
+          </span>
         </div>
       )}
 
@@ -277,6 +428,44 @@ export const McpSettingsPanel: React.FC = () => {
                 </button>
               </div>
             </>
+          )}
+        </div>
+      )}
+
+      {(status.writeEnabled || versions.length > 0) && (
+        <div className="setting-item">
+          <div className="mcp-activity-header">
+            <label>Recent AI changes</label>
+            <button type="button" className="mcp-btn-secondary" onClick={refreshActivity}>
+              Refresh
+            </button>
+          </div>
+          <p className="setting-hint">
+            Each entry is a note as it was just before an AI app changed it. Reverting saves the
+            current content first, so a revert can be undone too. Kept for 30 days.
+          </p>
+          {versions.length === 0 ? (
+            <p className="setting-hint">No changes yet.</p>
+          ) : (
+            <ul className="mcp-activity-list">
+              {versions.map((version) => (
+                <li key={version.id} className="ok">
+                  <span className="mcp-activity-time">{new Date(version.ts).toLocaleString()}</span>
+                  <span className="mcp-activity-tool">
+                    {version.tool}
+                    <span className="mcp-activity-target"> {version.path}</span>
+                  </span>
+                  <button
+                    type="button"
+                    className="mcp-btn-secondary"
+                    disabled={busy}
+                    onClick={() => void handleRevert(version)}
+                  >
+                    Revert
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       )}

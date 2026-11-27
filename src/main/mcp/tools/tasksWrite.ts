@@ -126,7 +126,8 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
         line: z.number(),
         completedLine: z.string(),
         nextLine: z.string().optional(),
-        nextLineNumber: z.number().optional()
+        nextLineNumber: z.number().optional(),
+        versionId: z.string().optional()
       },
       annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
     },
@@ -149,7 +150,8 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
           line: result.line,
           completedLine,
           nextLine: nextLine ?? undefined,
-          nextLineNumber: nextLine ? line + 1 : undefined
+          nextLineNumber: nextLine ? line + 1 : undefined,
+          versionId: result.versionId
         };
       },
       (args) => args.file
@@ -177,7 +179,12 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
         priority: z.enum(['high', 'medium', 'low', 'none']).optional(),
         status: z.enum(['todo', 'doing', 'done']).optional()
       },
-      outputSchema: { path: z.string(), line: z.number(), taskLine: z.string() },
+      outputSchema: {
+        path: z.string(),
+        line: z.number(),
+        taskLine: z.string(),
+        versionId: z.string().optional()
+      },
       annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
     },
     withVaultWriteGuard(
@@ -251,7 +258,7 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
           [taskLine],
           ctx
         );
-        return { path: result.path, line: result.line, taskLine };
+        return { path: result.path, line: result.line, taskLine, versionId: result.versionId };
       },
       (args) => args.file
     )
@@ -270,7 +277,12 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
         rawText: z.string(),
         due: z.union([z.string().regex(DUE_DATE_RE), z.literal('')])
       },
-      outputSchema: { path: z.string(), line: z.number(), taskLine: z.string() },
+      outputSchema: {
+        path: z.string(),
+        line: z.number(),
+        taskLine: z.string(),
+        versionId: z.string().optional()
+      },
       annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
     },
     withVaultWriteGuard(
@@ -298,7 +310,7 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
           [taskLine],
           ctx
         );
-        return { path: result.path, line: result.line, taskLine };
+        return { path: result.path, line: result.line, taskLine, versionId: result.versionId };
       },
       (args) => args.file
     )
@@ -315,7 +327,7 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
         line: z.number().int().min(1),
         rawText: z.string()
       },
-      outputSchema: { path: z.string() },
+      outputSchema: { path: z.string(), versionId: z.string().optional() },
       annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: true }
     },
     withVaultWriteGuard(
@@ -324,7 +336,7 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
       async ({ file, line, rawText }: { file: string; line: number; rawText: string }, ctx) => {
         requireTaskLine(rawText);
         const result = await deps.replaceLines(file, { line, expectedText: rawText }, [], ctx);
-        return { path: result.path };
+        return { path: result.path, versionId: result.versionId };
       },
       (args) => args.file
     )

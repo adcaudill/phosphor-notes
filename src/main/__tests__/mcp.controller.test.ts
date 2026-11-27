@@ -151,4 +151,50 @@ describe('mcpController', () => {
       fs.rmSync(vaultDir, { recursive: true, force: true });
     }
   });
+
+  it('edit access requires write access, and turning write (or the server) off clears it', async () => {
+    await mcpController.init(userDataDir);
+    await mcpController.setPort(await getEphemeralPort());
+    await mcpController.enable();
+
+    // Refused while write access is off.
+    expect((await mcpController.setEditEnabled(true)).editEnabled).toBe(false);
+
+    await mcpController.setWriteEnabled(true);
+    const withEdit = await mcpController.setEditEnabled(true);
+    expect(withEdit).toMatchObject({ writeEnabled: true, editEnabled: true });
+
+    // Turning write off must not leave edit access to silently come back later.
+    await mcpController.setWriteEnabled(false);
+    expect((await mcpController.setWriteEnabled(true)).editEnabled).toBe(false);
+
+    await mcpController.setEditEnabled(true);
+    await mcpController.disable();
+    const reEnabled = await mcpController.enable();
+    expect(reEnabled).toMatchObject({ writeEnabled: false, editEnabled: false });
+  });
+
+  it('normalizes and persists the folder write scope', async () => {
+    await mcpController.init(userDataDir);
+    const status = await mcpController.setWriteScope(
+      ['Inbox/', 'inbox', '../escape', 'Journal'],
+      ['Private']
+    );
+    expect(status.writeAllowFolders).toEqual(['Inbox', 'Journal']);
+    expect(status.writeDenyFolders).toEqual(['Private']);
+
+    const onDisk = JSON.parse(fs.readFileSync(getConfigPath(userDataDir), 'utf-8'));
+    expect(onDisk.writeAllowFolders).toEqual(['Inbox', 'Journal']);
+    expect(onDisk.writeDenyFolders).toEqual(['Private']);
+  });
+
+  it('never loads editEnabled from disk without writeEnabled', async () => {
+    fs.mkdirSync(path.dirname(getConfigPath(userDataDir)), { recursive: true });
+    fs.writeFileSync(
+      getConfigPath(userDataDir),
+      JSON.stringify({ enabled: false, writeEnabled: false, editEnabled: true })
+    );
+    await mcpController.init(userDataDir);
+    expect((await mcpController.getStatus()).editEnabled).toBe(false);
+  });
 });

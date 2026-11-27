@@ -3,6 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpDeps } from '../deps';
 import { withVaultGuard } from '../toolkit';
 import { extractFrontmatter } from '../../../renderer/src/utils/frontmatterUtils';
+import { contentHash } from '../../contentHash';
 
 function titleFromPath(relPath: string): string {
   const withoutExt = relPath.replace(/\.md$/i, '');
@@ -60,7 +61,9 @@ export function registerNoteTools(server: McpServer, deps: McpDeps): void {
       description:
         'Read the full content of one note by its vault-relative path (as returned by ' +
         'list_notes), including its parsed frontmatter. Reads only what is saved to disk - ' +
-        'unsaved edits open in the Phosphor Notes editor are not reflected here.',
+        'unsaved edits open in the Phosphor Notes editor are not reflected here. Also returns ' +
+        '`hash`, an opaque version token for the whole note: pass it back as `expectedHash` to ' +
+        'any write tool so the write is refused (NOTE_CHANGED) if the note changed since you read it.',
       inputSchema: {
         path: z.string().describe('Vault-relative path, e.g. "People/John.md"'),
         maxChars: z.number().int().min(1).max(500_000).optional().default(100_000)
@@ -70,7 +73,8 @@ export function registerNoteTools(server: McpServer, deps: McpDeps): void {
         title: z.string(),
         frontmatter: z.record(z.string(), z.unknown()).nullable(),
         content: z.string(),
-        truncated: z.boolean()
+        truncated: z.boolean(),
+        hash: z.string()
       },
       annotations: { readOnlyHint: true, openWorldHint: false }
     },
@@ -87,7 +91,8 @@ export function registerNoteTools(server: McpServer, deps: McpDeps): void {
           title: titleFromPath(relPath),
           frontmatter: frontmatter ? frontmatter.content : null,
           content: truncated ? raw.slice(0, limit) : raw,
-          truncated
+          truncated,
+          hash: contentHash(raw)
         };
       }
     )

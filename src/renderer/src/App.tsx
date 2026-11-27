@@ -598,7 +598,22 @@ function AppContent(): React.JSX.Element {
       return false;
     });
 
+    // Before an AI (MCP) write, main asks whether the target note is open here
+    // with unsaved edits, and refuses the write if so rather than racing our
+    // autosave. Paths are compared slash- and case-insensitively, erring
+    // toward "dirty" (a refused write the AI can retry) over a lost edit.
+    const normalizeNotePath = (p: string): string => p.replace(/\\/g, '/').toLowerCase();
+    const unsubscribeDirtyQuery = window.phosphor.onQueryNoteDirty?.((relPath) => {
+      const { currentFile, isDirty } = latestRef.current;
+      return (
+        isDirty &&
+        currentFile !== null &&
+        normalizeNotePath(currentFile) === normalizeNotePath(relPath)
+      );
+    });
+
     return () => {
+      if (unsubscribeDirtyQuery) unsubscribeDirtyQuery();
       window.removeEventListener('keydown', handleKeyDown);
       if (unsubscribe) unsubscribe();
       if (unsubscribeTasks) unsubscribeTasks();

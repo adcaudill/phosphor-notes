@@ -21,6 +21,12 @@ export interface McpStatus {
   vaultReadable: boolean;
   /** A second, separate opt-in from `enabled` - true only when both the server and write access are on. */
   writeEnabled: boolean;
+  /** A third opt-in on top of write access: editing/removing existing text in place. True only when the server, write access, and edit access are all on. */
+  editEnabled: boolean;
+  /** Folders AI writes are limited to (empty = whole vault). */
+  writeAllowFolders: string[];
+  /** Folders AI writes may never touch (wins over writeAllowFolders). */
+  writeDenyFolders: string[];
 }
 
 export interface McpActivityEntry {
@@ -32,6 +38,20 @@ export interface McpActivityEntry {
   target?: string;
   /** True for a create/append/add-task style call, so the UI can badge it distinctly from a read. */
   write?: boolean;
+  /** Note-history id of the version this write replaced, if any. */
+  versionId?: string;
+}
+
+/** A saved version of a note, recorded just before an AI (MCP) write replaced it. */
+export interface McpNoteVersion {
+  id: string;
+  /** When the version was replaced (ISO timestamp). */
+  ts: string;
+  path: string;
+  /** What replaced it, e.g. "edit_note". */
+  tool: string;
+  summary?: string;
+  size: number;
 }
 
 export interface McpClientConfig {
@@ -83,6 +103,8 @@ export interface PhosphorAPI {
   onFileDeleted: (cb: (filename: string) => void) => () => void;
   onFileAdded: (cb: (filename: string) => void) => () => void;
   onCheckUnsavedChanges: (cb: (hasUnsaved: boolean) => boolean) => () => void;
+  /** Answers main's pre-MCP-write check: is `relPath` open in the editor with unsaved edits? */
+  onQueryNoteDirty: (cb: (relPath: string) => boolean) => () => void;
   getLatestGraph: () => Promise<Record<string, string[]> | null>;
   search: (
     query: string
@@ -140,10 +162,14 @@ export interface PhosphorAPI {
   mcpSetEnabled: (enabled: boolean) => Promise<McpStatus>;
   /** Refused (status unchanged) if the server itself is disabled - enable it first. */
   mcpSetWriteEnabled: (enabled: boolean) => Promise<McpStatus>;
+  mcpSetEditEnabled: (enabled: boolean) => Promise<McpStatus>;
+  mcpSetWriteScope: (allow: string[], deny: string[]) => Promise<McpStatus>;
   mcpSetPort: (port: number) => Promise<McpStatus>;
   /** Generates a new token and returns the plaintext ONCE - only its hash is persisted. */
   mcpRegenerateToken: () => Promise<string>;
   mcpGetActivity: () => Promise<McpActivityEntry[]>;
+  mcpListVersions: (limit?: number) => Promise<McpNoteVersion[]>;
+  mcpRestoreVersion: (id: string) => Promise<{ path: string; versionId?: string }>;
   mcpGetClientConfig: (token: string) => Promise<McpClientConfig>;
   onMcpStatusChange: (cb: (status: McpStatus) => void) => () => void;
 

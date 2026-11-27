@@ -14,7 +14,10 @@ export function registerStatusTool(server: McpServer, deps: McpDeps): void {
         'Report whether a Phosphor Notes vault is open, encrypted, and currently unlocked/readable. ' +
         'This is the only tool that works when the vault is locked or no vault is open - call it ' +
         'first, and if `readable` is false, ask the user to open or unlock the vault in the Phosphor ' +
-        'Notes app before calling any other tool. There is no tool to unlock the vault remotely.',
+        'Notes app before calling any other tool. There is no tool to unlock the vault remotely. ' +
+        '`access` says what the user lets you change: `write` (create notes, add content, edit ' +
+        'tasks), `edit` (also edit or remove existing text in place), and the folders writes are ' +
+        'limited to (`writeAllowFolders`, empty = whole vault) or excluded from (`writeDenyFolders`).',
       outputSchema: {
         open: z.boolean(),
         vaultName: z.string().nullable(),
@@ -22,7 +25,13 @@ export function registerStatusTool(server: McpServer, deps: McpDeps): void {
         locked: z.boolean(),
         readable: z.boolean(),
         indexReady: z.boolean(),
-        appVersion: z.string()
+        appVersion: z.string(),
+        access: z.object({
+          write: z.boolean(),
+          edit: z.boolean(),
+          writeAllowFolders: z.array(z.string()),
+          writeDenyFolders: z.array(z.string())
+        })
       },
       annotations: { readOnlyHint: true, openWorldHint: false }
     },
@@ -39,7 +48,13 @@ export function registerStatusTool(server: McpServer, deps: McpDeps): void {
         locked: open && encrypted && !readable,
         readable,
         indexReady: deps.isIndexReady(),
-        appVersion: deps.getAppVersion()
+        appVersion: deps.getAppVersion(),
+        access: {
+          write: deps.isWriteEnabled(),
+          edit: deps.isEditEnabled(),
+          writeAllowFolders: deps.getWriteScope().allow,
+          writeDenyFolders: deps.getWriteScope().deny
+        }
       });
     }
   );

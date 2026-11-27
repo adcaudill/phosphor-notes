@@ -1,5 +1,8 @@
 import { promises as fsp } from 'fs';
 import * as path from 'path';
+import { writeFileAtomic } from './atomicWrite';
+import { contentHash } from './contentHash';
+import { recordSnapshot, readVersion } from './noteHistory';
 import { encryptBuffer, isEncrypted } from './crypto';
 import * as vaultState from './vaultState';
 import { resolveWritableNotePath } from './vaultPaths';
@@ -63,6 +66,68 @@ export class LineMismatchError extends Error {
   }
 }
 
+/** The whole-note counterpart of LineMismatchError: the note's content hash no longer matches the `expectedHash` the caller read it with. */
+export class NoteChangedError extends Error {
+  constructor(public readonly relPath: string) {
+    super(
+      `${relPath} has changed since it was last read (its hash no longer matches expectedHash). Re-read it and retry.`
+    );
+    this.name = 'NoteChangedError';
+  }
+}
+
+/** Asks a write to save the version it replaces to the vault's note history (see noteHistory.ts). */
+export interface HistoryOption {
+  /** What is making the change, e.g. "edit_note". */
+  tool: string;
+  /** Short, content-free description of the change. */
+  summary?: string;
+}
+
+/**
+ * The common tail of every write in this module: encode for the vault,
+ * snapshot the bytes being replaced into note history (only when the caller
+ * asked for history and there was a previous version), then write
+ * atomically. Returns the history version id, if one was recorded.
+ */
+async function commitWrite(
+  vaultPath: string,
+  relPath: string,
+  absPath: string,
+  nextDoc: string,
+  o: {
+    previousRaw: Buffer | null;
+    forceEncrypt?: boolean;
+    expectedGeneration: number;
+    history?: HistoryOption;
+    exclusive?: boolean;
+  }
+): Promise<string | undefined> {
+  const buf = await encodeForVault(vaultPath, Buffer.from(nextDoc, 'utf-8'), {
+    forceEncrypt: o.forceEncrypt,
+    expectedGeneration: o.expectedGeneration
+  });
+  let versionId: string | undefined;
+  if (o.history && o.previousRaw) {
+    const entry = await recordSnapshot(vaultPath, {
+      path: relPath,
+      raw: o.previousRaw,
+      tool: o.history.tool,
+      summary: o.history.summary
+    });
+    versionId = entry.id;
+  }
+  await writeFileAtomic(absPath, buf, { exclusive: o.exclusive });
+  return versionId;
+}
+
+/** Throws NoteChangedError if `expectedHash` is given and doesn't match `doc`'s current content hash. */
+function checkExpectedHash(relPath: string, doc: string, expectedHash: string | undefined): void {
+  if (expectedHash !== undefined && contentHash(doc) !== expectedHash) {
+    throw new NoteChangedError(relPath);
+  }
+}
+
 const MAX_CREATE_BODY_CHARS = 200_000;
 const MAX_APPEND_CHARS = 100_000;
 
@@ -82,7 +147,7 @@ interface EncodeOptions {
  * generation check, key fetch, and `encryptBuffer` call all happen in one
  * synchronous section with no `await` between them, so a concurrent
  * `clearMasterKey()` (which zeroes the key buffer in place) cannot corrupt
- * the encryption. The caller must `fsp.writeFile` the result immediately,
+ * the encryption. The caller must write the result (via `writeFileAtomic`) immediately,
  * with no `await` in between.
  */
 export async function encodeForVault(
@@ -117,10 +182,13 @@ export async function encodeForVault(
  * another write can never be clobbered with an empty file, and skips (logs,
  * doesn't throw) a stub whose encoding fails - e.g. a locked encrypted
  * vault - rather than writing a plaintext stub into an encrypted vault.
+ * `canCreate`, if given, can veto individual stubs (e.g. ones outside an
+ * MCP client's permitted folders); vetoed stubs are skipped, not errors.
  */
 export async function ensureParentFilesExist(
   vaultPath: string,
-  absPath: string
+  absPath: string,
+  canCreate?: (relPath: string) => boolean
 ): Promise<string[]> {
   const relativePath = path.relative(vaultPath, absPath).split(path.sep).join('/');
   const parts = relativePath.split('/');
@@ -130,9 +198,10 @@ export async function ensureParentFilesExist(
   for (let i = 1; i < parts.length; i++) {
     const parentRel = parts.slice(0, i).join('/') + '.md';
     const parentAbs = path.join(vaultPath, parentRel);
+    if (canCreate && !canCreate(parentRel)) continue;
     try {
       const buf = await encodeForVault(vaultPath, Buffer.from('', 'utf-8'));
-      await fsp.writeFile(parentAbs, buf, { flag: 'wx' });
+      await writeFileAtomic(parentAbs, buf, { exclusive: true });
       created.push(parentRel);
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === 'EEXIST') continue;
@@ -184,13 +253,24 @@ export interface CreateNoteResult {
   overwritten: boolean;
   mode: NoteMode;
   parentsCreated: string[];
+  /** Only for overwrites without `history`: where the replaced version was backed up. */
   backupPath?: string;
+  /** Only for overwrites with `history`: the note-history id of the replaced version. */
+  versionId?: string;
+  /** Content hash of the note as written (see contentHash). */
+  hash: string;
 }
 
 export interface CreateNoteOptions {
   mode?: NoteMode;
   overwrite?: boolean;
   expectedGeneration: number;
+  /** On overwrite, save the replaced version to note history instead of a .bak file beside the note. */
+  history?: HistoryOption;
+  /** Only meaningful with overwrite: refuse (NoteChangedError) unless the existing note still has this content hash. */
+  expectedHash?: string;
+  /** Veto for auto-created parent stub notes (see ensureParentFilesExist). */
+  canCreateParent?: (relPath: string) => boolean;
 }
 
 /**
@@ -224,49 +304,71 @@ export async function createNote(
 
   return withFileLock(absPath, async () => {
     await fsp.mkdir(path.dirname(absPath), { recursive: true });
-    const parentsCreated = await ensureParentFilesExist(vaultPath, absPath);
+    const parentsCreated = await ensureParentFilesExist(vaultPath, absPath, opts.canCreateParent);
 
     if (!opts.overwrite) {
       const buf = await encodeForVault(vaultPath, Buffer.from(doc, 'utf-8'), {
         expectedGeneration: opts.expectedGeneration
       });
       try {
-        await fsp.writeFile(absPath, buf, { flag: 'wx' });
+        await writeFileAtomic(absPath, buf, { exclusive: true });
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
           throw new NoteAlreadyExistsError(relPath);
         }
         throw err;
       }
-      return { path: relPath, created: true, overwritten: false, mode, parentsCreated };
+      return {
+        path: relPath,
+        created: true,
+        overwritten: false,
+        mode,
+        parentsCreated,
+        hash: contentHash(doc)
+      };
     }
 
-    let backupPath: string | undefined;
-    let wasEncrypted = false;
+    let previousRaw: Buffer | null = null;
     try {
-      const raw = await fsp.readFile(absPath);
-      wasEncrypted = isEncrypted(raw);
-      const backupAbs = backupPathFor(absPath);
-      await fsp.writeFile(backupAbs, raw);
-      backupPath = path.relative(vaultPath, backupAbs).split(path.sep).join('/');
+      previousRaw = await fsp.readFile(absPath);
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
       // Nothing existed yet - this is really a create, not an overwrite.
     }
 
-    const buf = await encodeForVault(vaultPath, Buffer.from(doc, 'utf-8'), {
+    let backupPath: string | undefined;
+    const wasEncrypted = previousRaw !== null && isEncrypted(previousRaw);
+    if (previousRaw !== null) {
+      if (opts.expectedHash !== undefined) {
+        checkExpectedHash(
+          relPath,
+          decodeBuffer(previousRaw, absPath).toString('utf-8'),
+          opts.expectedHash
+        );
+      }
+      if (!opts.history) {
+        const backupAbs = backupPathFor(absPath);
+        await writeFileAtomic(backupAbs, previousRaw);
+        backupPath = path.relative(vaultPath, backupAbs).split(path.sep).join('/');
+      }
+    }
+
+    const versionId = await commitWrite(vaultPath, relPath, absPath, doc, {
+      previousRaw,
       forceEncrypt: wasEncrypted,
-      expectedGeneration: opts.expectedGeneration
+      expectedGeneration: opts.expectedGeneration,
+      history: opts.history
     });
-    await fsp.writeFile(absPath, buf);
 
     return {
       path: relPath,
-      created: backupPath === undefined,
-      overwritten: backupPath !== undefined,
+      created: previousRaw === null,
+      overwritten: previousRaw !== null,
       mode,
       parentsCreated,
-      backupPath
+      backupPath,
+      versionId,
+      hash: contentHash(doc)
     };
   });
 }
@@ -279,12 +381,22 @@ export interface AppendResult {
   parentsCreated: string[];
   /** 1-based line number of the last line of the final document - since `appended` is always the tail, this is also where it ends. A snapshot, like list_tasks' line numbers. */
   endLine: number;
+  /** Content hash of the note as written. */
+  hash: string;
+  /** Note-history id of the replaced version, when `history` was requested. */
+  versionId?: string;
 }
 
 export interface AppendToNoteOptions {
   expectedGeneration: number;
+  /** Save the version this write replaces to note history. */
+  history?: HistoryOption;
   /** If the note doesn't exist, create it with this frontmatter first instead of throwing NoteNotFoundError. */
   createIfMissing?: { frontmatter: string };
+  /** Refuse (NoteChangedError) unless the existing note still has this content hash. */
+  expectedHash?: string;
+  /** Veto for auto-created parent stub notes (see ensureParentFilesExist). */
+  canCreateParent?: (relPath: string) => boolean;
 }
 
 /**
@@ -325,7 +437,7 @@ export async function appendToNote(
         throw new NoteNotFoundError(relPath);
       }
       await fsp.mkdir(path.dirname(absPath), { recursive: true });
-      parentsCreated = await ensureParentFilesExist(vaultPath, absPath);
+      parentsCreated = await ensureParentFilesExist(vaultPath, absPath, opts.canCreateParent);
       doc = opts.createIfMissing.frontmatter + '\n';
       created = true;
     } else {
@@ -334,22 +446,34 @@ export async function appendToNote(
       // so a concurrent lock can't zero the key mid-decrypt.
       const decoded = decodeBuffer(raw, absPath);
       doc = decoded.toString('utf-8');
+      checkExpectedHash(relPath, doc, opts.expectedHash);
     }
 
     const mode = detectNoteMode(doc);
     const { doc: nextDoc, appended } = formatAppend(doc, addition, mode);
 
-    const buf = await encodeForVault(vaultPath, Buffer.from(nextDoc, 'utf-8'), {
+    const versionId = await commitWrite(vaultPath, relPath, absPath, nextDoc, {
+      previousRaw: raw,
       forceEncrypt: wasEncrypted,
-      expectedGeneration: opts.expectedGeneration
+      expectedGeneration: opts.expectedGeneration,
+      history: opts.history,
+      exclusive: created
     });
-    await fsp.writeFile(absPath, buf, created ? { flag: 'wx' } : undefined);
 
     // nextDoc always ends in exactly one trailing newline, so trimming it
     // before counting gives the 1-based line number of the last real line.
     const endLine = nextDoc.replace(/\n$/, '').split('\n').length;
 
-    return { path: relPath, created, mode, appended, parentsCreated, endLine };
+    return {
+      path: relPath,
+      created,
+      mode,
+      appended,
+      parentsCreated,
+      endLine,
+      hash: contentHash(nextDoc),
+      versionId
+    };
   });
 }
 
@@ -358,10 +482,16 @@ export interface ReplaceLinesResult {
   line: number;
   /** newLines.length - 1: positive when the replacement grew the file (e.g. a recurring task's completion inserting a next-occurrence line), negative if it shrank it. */
   linesAdded: number;
+  /** Content hash of the note as written. */
+  hash: string;
+  /** Note-history id of the replaced version, when `history` was requested. */
+  versionId?: string;
 }
 
 export interface ReplaceLinesOptions {
   expectedGeneration: number;
+  /** Save the version this write replaces to note history. */
+  history?: HistoryOption;
 }
 
 /**
@@ -410,13 +540,20 @@ export async function replaceLines(
     const nextLines = [...lines.slice(0, idx), ...newLines, ...lines.slice(idx + 1)];
     const nextDoc = nextLines.join('\n');
 
-    const buf = await encodeForVault(vaultPath, Buffer.from(nextDoc, 'utf-8'), {
+    const versionId = await commitWrite(vaultPath, relPath, absPath, nextDoc, {
+      previousRaw: raw,
       forceEncrypt: wasEncrypted,
-      expectedGeneration: opts.expectedGeneration
+      expectedGeneration: opts.expectedGeneration,
+      history: opts.history
     });
-    await fsp.writeFile(absPath, buf);
 
-    return { path: relPath, line: target.line, linesAdded: newLines.length - 1 };
+    return {
+      path: relPath,
+      line: target.line,
+      linesAdded: newLines.length - 1,
+      hash: contentHash(nextDoc),
+      versionId
+    };
   });
 }
 
@@ -426,11 +563,19 @@ export interface InsertUnderBulletResult {
   matchedLine: number;
   matchedText: string;
   appended: string;
+  /** Content hash of the note as written. */
+  hash: string;
+  /** Note-history id of the replaced version, when `history` was requested. */
+  versionId?: string;
 }
 
 export interface InsertUnderBulletOptions {
   expectedGeneration: number;
+  /** Save the version this write replaces to note history. */
+  history?: HistoryOption;
   occurrence?: number;
+  /** Refuse (NoteChangedError) unless the note still has this content hash. */
+  expectedHash?: string;
 }
 
 /**
@@ -466,23 +611,100 @@ export async function insertUnderBullet(
     // so a concurrent lock can't zero the key mid-decrypt.
     const decoded = decodeBuffer(raw, absPath);
     const doc = decoded.toString('utf-8');
+    checkExpectedHash(relPath, doc, opts.expectedHash);
 
     const result = formatInsertUnderBullet(doc, matchText, addition, {
       occurrence: opts.occurrence
     });
 
-    const buf = await encodeForVault(vaultPath, Buffer.from(result.doc, 'utf-8'), {
+    const versionId = await commitWrite(vaultPath, relPath, absPath, result.doc, {
+      previousRaw: raw,
       forceEncrypt: wasEncrypted,
-      expectedGeneration: opts.expectedGeneration
+      expectedGeneration: opts.expectedGeneration,
+      history: opts.history
     });
-    await fsp.writeFile(absPath, buf);
 
     return {
       path: relPath,
       mode: 'outliner',
       matchedLine: result.matchedLine,
       matchedText: result.matchedText,
-      appended: result.appended
+      appended: result.appended,
+      hash: contentHash(result.doc),
+      versionId
+    };
+  });
+}
+
+export interface RestoreVersionResult {
+  path: string;
+  /** The history id that was restored. */
+  restoredFrom: string;
+  /** History id of the version the restore replaced (so the restore itself can be undone). */
+  versionId?: string;
+  /** True if the note no longer existed and the restore recreated it. */
+  created: boolean;
+  hash: string;
+}
+
+export interface RestoreVersionOptions {
+  expectedGeneration: number;
+  /** Refuse (NoteChangedError) unless the note's current content still has this hash. */
+  expectedHash?: string;
+  history?: HistoryOption;
+  /** Called with the version's note path before anything is written - e.g. to enforce an MCP write scope. */
+  beforeWrite?: (relPath: string) => Promise<void>;
+}
+
+/**
+ * Restores a note to a version saved in note history. The snapshot is
+ * decoded and re-encoded for the vault's current state rather than written
+ * back byte-for-byte, so a version saved before encryption was turned on is
+ * never restored as plaintext into a now-encrypted vault. The version being
+ * replaced is itself saved to history (when `history` is given), so a
+ * restore can be undone the same way.
+ */
+export async function restoreVersion(
+  vaultPath: string,
+  id: string,
+  opts: RestoreVersionOptions
+): Promise<RestoreVersionResult> {
+  const { entry, raw: snapshotRaw } = await readVersion(vaultPath, id);
+  await opts.beforeWrite?.(entry.path);
+  const absPath = await resolveWritableNotePath(vaultPath, entry.path);
+
+  return withFileLock(absPath, async () => {
+    let currentRaw: Buffer | null = null;
+    try {
+      currentRaw = await fsp.readFile(absPath);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+    }
+    if (currentRaw !== null) {
+      checkExpectedHash(
+        entry.path,
+        decodeBuffer(currentRaw, absPath).toString('utf-8'),
+        opts.expectedHash
+      );
+    } else {
+      await fsp.mkdir(path.dirname(absPath), { recursive: true });
+    }
+
+    const restoredDoc = decodeBuffer(snapshotRaw, absPath).toString('utf-8');
+    const versionId = await commitWrite(vaultPath, entry.path, absPath, restoredDoc, {
+      previousRaw: currentRaw,
+      forceEncrypt: isEncrypted(snapshotRaw) || (currentRaw !== null && isEncrypted(currentRaw)),
+      expectedGeneration: opts.expectedGeneration,
+      history: opts.history,
+      exclusive: currentRaw === null
+    });
+
+    return {
+      path: entry.path,
+      restoredFrom: id,
+      versionId,
+      created: currentRaw === null,
+      hash: contentHash(restoredDoc)
     };
   });
 }

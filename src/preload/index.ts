@@ -4,7 +4,8 @@ import type {
   UserSettings,
   McpStatus,
   McpActivityEntry,
-  McpClientConfig
+  McpClientConfig,
+  McpNoteVersion
 } from '../types/phosphor';
 import type { PredictionModelSnapshot } from '../shared/predictionModel';
 
@@ -131,6 +132,25 @@ const api = {
     return () => ipcRenderer.removeListener('app:check-unsaved-changes', handler);
   },
 
+  // Answer the main process's "is this note open with unsaved edits?" check,
+  // made before an AI (MCP) write so it doesn't race the user's own autosave.
+  onQueryNoteDirty: (cb: (relPath: string) => boolean) => {
+    const handler = (
+      _event: IpcRendererEvent,
+      payload: { requestId: number; path: string }
+    ): void => {
+      let dirty = false;
+      try {
+        dirty = cb(payload.path) === true;
+      } catch (err) {
+        console.error('onQueryNoteDirty callback failed:', err);
+      }
+      ipcRenderer.send('mcp:note-dirty-result', { requestId: payload.requestId, dirty });
+    };
+    ipcRenderer.on('mcp:query-note-dirty', handler);
+    return () => ipcRenderer.removeListener('mcp:query-note-dirty', handler);
+  },
+
   getDailyNoteFilename: () => {
     const today = new Date();
     // Use local date components to avoid UTC-based rollovers
@@ -213,9 +233,16 @@ const api = {
   mcpGetStatus: () => ipcRenderer.invoke('mcp:get-status'),
   mcpSetEnabled: (enabled: boolean) => ipcRenderer.invoke('mcp:set-enabled', enabled),
   mcpSetWriteEnabled: (enabled: boolean) => ipcRenderer.invoke('mcp:set-write-enabled', enabled),
+  mcpSetEditEnabled: (enabled: boolean) => ipcRenderer.invoke('mcp:set-edit-enabled', enabled),
+  mcpSetWriteScope: (allow: string[], deny: string[]) =>
+    ipcRenderer.invoke('mcp:set-write-scope', allow, deny),
   mcpSetPort: (port: number) => ipcRenderer.invoke('mcp:set-port', port),
   mcpRegenerateToken: (): Promise<string> => ipcRenderer.invoke('mcp:regenerate-token'),
   mcpGetActivity: (): Promise<McpActivityEntry[]> => ipcRenderer.invoke('mcp:get-activity'),
+  mcpListVersions: (limit?: number): Promise<McpNoteVersion[]> =>
+    ipcRenderer.invoke('mcp:list-versions', limit),
+  mcpRestoreVersion: (id: string): Promise<{ path: string; versionId?: string }> =>
+    ipcRenderer.invoke('mcp:restore-version', id),
   mcpGetClientConfig: (token: string): Promise<McpClientConfig> =>
     ipcRenderer.invoke('mcp:get-client-config', token),
   onMcpStatusChange: (cb: (status: McpStatus) => void) => {

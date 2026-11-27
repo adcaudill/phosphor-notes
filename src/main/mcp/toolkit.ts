@@ -1,7 +1,17 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { McpDeps } from './deps';
+import type { McpDeps, WriteCtx } from './deps';
 import { auditLog } from './audit';
-import { redactText, redactValue } from './redact';
+import { assertNoRedactionMasks, redactText, redactValue } from './redact';
+
+/** Every string anywhere inside a tool's arguments (nested objects/arrays included). */
+function collectStrings(value: unknown, out: string[] = []): string[] {
+  if (typeof value === 'string') out.push(value);
+  else if (Array.isArray(value)) value.forEach((v) => collectStrings(v, out));
+  else if (value !== null && typeof value === 'object') {
+    Object.values(value).forEach((v) => collectStrings(v, out));
+  }
+  return out;
+}
 
 /** All tool output passes through here (or `toErrorResult`), so PII is masked before it leaves the app. */
 export function toCallToolResult<T extends Record<string, unknown>>(data: T): CallToolResult {
@@ -58,6 +68,16 @@ function errorCodeFor(err: unknown): string {
         return 'AMBIGUOUS_MATCH';
       case 'LineMismatchError':
         return 'LINE_MISMATCH';
+      case 'NoteChangedError':
+        return 'NOTE_CHANGED';
+      case 'RedactedContentError':
+        return 'REDACTED_CONTENT';
+      case 'PathNotInWriteScopeError':
+        return 'PATH_NOT_IN_WRITE_SCOPE';
+      case 'NoteHasUnsavedEditsError':
+        return 'NOTE_HAS_UNSAVED_EDITS';
+      case 'VersionNotFoundError':
+        return 'VERSION_NOT_FOUND';
       default:
         return 'INTERNAL_ERROR';
     }
@@ -123,19 +143,21 @@ export function withVaultGuard<Args extends unknown[], T extends Record<string, 
  */
 export function withVaultWriteGuard<TArgs, T extends Record<string, unknown>>(
   toolName: string,
-  deps: Pick<McpDeps, 'isReadable' | 'getGeneration' | 'isWriteEnabled'>,
-  handler: (args: TArgs, ctx: { generation: number }) => Promise<T>,
-  targetOf?: (args: TArgs) => string | undefined
+  deps: Pick<McpDeps, 'isReadable' | 'getGeneration' | 'isWriteEnabled' | 'isEditEnabled'>,
+  handler: (args: TArgs, ctx: WriteCtx) => Promise<T>,
+  targetOf?: (args: TArgs) => string | undefined,
+  opts: { tier?: 'write' | 'edit' } = {}
 ): (args: TArgs) => Promise<CallToolResult> {
   return async (args: TArgs) => {
-    const record = (ok: boolean, errorCode?: string): void =>
+    const record = (ok: boolean, errorCode?: string, versionId?: string): void =>
       auditLog.record({
         ts: new Date().toISOString(),
         tool: toolName,
         ok,
         errorCode,
         target: targetOf?.(args),
-        write: true
+        write: true,
+        versionId
       });
 
     if (!deps.isWriteEnabled()) {
@@ -143,6 +165,13 @@ export function withVaultWriteGuard<TArgs, T extends Record<string, unknown>>(
       return toErrorResult(
         'WRITE_DISABLED',
         "Write access is turned off. Ask the user to enable it in Phosphor Notes' Settings > AI Access."
+      );
+    }
+    if (opts.tier === 'edit' && !deps.isEditEnabled()) {
+      record(false, 'EDIT_DISABLED');
+      return toErrorResult(
+        'EDIT_DISABLED',
+        "Editing existing text is turned off. Ask the user to enable it in Phosphor Notes' Settings > AI Access."
       );
     }
     if (!(await deps.isReadable())) {
@@ -154,8 +183,12 @@ export function withVaultWriteGuard<TArgs, T extends Record<string, unknown>>(
     }
     const generation = deps.getGeneration();
     try {
-      const result = await handler(args, { generation });
-      record(true);
+      // Every string argument of every write tool: none may carry a redaction
+      // placeholder copied from a read (see assertNoRedactionMasks).
+      assertNoRedactionMasks(...collectStrings(args));
+      const result = await handler(args, { generation, tool: toolName });
+      const versionId = (result as { versionId?: unknown }).versionId;
+      record(true, undefined, typeof versionId === 'string' ? versionId : undefined);
       return toCallToolResult(result);
     } catch (err) {
       const code = errorCodeFor(err);

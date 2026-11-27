@@ -5,7 +5,7 @@ layout: page
 
 **Overview**
 
-- **What:** Phosphor Notes can run a local [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server, letting AI apps you run yourself - Claude Desktop, Claude Code, and other MCP-capable clients - read your vault, and optionally create/append to notes. Off by default; both reading and writing require an explicit opt-in.
+- **What:** Phosphor Notes can run a local [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server, letting AI apps you run yourself - Claude Desktop, Claude Code, and other MCP-capable clients - read your vault, and optionally create, add to, and edit notes. Off by default; reading, writing, and editing existing text each require an explicit opt-in.
 - **Where:** Enable it in **Preferences \> AI Access**. It runs inside the same process as the app itself; there is no separate helper binary.
 
 **Privacy: read this before enabling**
@@ -22,9 +22,9 @@ Once enabled, any AI app you authorize can read your vault's contents, and that 
 
 | Tool | What it does |
 |---|---|
-| `get_vault_status` | Vault name, open/locked/readable state - the only tool that works before unlocking |
+| `get_vault_status` | Vault name, open/locked/readable state, and what AI apps may change - the only tool that works before unlocking |
 | `list_notes` | List notes, optionally scoped to a folder |
-| `read_note` | Full text and parsed frontmatter of one note |
+| `read_note` | Full text and parsed frontmatter of one note, plus a `hash` used for the version check described below |
 | `search_notes` | Full-text search. Requires every query word to match (unlike the app's own Cmd+K search, which is deliberately forgiving) - a compound query like an email address won't return unrelated notes that only share one word with it. |
 | `list_tasks` | Filter checkbox tasks by status, file, or due date |
 | `get_note_links` | A note's outgoing wikilinks and backlinks |
@@ -39,14 +39,48 @@ A second toggle, off by default even when read access is on, controls write acce
 
 | Tool | What it does |
 |---|---|
-| `create_note` | Creates a new note. Refuses to overwrite an existing one unless you're explicitly asked to allow it, in which case the old content is backed up to a `.bak` file first. |
-| `append_to_note` | Adds content to the *end* of an existing note. There is no tool that edits the middle of a note or replaces its content wholesale. |
+| `create_note` | Creates a new note. Refuses to overwrite an existing one unless you're explicitly asked to allow it, in which case the old content is saved as a version first (see "Undo and history" below). |
+| `append_to_note` | Adds content to the *end* of an existing note. |
 | `insert_under_bullet` | Adds content under a *specific existing bullet* elsewhere in an outliner note (found by matching its text), rather than only at the very end - useful for filing new content under an already-existing heading-like bullet instead of creating a duplicate. |
 | `add_task` | Adds one checkbox task, by default to today's daily journal (auto-created if needed). |
+| `complete_task` | Checks off a task; for a recurring task, also adds the next occurrence below it. |
+| `update_task` / `reschedule_task` | Changes a task's text, status, due date, recurrence, or priority. |
+| `delete_task` | Removes one task line. |
+| `list_note_versions` / `read_note_version` | Lists and reads the saved versions described under "Undo and history". |
 
-Together, `append_to_note` and `insert_under_bullet` are the only ways to modify an existing note through this connection - there is no tool that edits arbitrary text in place, deletes, renames, or moves a note.
+Without edit access (below), these are the only ways to change an existing note: there is no tool that edits other existing text in place, and no tool at all that deletes, renames, or moves a note.
 
-Notes created or appended to this way automatically match the target note's own formatting convention - see "Outliner vs. freeform" below. Writes take effect immediately; there's no per-call confirmation dialog from Phosphor itself; the connected AI app's own tool-approval UI is the safety net for that.
+Notes created or appended to this way automatically match the target note's own formatting convention - see "Outliner vs. freeform" below. Writes take effect immediately; there's no per-call confirmation dialog from Phosphor itself; the connected AI app's own tool-approval UI is the safety net for that, and every change can be reverted afterwards.
+
+**Edit access (a third opt-in)**
+
+A further toggle, nested under write access and off by default, lets AI apps change or remove text that's already in a note rather than only add to it. It has its own disclosure, and turning write access (or the server) off also turns it off, so it never comes back without a fresh confirmation. Tools that need it aren't listed unless it's on:
+
+| Tool | What it does |
+|---|---|
+| `restore_note_version` | Puts a saved version of a note back (see "Undo and history"). |
+
+Even with edit access, AI apps cannot delete, rename, or move whole notes.
+
+**Limiting writes to certain folders**
+
+With write access on, Settings also lets you list folders AI apps may change ("Only allow changes in these folders" - empty means the whole vault) and folders they may never change ("Never allow changes in these folders", which always wins). A folder includes its subfolders and its own index note (`People.md` for `People`), and matching ignores case. Writes outside the allowed folders are refused with `PATH_NOT_IN_WRITE_SCOPE`, and parent index notes Phosphor would normally create for a nested path are skipped if they fall outside. Daily notes live at the top of the vault, so limiting writes to folders also stops AI apps adding tasks to today's note. `get_vault_status` reports the current access level and folder limits, so a connected app knows what it may do.
+
+**Undo and history**
+
+Before any write changes an existing note, Phosphor saves the note exactly as it was (still encrypted, in an encrypted vault) to the vault's `.phosphor/history/` folder. Versions are kept for 30 days, up to 500 in total, and write tools return the saved version's id as `versionId`.
+
+- **In the app:** Preferences > AI Access > **Recent AI changes** lists each note an AI app changed, with a **Revert** button.
+- **From the AI app:** `list_note_versions` and `read_note_version` show the saved versions; `restore_note_version` (edit access only) puts one back.
+
+A revert saves the content it replaces first, so a revert can itself be undone the same way. Restoring decrypts and re-encrypts for the vault's current state, so a version saved before you turned on encryption is never restored as plaintext.
+
+**Safety checks on every write**
+
+- **Unsaved edits:** a write to a note you have open with unsaved changes is refused (`NOTE_HAS_UNSAVED_EDITS`) instead of racing your autosave; the AI app can retry once it's saved.
+- **Version check:** `read_note` returns a `hash` for the note. Write tools accept it back as `expectedHash` and refuse (`NOTE_CHANGED`) if the note changed since it was read. The hash is keyed with a secret that never leaves the app, so it can't be used to guess redacted values.
+- **Redacted values:** reads mask anything that looks like a US Social Security number or a payment card number. A write containing one of those masks is refused (`REDACTED_CONTENT`), so text copied from a read can never replace the real value with the placeholder.
+- **Crash safety:** writes go to a temporary file that's then renamed over the note, so a crash or power loss mid-write can't leave a half-written note.
 
 **Outliner vs. freeform**
 
@@ -54,8 +88,7 @@ A note's format is entirely determined by its own frontmatter (`mode: outliner` 
 
 **Known limitations**
 
-- If you have unsaved edits open in the very same note an AI app just wrote to, there's a narrow window where your own autosave could still overwrite that write before Phosphor's usual conflict prompt appears - this is a pre-existing edge case in the save pipeline, not something MCP writes work around.
-- An AI client that connected before write access was turned on may need to reconnect (or you may need to restart it) to see the write tools appear.
+- An AI client that connected before write or edit access was turned on may need to reconnect (or you may need to restart it) to see the new tools appear.
 
 **Connecting a client**
 
@@ -77,7 +110,7 @@ After enabling the server and generating a token, the Settings panel shows ready
 
 **A note on prompt injection**
 
-Note content is untrusted input once it flows into an AI client through these tools. A note containing text crafted to look like instructions (for example, pasted from an untrusted source) could attempt to steer a connected AI assistant into misusing its *other* tools. Keeping this integration read-only limits what a compromised note can cause Phosphor itself to do, but it's still worth keeping an eye on what a connected AI client does with the content it reads.
+Note content is untrusted input once it flows into an AI client through these tools. A note containing text crafted to look like instructions (for example, pasted from an untrusted source) could attempt to steer a connected AI assistant into misusing its *other* tools. Keeping this integration read-only (or limiting writes to specific folders) limits what a compromised note can cause Phosphor itself to do, and every write can be reverted from Recent AI changes, but it's still worth keeping an eye on what a connected AI client does with the content it reads.
 
 **Implementation notes**
 

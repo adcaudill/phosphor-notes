@@ -1,5 +1,6 @@
 import { promises as fsp } from 'fs';
 import * as path from 'path';
+import { normalizeFolderList } from './scope';
 
 export const DEFAULT_PORT = 47823;
 
@@ -11,6 +12,16 @@ export interface McpConfig {
   tokenCreatedAt: string | null;
   /** A second, separate opt-in from `enabled` - write tools aren't registered at all unless this is also true. */
   writeEnabled: boolean;
+  /**
+   * A third opt-in, on top of `writeEnabled`: tools that edit or remove existing
+   * text in place (edit_note, section tools, update_frontmatter,
+   * restore_note_version) are registered only when this is also true.
+   */
+  editEnabled: boolean;
+  /** Folders MCP writes are limited to; empty means the whole vault. */
+  writeAllowFolders: string[];
+  /** Folders MCP writes may never touch; wins over writeAllowFolders. */
+  writeDenyFolders: string[];
 }
 
 const DEFAULTS: McpConfig = {
@@ -18,7 +29,10 @@ const DEFAULTS: McpConfig = {
   port: DEFAULT_PORT,
   tokenHash: null,
   tokenCreatedAt: null,
-  writeEnabled: false
+  writeEnabled: false,
+  editEnabled: false,
+  writeAllowFolders: [],
+  writeDenyFolders: []
 };
 
 export function getConfigPath(userDataDir: string): string {
@@ -29,7 +43,16 @@ export async function loadConfig(userDataDir: string): Promise<McpConfig> {
   try {
     const raw = await fsp.readFile(getConfigPath(userDataDir), 'utf-8');
     const parsed = JSON.parse(raw) as Partial<McpConfig>;
-    return { ...DEFAULTS, ...parsed, writeEnabled: parsed.writeEnabled === true };
+    const writeEnabled = parsed.writeEnabled === true;
+    return {
+      ...DEFAULTS,
+      ...parsed,
+      writeEnabled,
+      // Edit access is meaningless (and never honored) without write access.
+      editEnabled: writeEnabled && parsed.editEnabled === true,
+      writeAllowFolders: normalizeFolderList(parsed.writeAllowFolders),
+      writeDenyFolders: normalizeFolderList(parsed.writeDenyFolders)
+    };
   } catch {
     return { ...DEFAULTS };
   }

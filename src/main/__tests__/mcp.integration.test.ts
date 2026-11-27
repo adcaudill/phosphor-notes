@@ -16,6 +16,9 @@ import { auditLog } from '../mcp/audit';
 import { buildWikiGraph } from '../graphBuilder';
 import type { NoteMode } from '../../shared/noteFormat';
 import type { McpDeps } from '../mcp/deps';
+import { createWriteGate } from '../mcp/writeGate';
+import * as noteHistory from '../noteHistory';
+import { UNRESTRICTED_SCOPE, type WriteScope } from '../mcp/scope';
 import type { Task } from '../../types/phosphor.d';
 
 // End-to-end test: a real StreamableHTTPServerTransport on an ephemeral
@@ -29,6 +32,9 @@ describe('MCP server (integration)', () => {
   let deps: McpDeps;
   let readable: boolean;
   let writeEnabled: boolean;
+  let editEnabled: boolean;
+  let writeScope: WriteScope;
+  const dirtyNotes = new Set<string>();
   let journalMode: NoteMode;
   let vault: string;
   const TODAY = '2026-09-23.md';
@@ -74,7 +80,13 @@ describe('MCP server (integration)', () => {
     token = generateToken();
     readable = true;
     writeEnabled = true;
+    editEnabled = true;
+    writeScope = UNRESTRICTED_SCOPE;
     journalMode = 'outliner';
+    const gate = createWriteGate({
+      getWriteScope: () => writeScope,
+      isNoteDirty: async (relPath) => dirtyNotes.has(relPath)
+    });
     deps = {
       getVaultPath: () => vault,
       isReadable: async () => readable,
@@ -88,27 +100,58 @@ describe('MCP server (integration)', () => {
       listNotes: (folder?: string) => vaultReader.listNotes(vault, folder),
       readNote: (relPath: string) => vaultReader.readNoteText(vault, relPath),
       isWriteEnabled: () => writeEnabled,
+      isEditEnabled: () => writeEnabled && editEnabled,
+      getWriteScope: () => writeScope,
       getDefaultJournalMode: async () => journalMode,
       todayDailyNotePath: () => TODAY,
-      createNote: (relPath, body, opts, ctx) =>
-        vaultWriter.createNote(vault, relPath, body, {
+      createNote: async (relPath, body, opts, ctx) => {
+        await gate.check(relPath);
+        return vaultWriter.createNote(vault, relPath, body, {
           mode: opts.mode,
           overwrite: opts.overwrite,
-          expectedGeneration: ctx.generation
-        }),
-      appendToNote: (relPath, addition, ctx, createIfMissing) =>
-        vaultWriter.appendToNote(vault, relPath, addition, {
+          expectedHash: opts.expectedHash,
+          canCreateParent: gate.canCreateParent,
           expectedGeneration: ctx.generation,
-          createIfMissing
-        }),
-      insertUnderBullet: (relPath, matchText, addition, ctx, insertOpts) =>
-        vaultWriter.insertUnderBullet(vault, relPath, matchText, addition, {
+          history: { tool: ctx.tool }
+        });
+      },
+      appendToNote: async (relPath, addition, ctx, createIfMissing, appendOpts) => {
+        await gate.check(relPath);
+        return vaultWriter.appendToNote(vault, relPath, addition, {
           expectedGeneration: ctx.generation,
-          occurrence: insertOpts?.occurrence
-        }),
-      replaceLines: (relPath, target, newLines, ctx) =>
-        vaultWriter.replaceLines(vault, relPath, target, newLines, {
-          expectedGeneration: ctx.generation
+          createIfMissing,
+          expectedHash: appendOpts?.expectedHash,
+          canCreateParent: gate.canCreateParent,
+          history: { tool: ctx.tool }
+        });
+      },
+      insertUnderBullet: async (relPath, matchText, addition, ctx, insertOpts) => {
+        await gate.check(relPath);
+        return vaultWriter.insertUnderBullet(vault, relPath, matchText, addition, {
+          expectedGeneration: ctx.generation,
+          occurrence: insertOpts?.occurrence,
+          expectedHash: insertOpts?.expectedHash,
+          history: { tool: ctx.tool }
+        });
+      },
+      replaceLines: async (relPath, target, newLines, ctx) => {
+        await gate.check(relPath);
+        return vaultWriter.replaceLines(vault, relPath, target, newLines, {
+          expectedGeneration: ctx.generation,
+          history: { tool: ctx.tool }
+        });
+      },
+      listVersions: (listOpts) => noteHistory.listVersions(vault, listOpts),
+      readVersion: async (id) => {
+        const { entry, raw } = await noteHistory.readVersion(vault, id);
+        return { entry, text: raw.toString('utf-8') };
+      },
+      restoreVersion: (id, ctx, restoreOpts) =>
+        vaultWriter.restoreVersion(vault, id, {
+          expectedGeneration: ctx.generation,
+          expectedHash: restoreOpts?.expectedHash,
+          history: { tool: ctx.tool },
+          beforeWrite: (relPath) => gate.check(relPath)
         }),
       searchNotes: async (query: string) => [
         { filename: 'top.md', title: 'Top', snippet: `...${query}...` }
@@ -142,6 +185,9 @@ describe('MCP server (integration)', () => {
   beforeEach(() => {
     readable = true;
     writeEnabled = true;
+    editEnabled = true;
+    writeScope = UNRESTRICTED_SCOPE;
+    dirtyNotes.clear();
     journalMode = 'outliner';
   });
 
@@ -517,7 +563,7 @@ describe('MCP server (integration)', () => {
       await client.close();
     });
 
-    it('refuses to overwrite an existing note by default, and backs up on overwrite:true', async () => {
+    it('refuses to overwrite an existing note by default, and saves the old version on overwrite:true', async () => {
       const client = await makeClient(token);
       await client.callTool({
         name: 'create_note',
@@ -537,17 +583,29 @@ describe('MCP server (integration)', () => {
         arguments: { path: 'Overwrite.md', content: 'replacement', overwrite: true }
       });
       expect(overwritten.isError).toBeFalsy();
-      const { backupPath } = overwritten.structuredContent as { backupPath: string };
-      expect(backupPath).toMatch(/^Overwrite\.\d+\.md\.bak$/);
-      expect(fs.readFileSync(path.join(vault, backupPath), 'utf-8')).toContain('original');
+      const { versionId, backupPath } = overwritten.structuredContent as {
+        versionId: string;
+        backupPath?: string;
+      };
+      expect(backupPath).toBeUndefined();
       expect(fs.readFileSync(path.join(vault, 'Overwrite.md'), 'utf-8')).toContain('replacement');
 
-      // The backup must never show up in list_notes.
+      // The old content is in note history, not a .bak file beside the note.
+      const version = await client.callTool({
+        name: 'read_note_version',
+        arguments: { id: versionId }
+      });
+      expect((version.structuredContent as { content: string }).content).toContain('original');
+      expect(fs.readdirSync(vault).filter((n) => n.startsWith('Overwrite.'))).toEqual([
+        'Overwrite.md'
+      ]);
+
+      // History must never show up in list_notes.
       const listed = await client.callTool({ name: 'list_notes', arguments: {} });
       const paths = (listed.structuredContent as { notes: Array<{ path: string }> }).notes.map(
         (n) => n.path
       );
-      expect(paths).not.toContain(backupPath);
+      expect(paths.some((p) => p.startsWith('.phosphor'))).toBe(false);
 
       await client.close();
     });
@@ -924,6 +982,220 @@ describe('MCP server (integration)', () => {
         .reverse()
         .find((e) => e.tool === 'create_note' && e.target === 'Audited.md');
       expect(entry).toMatchObject({ ok: true, write: true, target: 'Audited.md' });
+    });
+
+    it('returns a content hash from read_note and refuses a write with a stale expectedHash', async () => {
+      fs.writeFileSync(path.join(vault, 'Hashed.md'), 'first\n');
+      const client = await makeClient(token);
+      const read = await client.callTool({ name: 'read_note', arguments: { path: 'Hashed.md' } });
+      const hash = (read.structuredContent as { hash: string }).hash;
+      expect(hash).toMatch(/^[0-9a-f]{32}$/);
+
+      // Matching hash: the append goes through and returns the new hash.
+      const ok = await client.callTool({
+        name: 'append_to_note',
+        arguments: { path: 'Hashed.md', content: 'second', expectedHash: hash }
+      });
+      expect(ok.isError).toBeFalsy();
+      const newHash = (ok.structuredContent as { hash: string }).hash;
+      expect(newHash).not.toBe(hash);
+
+      // The original hash is now stale.
+      const stale = await client.callTool({
+        name: 'append_to_note',
+        arguments: { path: 'Hashed.md', content: 'third', expectedHash: hash }
+      });
+      expect(stale.isError).toBe(true);
+      expect((stale.content as Array<{ text: string }>)[0].text).toContain('NOTE_CHANGED');
+      expect(fs.readFileSync(path.join(vault, 'Hashed.md'), 'utf-8')).not.toContain('third');
+
+      const reread = await client.callTool({ name: 'read_note', arguments: { path: 'Hashed.md' } });
+      expect((reread.structuredContent as { hash: string }).hash).toBe(newHash);
+      await client.close();
+    });
+
+    it('refuses any write whose arguments contain a redaction placeholder (REDACTED_CONTENT)', async () => {
+      fs.writeFileSync(path.join(vault, 'Secret.md'), 'SSN 123-45-6789\n');
+      const client = await makeClient(token);
+
+      // What the client sees when it reads the note:
+      const read = await client.callTool({ name: 'read_note', arguments: { path: 'Secret.md' } });
+      const shown = (read.structuredContent as { content: string }).content;
+      expect(shown).toContain('[REDACTED SSN]');
+
+      // Writing that text back must be refused rather than replacing the real number.
+      for (const call of [
+        { name: 'append_to_note', arguments: { path: 'Secret.md', content: shown } },
+        {
+          name: 'create_note',
+          arguments: { path: 'Secret.md', content: shown, overwrite: true }
+        },
+        { name: 'add_task', arguments: { text: `call about ${shown}` } }
+      ]) {
+        const result = await client.callTool(call);
+        expect(result.isError).toBe(true);
+        expect((result.content as Array<{ text: string }>)[0].text).toContain('REDACTED_CONTENT');
+      }
+      expect(fs.readFileSync(path.join(vault, 'Secret.md'), 'utf-8')).toBe('SSN 123-45-6789\n');
+      await client.close();
+    });
+
+    it('reports the access level and folder scope in get_vault_status', async () => {
+      editEnabled = false;
+      writeScope = { allow: ['Inbox'], deny: ['Inbox/Private'] };
+      const client = await makeClient(token);
+      const status = await client.callTool({ name: 'get_vault_status', arguments: {} });
+      expect((status.structuredContent as { access: unknown }).access).toEqual({
+        write: true,
+        edit: false,
+        writeAllowFolders: ['Inbox'],
+        writeDenyFolders: ['Inbox/Private']
+      });
+      await client.close();
+    });
+
+    it('refuses writes outside the folder scope (PATH_NOT_IN_WRITE_SCOPE), including the default daily note', async () => {
+      writeScope = { allow: ['Inbox'], deny: ['Inbox/Private'] };
+      const before = snapshot();
+      const client = await makeClient(token);
+      for (const call of [
+        { name: 'create_note', arguments: { path: 'Elsewhere.md', content: 'x' } },
+        { name: 'create_note', arguments: { path: 'Inbox/Private/x.md', content: 'x' } },
+        { name: 'append_to_note', arguments: { path: 'top.md', content: 'x' } },
+        // No file: defaults to today's daily note at the vault root - also out of scope.
+        { name: 'add_task', arguments: { text: 'x' } }
+      ]) {
+        const result = await client.callTool(call);
+        expect(result.isError).toBe(true);
+        expect((result.content as Array<{ text: string }>)[0].text).toContain(
+          'PATH_NOT_IN_WRITE_SCOPE'
+        );
+      }
+      expect(snapshot()).toEqual(before);
+      await client.close();
+    });
+
+    it('writes inside the scope, skipping parent stubs that fall outside it', async () => {
+      writeScope = { allow: ['Scoped/Area'], deny: [] };
+      const client = await makeClient(token);
+      const result = await client.callTool({
+        name: 'create_note',
+        arguments: { path: 'Scoped/Area/Deep/Note.md', content: 'hi' }
+      });
+      expect(result.isError).toBeFalsy();
+      // Scoped.md is outside Scoped/Area and is skipped; the in-scope stubs are created.
+      expect((result.structuredContent as { parentsCreated: string[] }).parentsCreated).toEqual([
+        'Scoped/Area.md',
+        'Scoped/Area/Deep.md'
+      ]);
+      expect(fs.existsSync(path.join(vault, 'Scoped.md'))).toBe(false);
+      expect(fs.existsSync(path.join(vault, 'Scoped/Area/Deep/Note.md'))).toBe(true);
+      await client.close();
+    });
+
+    it('registers history tools by tier: list/read with write access, restore only with edit access', async () => {
+      editEnabled = false;
+      const writeOnly = await makeClient(token);
+      const names = (await writeOnly.listTools()).tools.map((t) => t.name);
+      expect(names).toEqual(expect.arrayContaining(['list_note_versions', 'read_note_version']));
+      expect(names).not.toContain('restore_note_version');
+      await writeOnly.close();
+
+      editEnabled = true;
+      const withEdit = await makeClient(token);
+      expect((await withEdit.listTools()).tools.map((t) => t.name)).toContain(
+        'restore_note_version'
+      );
+      await withEdit.close();
+    });
+
+    it('undoes a change end to end: write, find the saved version, restore it', async () => {
+      fs.writeFileSync(path.join(vault, 'Undo.md'), 'keep this\n');
+      const client = await makeClient(token);
+
+      const appended = await client.callTool({
+        name: 'append_to_note',
+        arguments: { path: 'Undo.md', content: 'oops' }
+      });
+      const { versionId } = appended.structuredContent as { versionId: string };
+      expect(versionId).toBeTruthy();
+
+      // The audit log ties the write to the version it replaced.
+      const audited = auditLog
+        .recent()
+        .reverse()
+        .find((e) => e.tool === 'append_to_note' && e.target === 'Undo.md');
+      expect(audited?.versionId).toBe(versionId);
+
+      const listed = await client.callTool({
+        name: 'list_note_versions',
+        arguments: { path: 'Undo.md' }
+      });
+      expect(
+        (listed.structuredContent as { versions: Array<{ id: string }> }).versions[0]
+      ).toMatchObject({
+        id: versionId,
+        path: 'Undo.md',
+        tool: 'append_to_note'
+      });
+
+      const restored = await client.callTool({
+        name: 'restore_note_version',
+        arguments: { id: versionId }
+      });
+      expect(restored.isError).toBeFalsy();
+      expect(fs.readFileSync(path.join(vault, 'Undo.md'), 'utf-8')).toBe('keep this\n');
+
+      const missing = await client.callTool({
+        name: 'read_note_version',
+        arguments: { id: '1700000000000-00000000' }
+      });
+      expect((missing.content as Array<{ text: string }>)[0].text).toContain('VERSION_NOT_FOUND');
+      await client.close();
+    });
+
+    it('applies the folder scope to restores too', async () => {
+      fs.writeFileSync(path.join(vault, 'Scoped.md'), 'a\n');
+      const client = await makeClient(token);
+      const appended = await client.callTool({
+        name: 'append_to_note',
+        arguments: { path: 'Scoped.md', content: 'b' }
+      });
+      const { versionId } = appended.structuredContent as { versionId: string };
+
+      writeScope = { allow: [], deny: ['Scoped'] };
+      const refused = await client.callTool({
+        name: 'restore_note_version',
+        arguments: { id: versionId }
+      });
+      expect((refused.content as Array<{ text: string }>)[0].text).toContain(
+        'PATH_NOT_IN_WRITE_SCOPE'
+      );
+      expect(fs.readFileSync(path.join(vault, 'Scoped.md'), 'utf-8')).toBe('a\n\nb\n');
+      await client.close();
+    });
+
+    it('refuses to write a note that is open in the app with unsaved edits (NOTE_HAS_UNSAVED_EDITS)', async () => {
+      fs.writeFileSync(path.join(vault, 'Busy.md'), 'mine\n');
+      dirtyNotes.add('Busy.md');
+      const client = await makeClient(token);
+      const refused = await client.callTool({
+        name: 'append_to_note',
+        arguments: { path: 'Busy.md', content: 'theirs' }
+      });
+      expect((refused.content as Array<{ text: string }>)[0].text).toContain(
+        'NOTE_HAS_UNSAVED_EDITS'
+      );
+      expect(fs.readFileSync(path.join(vault, 'Busy.md'), 'utf-8')).toBe('mine\n');
+
+      // Once the user's edit is saved, the same call goes through.
+      dirtyNotes.delete('Busy.md');
+      const ok = await client.callTool({
+        name: 'append_to_note',
+        arguments: { path: 'Busy.md', content: 'theirs' }
+      });
+      expect(ok.isError).toBeFalsy();
+      await client.close();
     });
   });
 });
