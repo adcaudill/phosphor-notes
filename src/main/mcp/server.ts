@@ -9,6 +9,7 @@ import { registerTagTools } from './tools/tags';
 import { registerNoteWriteTools } from './tools/notesWrite';
 import { registerTaskWriteTools } from './tools/tasksWrite';
 import { registerHistoryReadTools, registerHistoryRestoreTool } from './tools/history';
+import { registerNoteEditTools } from './tools/notesEdit';
 
 /**
  * Builds a fresh, fully-configured MCP server. Called once per request in
@@ -33,6 +34,7 @@ export function createPhosphorMcpServer(deps: McpDeps): McpServer {
 
     if (deps.isEditEnabled()) {
       registerHistoryRestoreTool(server, deps);
+      registerNoteEditTools(server, deps);
     }
   }
 

@@ -23,16 +23,22 @@ export interface WriteGateOptions {
  * deps so both exercise exactly the same rules.
  */
 export interface WriteGate {
-  /** Throws PathNotInWriteScopeError or NoteHasUnsavedEditsError if `relPath` may not be written right now. */
-  check(relPath: string): Promise<void>;
+  /**
+   * Throws PathNotInWriteScopeError or NoteHasUnsavedEditsError if `relPath`
+   * may not be written right now. A dry run (nothing will be written) is
+   * still held to the folder scope, so its answer is honest, but skips the
+   * unsaved-edits check.
+   */
+  check(relPath: string, checkOpts?: { dryRun?: boolean }): Promise<void>;
   /** Filter for auto-created parent stub notes: stubs outside the write scope are skipped, not created. */
   canCreateParent(relPath: string): boolean;
 }
 
 export function createWriteGate(opts: WriteGateOptions): WriteGate {
   return {
-    async check(relPath: string): Promise<void> {
+    async check(relPath: string, checkOpts?: { dryRun?: boolean }): Promise<void> {
       assertInWriteScope(relPath, opts.getWriteScope());
+      if (checkOpts?.dryRun) return;
       if (opts.isNoteDirty && (await opts.isNoteDirty(relPath))) {
         throw new NoteHasUnsavedEditsError(relPath);
       }

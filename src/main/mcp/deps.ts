@@ -92,6 +92,18 @@ export interface McpDeps {
     ctx: WriteCtx,
     opts?: { expectedHash?: string }
   ): Promise<vaultWriter.RestoreVersionResult>;
+
+  /**
+   * General in-place edit of an existing note (edit tier): `transform` gets the
+   * note's current text and returns the new text plus any metadata to report.
+   * Enforces the write gate, expectedHash, history, and (unless dryRun) writes.
+   */
+  modifyNote<M>(
+    relPath: string,
+    transform: (doc: string) => { doc: string; meta: M },
+    ctx: WriteCtx,
+    opts?: { expectedHash?: string; dryRun?: boolean; summary?: string }
+  ): Promise<vaultWriter.ModifyNoteResult<M>>;
 }
 
 function requireVaultPath(): string {
@@ -265,6 +277,26 @@ export function buildDefaultDeps(opts: BuildDepsOptions): McpDeps {
       const vp = requireVaultPath();
       const { entry, raw } = await noteHistory.readVersion(vp, id);
       return { entry, text: decodeBuffer(raw, entry.path).toString('utf-8') };
+    },
+
+    modifyNote: async (relPath, transform, ctx, modifyOpts) => {
+      const vp = requireVaultPath();
+      await gate.check(relPath, { dryRun: modifyOpts?.dryRun });
+      const result = await vaultWriter.modifyNote(vp, relPath, transform, {
+        expectedGeneration: ctx.generation,
+        expectedHash: modifyOpts?.expectedHash,
+        dryRun: modifyOpts?.dryRun,
+        history: { tool: ctx.tool, summary: modifyOpts?.summary }
+      });
+      if (result.changed && !result.dryRun) {
+        await notifyNoteWritten(
+          vp,
+          relPath,
+          { created: false, parentsCreated: [] },
+          opts.getMainWindow()
+        );
+      }
+      return result;
     },
 
     restoreVersion: async (id, ctx, restoreOpts) => {

@@ -708,3 +708,82 @@ export async function restoreVersion(
     };
   });
 }
+
+/** Upper bound on a note's size after an in-place edit. */
+const MAX_NOTE_CHARS = 500_000;
+
+export interface ModifyNoteOptions {
+  expectedGeneration: number;
+  /** Refuse (NoteChangedError) unless the note still has this content hash. */
+  expectedHash?: string;
+  /** Compute and return the result without writing anything. */
+  dryRun?: boolean;
+  history?: HistoryOption;
+}
+
+export interface ModifyNoteResult<M> {
+  path: string;
+  /** Hash of the resulting content (of what would be written, for a dry run). */
+  hash: string;
+  /** False if the transform left the note exactly as it was (nothing is written then). */
+  changed: boolean;
+  dryRun: boolean;
+  versionId?: string;
+  /** Whatever the transform reported about what it did. */
+  meta: M;
+}
+
+/**
+ * The general in-place edit: reads an existing note, verifies `expectedHash`,
+ * runs `transform` on its decrypted text, and - unless this is a dry run or
+ * nothing changed - commits the result through the same encode/history/
+ * atomic-write path as every other write. `transform` should throw to refuse
+ * an edit; nothing is written in that case.
+ */
+export async function modifyNote<M>(
+  vaultPath: string,
+  relPath: string,
+  transform: (doc: string) => { doc: string; meta: M },
+  opts: ModifyNoteOptions
+): Promise<ModifyNoteResult<M>> {
+  const absPath = await resolveWritableNotePath(vaultPath, relPath);
+
+  return withFileLock(absPath, async () => {
+    let raw: Buffer;
+    try {
+      raw = await fsp.readFile(absPath);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        throw new NoteNotFoundError(relPath);
+      }
+      throw err;
+    }
+
+    const wasEncrypted = isEncrypted(raw);
+    // Decode synchronously right after the read - no `await` in between -
+    // so a concurrent lock can't zero the key mid-decrypt.
+    const doc = decodeBuffer(raw, absPath).toString('utf-8');
+    checkExpectedHash(relPath, doc, opts.expectedHash);
+
+    const { doc: nextDoc, meta } = transform(doc);
+    if (nextDoc.length > MAX_NOTE_CHARS) {
+      throw new InvalidArgumentError(
+        `the edited note would be too large (max ${MAX_NOTE_CHARS} characters)`
+      );
+    }
+
+    const changed = nextDoc !== doc;
+    const base = { path: relPath, hash: contentHash(nextDoc), changed, meta };
+    if (opts.dryRun || !changed) {
+      return { ...base, dryRun: opts.dryRun === true };
+    }
+
+    const versionId = await commitWrite(vaultPath, relPath, absPath, nextDoc, {
+      previousRaw: raw,
+      forceEncrypt: wasEncrypted,
+      expectedGeneration: opts.expectedGeneration,
+      history: opts.history
+    });
+    return { ...base, dryRun: false, versionId };
+  });
+}
