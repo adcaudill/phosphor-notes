@@ -27,9 +27,7 @@ export function registerNoteTools(server: McpServer, deps: McpDeps): void {
         cursor: z.string().optional().describe('Opaque pagination cursor from a previous call.')
       },
       outputSchema: {
-        notes: z.array(
-          z.object({ path: z.string(), title: z.string(), modified: z.string() })
-        ),
+        notes: z.array(z.object({ path: z.string(), title: z.string(), modified: z.string() })),
         nextCursor: z.string().optional()
       },
       annotations: { readOnlyHint: true, openWorldHint: false }
@@ -37,15 +35,7 @@ export function registerNoteTools(server: McpServer, deps: McpDeps): void {
     withVaultGuard(
       'list_notes',
       deps,
-      async ({
-        folder,
-        limit,
-        cursor
-      }: {
-        folder?: string;
-        limit?: number;
-        cursor?: string;
-      }) => {
+      async ({ folder, limit, cursor }: { folder?: string; limit?: number; cursor?: string }) => {
         const pageSize = limit ?? 200;
         const notes = await deps.listNotes(folder);
         const offset = cursor ? Math.max(0, parseInt(cursor, 10) || 0) : 0;

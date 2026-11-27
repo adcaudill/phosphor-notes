@@ -12,7 +12,7 @@ import MiniSearch from 'minisearch';
  * `new MiniSearch(...)` call) rather than going through the worker-thread
  * plumbing itself.
  */
-describe('search combineWith (matches the app\'s real index config)', () => {
+describe("search combineWith (matches the app's real index config)", () => {
   function buildIndex(): MiniSearch {
     const index = new MiniSearch({
       fields: ['title', 'content', 'tags'],
@@ -30,7 +30,13 @@ describe('search combineWith (matches the app\'s real index config)', () => {
         content: 'Contact: jon@iomergent.com',
         tags: []
       },
-      { id: '2', filename: 'Nuts.com.md', title: 'Nuts.com', content: 'A grocery order.', tags: [] },
+      {
+        id: '2',
+        filename: 'Nuts.com.md',
+        title: 'Nuts.com',
+        content: 'A grocery order.',
+        tags: []
+      },
       {
         id: '3',
         filename: 'Monday.com.md',

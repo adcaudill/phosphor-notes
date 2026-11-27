@@ -489,7 +489,9 @@ describe('MCP server (integration)', () => {
         arguments: { path: 'ShouldNotExist.md', content: 'x' }
       });
       expect(result.isError).toBe(true);
-      expect((result.content as Array<{ text: string }>)[0].text).toContain('create_note not found');
+      expect((result.content as Array<{ text: string }>)[0].text).toContain(
+        'create_note not found'
+      );
       expect(fs.existsSync(path.join(vault, 'ShouldNotExist.md'))).toBe(false);
       await client.close();
     });
@@ -768,7 +770,10 @@ describe('MCP server (integration)', () => {
         arguments: { file: 'CompleteTest.md', line: 3, rawText: '- [ ] One-off 📅 2026-01-15' }
       });
       expect(oneOff.isError).toBeFalsy();
-      const oneOffContent = oneOff.structuredContent as { nextLine?: string; nextLineNumber?: number };
+      const oneOffContent = oneOff.structuredContent as {
+        nextLine?: string;
+        nextLineNumber?: number;
+      };
       expect(oneOffContent.nextLine).toBeUndefined();
       expect(oneOffContent.nextLineNumber).toBeUndefined();
       const afterOneOff = fs.readFileSync(path.join(vault, 'CompleteTest.md'), 'utf-8');
@@ -786,7 +791,9 @@ describe('MCP server (integration)', () => {
       });
       expect(result.isError).toBe(true);
       expect((result.content as Array<{ text: string }>)[0].text).toContain('LINE_MISMATCH');
-      expect(fs.readFileSync(path.join(vault, 'MismatchTest.md'), 'utf-8')).toBe('- [ ] Real text\n');
+      expect(fs.readFileSync(path.join(vault, 'MismatchTest.md'), 'utf-8')).toBe(
+        '- [ ] Real text\n'
+      );
       await client.close();
     });
 
@@ -828,13 +835,18 @@ describe('MCP server (integration)', () => {
       });
       expect(cleared.isError).toBeFalsy();
       const finalText = fs.readFileSync(path.join(vault, 'UpdateTest.md'), 'utf-8');
-      expect(finalText).toMatch(/^- \[x\] Send the proposal ✓ \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\n$/);
+      expect(finalText).toMatch(
+        /^- \[x\] Send the proposal ✓ \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\n$/
+      );
 
       await client.close();
     });
 
     it('reschedule_task sets and clears the due date only', async () => {
-      fs.writeFileSync(path.join(vault, 'RescheduleTest.md'), '- [/] In progress 🔼 📅 2026-01-01\n');
+      fs.writeFileSync(
+        path.join(vault, 'RescheduleTest.md'),
+        '- [/] In progress 🔼 📅 2026-01-01\n'
+      );
       const client = await makeClient(token);
 
       const rescheduled = await client.callTool({
@@ -864,7 +876,10 @@ describe('MCP server (integration)', () => {
     });
 
     it('delete_task removes the line and nothing else', async () => {
-      fs.writeFileSync(path.join(vault, 'DeleteTest.md'), '- [ ] keep me\n- [ ] delete me\n- [ ] also keep\n');
+      fs.writeFileSync(
+        path.join(vault, 'DeleteTest.md'),
+        '- [ ] keep me\n- [ ] delete me\n- [ ] also keep\n'
+      );
       const client = await makeClient(token);
       const result = await client.callTool({
         name: 'delete_task',

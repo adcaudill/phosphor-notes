@@ -53,7 +53,11 @@ function rejectUnsafeSegments(rel: string): string {
   return normalized;
 }
 
-async function resolveWithSymlinkCheck(vaultPath: string, resolved: string, rel: string): Promise<string> {
+async function resolveWithSymlinkCheck(
+  vaultPath: string,
+  resolved: string,
+  rel: string
+): Promise<string> {
   let realVault: string;
   try {
     realVault = await fsp.realpath(vaultPath);
@@ -105,7 +109,10 @@ export async function resolveReadableNotePath(vaultPath: string, rel: string): P
  * hidden-segment/traversal/symlink rules, but no file-extension requirement,
  * and an empty/undefined folder resolves to the vault root.
  */
-export async function resolveReadableFolderPath(vaultPath: string, folder?: string): Promise<string> {
+export async function resolveReadableFolderPath(
+  vaultPath: string,
+  folder?: string
+): Promise<string> {
   if (!folder) {
     return resolveWithSymlinkCheck(vaultPath, path.resolve(vaultPath), '.');
   }

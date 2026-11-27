@@ -403,105 +403,107 @@ app.on('second-instance', () => {
 // Some APIs can only be used after this event occurs.
 if (gotSingleInstanceLock) {
   app.whenReady().then(async () => {
-  // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron');
+    // Set app user model id for windows
+    electronApp.setAppUserModelId('com.electron');
 
-  // Register custom phosphor:// protocol for asset serving
-  setupProtocol();
+    // Register custom phosphor:// protocol for asset serving
+    setupProtocol();
 
-  // Default open or close DevTools by F12 in development
-  // and ignore CommandOrControl + R in production.
-  // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
-  app.on('browser-window-created', (_, window) => {
-    optimizer.watchWindowShortcuts(window);
-  });
+    // Default open or close DevTools by F12 in development
+    // and ignore CommandOrControl + R in production.
+    // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
+    app.on('browser-window-created', (_, window) => {
+      optimizer.watchWindowShortcuts(window);
+    });
 
-  // Ensure IPC handlers for settings are registered, then load settings
-  setupSettingsHandlers();
-  let settings: UserSettings | undefined;
-  try {
-    settings = await initializeSettings();
-    console.log('Settings initialized');
-  } catch (err) {
-    console.error('Failed to initialize settings:', err);
-  }
-
-  const mainWindow = createWindow(settings);
-  setupIPC(mainWindow);
-  createMenu(mainWindow);
-
-  // Local MCP server: off by default, loads its own on-disk config and only
-  // starts listening if previously enabled by the user in Settings.
-  try {
-    await mcpController.init(app.getPath('userData'));
-    setupMcpIPC(mainWindow);
-  } catch (err) {
-    console.error('Failed to initialize MCP server:', err);
-  }
-
-  // Persist window bounds on close so we can restore on next launch
-  mainWindow.on('close', async () => {
+    // Ensure IPC handlers for settings are registered, then load settings
+    setupSettingsHandlers();
+    let settings: UserSettings | undefined;
     try {
-      const b = mainWindow.getBounds();
-      await updateSettings({ windowBounds: { width: b.width, height: b.height, x: b.x, y: b.y } });
+      settings = await initializeSettings();
+      console.log('Settings initialized');
     } catch (err) {
-      console.error('Failed to save window bounds:', err);
+      console.error('Failed to initialize settings:', err);
     }
-  });
 
-  // Try to auto-open the last used vault if present
-  try {
-    const last = await getSavedVaultPath();
-    console.log('Attempting to auto-open saved vault:', last);
-    if (last) {
-      // ensure path exists before opening
+    const mainWindow = createWindow(settings);
+    setupIPC(mainWindow);
+    createMenu(mainWindow);
+
+    // Local MCP server: off by default, loads its own on-disk config and only
+    // starts listening if previously enabled by the user in Settings.
+    try {
+      await mcpController.init(app.getPath('userData'));
+      setupMcpIPC(mainWindow);
+    } catch (err) {
+      console.error('Failed to initialize MCP server:', err);
+    }
+
+    // Persist window bounds on close so we can restore on next launch
+    mainWindow.on('close', async () => {
       try {
-        await import('fs').then((fs) => fs.promises.access(last));
-        console.log('Saved vault path exists; opening:', last);
-        await openVaultPath(last, mainWindow);
-        console.log('Auto-opened last vault:', last);
+        const b = mainWindow.getBounds();
+        await updateSettings({
+          windowBounds: { width: b.width, height: b.height, x: b.x, y: b.y }
+        });
       } catch (err) {
-        console.warn('Saved vault path not accessible:', last, err);
-      }
-    }
-  } catch (err) {
-    console.error('Failed to auto-open last vault', err);
-  }
-
-  app.on('activate', function () {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
-
-  // Handle before-quit to prompt user about unsaved changes
-  let allowQuit = false; // Flag to prevent multiple quit attempts
-  app.on('before-quit', (_event) => {
-    if (allowQuit) return; // Already confirmed, allow quit
-
-    // Ask renderer if there are unsaved changes
-    mainWindow.webContents.send('app:check-unsaved-changes');
-    _event.preventDefault(); // Prevent immediate quit
-
-    // Listen for response with a timeout
-    const timeout = setTimeout(() => {
-      allowQuit = true;
-      app.quit();
-    }, 2000); // 2 second timeout before forcing quit
-
-    // Will be set to false after user chooses action
-    ipcMain.once('app:unsaved-changes-result', (_event, hasUnsaved: boolean) => {
-      clearTimeout(timeout);
-      if (hasUnsaved) {
-        // Renderer will show a dialog, don't proceed
-        console.debug('[App] Renderer has unsaved changes, not quitting');
-      } else {
-        // Safe to quit
-        allowQuit = true;
-        app.quit();
+        console.error('Failed to save window bounds:', err);
       }
     });
-  });
+
+    // Try to auto-open the last used vault if present
+    try {
+      const last = await getSavedVaultPath();
+      console.log('Attempting to auto-open saved vault:', last);
+      if (last) {
+        // ensure path exists before opening
+        try {
+          await import('fs').then((fs) => fs.promises.access(last));
+          console.log('Saved vault path exists; opening:', last);
+          await openVaultPath(last, mainWindow);
+          console.log('Auto-opened last vault:', last);
+        } catch (err) {
+          console.warn('Saved vault path not accessible:', last, err);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to auto-open last vault', err);
+    }
+
+    app.on('activate', function () {
+      // On macOS it's common to re-create a window in the app when the
+      // dock icon is clicked and there are no other windows open.
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+
+    // Handle before-quit to prompt user about unsaved changes
+    let allowQuit = false; // Flag to prevent multiple quit attempts
+    app.on('before-quit', (_event) => {
+      if (allowQuit) return; // Already confirmed, allow quit
+
+      // Ask renderer if there are unsaved changes
+      mainWindow.webContents.send('app:check-unsaved-changes');
+      _event.preventDefault(); // Prevent immediate quit
+
+      // Listen for response with a timeout
+      const timeout = setTimeout(() => {
+        allowQuit = true;
+        app.quit();
+      }, 2000); // 2 second timeout before forcing quit
+
+      // Will be set to false after user chooses action
+      ipcMain.once('app:unsaved-changes-result', (_event, hasUnsaved: boolean) => {
+        clearTimeout(timeout);
+        if (hasUnsaved) {
+          // Renderer will show a dialog, don't proceed
+          console.debug('[App] Renderer has unsaved changes, not quitting');
+        } else {
+          // Safe to quit
+          allowQuit = true;
+          app.quit();
+        }
+      });
+    });
   });
 }
 

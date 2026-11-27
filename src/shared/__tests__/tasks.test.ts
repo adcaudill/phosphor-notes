@@ -102,7 +102,12 @@ describe('parseTaskLine', () => {
     expect(months?.recurrence).toEqual({ amount: 3, unit: 'm', supported: true });
 
     const minutes = parseTaskLine('- [ ] x @repeat(3M)');
-    expect(minutes?.recurrence).toEqual({ amount: 3, unit: 'M', raw: '@repeat(3M)', supported: false });
+    expect(minutes?.recurrence).toEqual({
+      amount: 3,
+      unit: 'M',
+      raw: '@repeat(3M)',
+      supported: false
+    });
   });
 
   it('flags legacy h/S @repeat() units as unsupported rather than silently wrong', () => {
@@ -156,7 +161,12 @@ describe('extractTasksFromContent', () => {
     const content = '# Title\n- [ ] first task\nSome text\n- [x] done task\n';
     const tasks = extractTasksFromContent(content, 'note.md');
     expect(tasks).toHaveLength(2);
-    expect(tasks[0]).toMatchObject({ file: 'note.md', line: 2, status: 'todo', text: 'first task' });
+    expect(tasks[0]).toMatchObject({
+      file: 'note.md',
+      line: 2,
+      status: 'todo',
+      text: 'first task'
+    });
     expect(tasks[1]).toMatchObject({ file: 'note.md', line: 4, status: 'done', text: 'done task' });
   });
 
@@ -210,24 +220,45 @@ describe('computeNextOccurrence', () => {
       unit,
       supported: true
     });
-    expect(computeNextOccurrence('2026-01-15', rec('d'), { today: '2020-01-01' })).toBe('2026-01-16');
-    expect(computeNextOccurrence('2026-01-15', rec('w'), { today: '2020-01-01' })).toBe('2026-01-22');
-    expect(computeNextOccurrence('2026-01-15', rec('m'), { today: '2020-01-01' })).toBe('2026-02-15');
-    expect(computeNextOccurrence('2026-01-15', rec('y'), { today: '2020-01-01' })).toBe('2027-01-15');
+    expect(computeNextOccurrence('2026-01-15', rec('d'), { today: '2020-01-01' })).toBe(
+      '2026-01-16'
+    );
+    expect(computeNextOccurrence('2026-01-15', rec('w'), { today: '2020-01-01' })).toBe(
+      '2026-01-22'
+    );
+    expect(computeNextOccurrence('2026-01-15', rec('m'), { today: '2020-01-01' })).toBe(
+      '2026-02-15'
+    );
+    expect(computeNextOccurrence('2026-01-15', rec('y'), { today: '2020-01-01' })).toBe(
+      '2027-01-15'
+    );
   });
 
   it('handles multi-unit amounts and month/year boundaries', () => {
     expect(
-      computeNextOccurrence('2026-01-15', { amount: 3, unit: 'd', supported: true }, { today: '2020-01-01' })
+      computeNextOccurrence(
+        '2026-01-15',
+        { amount: 3, unit: 'd', supported: true },
+        { today: '2020-01-01' }
+      )
     ).toBe('2026-01-18');
     expect(
-      computeNextOccurrence('2025-12-31', { amount: 1, unit: 'd', supported: true }, { today: '2020-01-01' })
+      computeNextOccurrence(
+        '2025-12-31',
+        { amount: 1, unit: 'd', supported: true },
+        { today: '2020-01-01' }
+      )
     ).toBe('2026-01-01');
   });
 
   it('returns null for an unsupported unit instead of infinite-duplicating', () => {
     expect(
-      computeNextOccurrence('2026-01-15', { amount: 5, unit: 'h', raw: '@repeat(5h)', supported: false })
+      computeNextOccurrence('2026-01-15', {
+        amount: 5,
+        unit: 'h',
+        raw: '@repeat(5h)',
+        supported: false
+      })
     ).toBeNull();
   });
 
@@ -265,7 +296,9 @@ describe('buildRecurrenceAdvance', () => {
   });
 
   it('preserves task text and other metadata across occurrences', () => {
-    const { nextLine } = buildRecurrenceAdvance('- [ ] Important daily sync 🔺 📅 2026-01-15 🔁 +1d');
+    const { nextLine } = buildRecurrenceAdvance(
+      '- [ ] Important daily sync 🔺 📅 2026-01-15 🔁 +1d'
+    );
     expect(nextLine).toContain('Important daily sync');
     expect(nextLine).toContain('🔺');
   });
@@ -282,7 +315,9 @@ describe('buildRecurrenceAdvance', () => {
   });
 
   it('produces no next line for an unsupported legacy recurrence unit (fixes the infinite-duplicate bug)', () => {
-    const { completedLine, nextLine } = buildRecurrenceAdvance('- [ ] Old import @repeat(5M) @due(2026-01-15)');
+    const { completedLine, nextLine } = buildRecurrenceAdvance(
+      '- [ ] Old import @repeat(5M) @due(2026-01-15)'
+    );
     expect(completedLine).toContain('[x]');
     expect(nextLine).toBeNull();
   });
@@ -345,9 +380,9 @@ describe('formatTaskLine', () => {
   });
 
   it('formats with a priority before due date/recurrence', () => {
-    expect(
-      formatTaskLine({ text: 'Renew passport', due: '2026-11-01', priority: 'high' })
-    ).toBe('- [ ] Renew passport 🔺 📅 2026-11-01');
+    expect(formatTaskLine({ text: 'Renew passport', due: '2026-11-01', priority: 'high' })).toBe(
+      '- [ ] Renew passport 🔺 📅 2026-11-01'
+    );
   });
 
   it('formats a "doing" task with [/]', () => {
@@ -411,6 +446,8 @@ describe('timestamp helpers', () => {
   });
 
   it('formatTimestamp renders a human-readable string', () => {
-    expect(formatTimestamp('2026-01-12 14:30:45')).toMatch(/Jan\s+\d{1,2},\s+\d{1,2}:\d{2}\s+(AM|PM)/);
+    expect(formatTimestamp('2026-01-12 14:30:45')).toMatch(
+      /Jan\s+\d{1,2},\s+\d{1,2}:\d{2}\s+(AM|PM)/
+    );
   });
 });

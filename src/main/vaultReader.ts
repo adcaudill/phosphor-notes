@@ -2,7 +2,11 @@ import { promises as fsp } from 'fs';
 import * as path from 'path';
 import { decryptBuffer, isEncrypted } from './crypto';
 import * as vaultState from './vaultState';
-import { resolveReadableNotePath, resolveReadableFolderPath, PathNotAllowedError } from './vaultPaths';
+import {
+  resolveReadableNotePath,
+  resolveReadableFolderPath,
+  PathNotAllowedError
+} from './vaultPaths';
 
 export { PathNotAllowedError };
 

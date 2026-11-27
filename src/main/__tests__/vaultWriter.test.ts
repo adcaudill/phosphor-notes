@@ -46,9 +46,16 @@ describe('vaultWriter', () => {
   describe('createNote', () => {
     it('creates a plaintext note with generated frontmatter', async () => {
       const gen = vaultState.getGeneration();
-      const result = await createNote(vault, 'Notes.md', 'Hello world', { expectedGeneration: gen });
+      const result = await createNote(vault, 'Notes.md', 'Hello world', {
+        expectedGeneration: gen
+      });
 
-      expect(result).toMatchObject({ path: 'Notes.md', created: true, overwritten: false, mode: 'freeform' });
+      expect(result).toMatchObject({
+        path: 'Notes.md',
+        created: true,
+        overwritten: false,
+        mode: 'freeform'
+      });
       const onDisk = fs.readFileSync(path.join(vault, 'Notes.md'), 'utf-8');
       expect(onDisk).toBe('---\ntitle: Notes\n---\nHello world\n');
     });
@@ -98,7 +105,9 @@ describe('vaultWriter', () => {
 
     it('creates parent stub files for a nested path', async () => {
       const gen = vaultState.getGeneration();
-      const result = await createNote(vault, 'Projects/Foo/Bar.md', 'body', { expectedGeneration: gen });
+      const result = await createNote(vault, 'Projects/Foo/Bar.md', 'body', {
+        expectedGeneration: gen
+      });
 
       expect(result.parentsCreated.sort()).toEqual(['Projects.md', 'Projects/Foo.md']);
       expect(fs.existsSync(path.join(vault, 'Projects.md'))).toBe(true);
@@ -189,10 +198,7 @@ describe('vaultWriter', () => {
     });
 
     it('detects outliner mode from the existing note and appends bullets', async () => {
-      fs.writeFileSync(
-        path.join(vault, 'Journal.md'),
-        '---\nmode: outliner\n---\n- a\n    - b\n'
-      );
+      fs.writeFileSync(path.join(vault, 'Journal.md'), '---\nmode: outliner\n---\n- a\n    - b\n');
       const gen = vaultState.getGeneration();
       const result = await appendToNote(vault, 'Journal.md', 'c\nd', { expectedGeneration: gen });
 
@@ -215,9 +221,9 @@ describe('vaultWriter', () => {
     it('rejects empty content without touching the file', async () => {
       fs.writeFileSync(path.join(vault, 'Notes.md'), 'original');
       const gen = vaultState.getGeneration();
-      await expect(appendToNote(vault, 'Notes.md', '', { expectedGeneration: gen })).rejects.toThrow(
-        InvalidArgumentError
-      );
+      await expect(
+        appendToNote(vault, 'Notes.md', '', { expectedGeneration: gen })
+      ).rejects.toThrow(InvalidArgumentError);
       expect(fs.readFileSync(path.join(vault, 'Notes.md'), 'utf-8')).toBe('original');
     });
 
@@ -298,10 +304,7 @@ describe('vaultWriter', () => {
 
   describe('insertUnderBullet', () => {
     const outlinerDoc =
-      '---\nmode: outliner\n---\n' +
-      '- [[IOmergent]]\n' +
-      '    - Meetings\n' +
-      '- Personal\n';
+      '---\nmode: outliner\n---\n' + '- [[IOmergent]]\n' + '    - Meetings\n' + '- Personal\n';
 
     it('inserts as a new child of the matched bullet, on disk', async () => {
       fs.writeFileSync(path.join(vault, 'Journal.md'), outlinerDoc);

@@ -187,7 +187,12 @@ export function buildDefaultDeps(opts: BuildDepsOptions): McpDeps {
         occurrence: insertOpts?.occurrence
       });
       // Never creates the note or any parent stubs.
-      await afterNoteWritten(vp, relPath, { created: false, parentsCreated: [] }, opts.getMainWindow());
+      await afterNoteWritten(
+        vp,
+        relPath,
+        { created: false, parentsCreated: [] },
+        opts.getMainWindow()
+      );
       return result;
     },
 
@@ -197,7 +202,12 @@ export function buildDefaultDeps(opts: BuildDepsOptions): McpDeps {
         expectedGeneration: ctx.generation
       });
       // Never creates the note or any parent stubs.
-      await afterNoteWritten(vp, relPath, { created: false, parentsCreated: [] }, opts.getMainWindow());
+      await afterNoteWritten(
+        vp,
+        relPath,
+        { created: false, parentsCreated: [] },
+        opts.getMainWindow()
+      );
       return result;
     }
   };

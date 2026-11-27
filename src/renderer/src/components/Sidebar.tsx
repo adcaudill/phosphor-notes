@@ -199,7 +199,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <span className="material-symbols-outlined">task</span>
               {taskAlertCount > 0 && (
-                <span className="nav-btn-badge">{taskAlertCount > 99 ? '99+' : taskAlertCount}</span>
+                <span className="nav-btn-badge">
+                  {taskAlertCount > 99 ? '99+' : taskAlertCount}
+                </span>
               )}
             </button>
             <button

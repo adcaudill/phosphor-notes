@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
-import type { Task, UserSettings, McpStatus, McpActivityEntry, McpClientConfig } from '../types/phosphor';
+import type {
+  Task,
+  UserSettings,
+  McpStatus,
+  McpActivityEntry,
+  McpClientConfig
+} from '../types/phosphor';
 import type { PredictionModelSnapshot } from '../shared/predictionModel';
 
 const parsePredictionModel = (
@@ -143,9 +149,7 @@ const api = {
   // Get last prediction model snapshot (if any)
   getPredictionModel: async (): Promise<PredictionModelSnapshot | null> => {
     const data = (await ipcRenderer.invoke('prediction:get')) as
-      | PredictionModelSnapshot
-      | string
-      | null;
+      PredictionModelSnapshot | string | null;
     return parsePredictionModel(data);
   },
   // Search vault

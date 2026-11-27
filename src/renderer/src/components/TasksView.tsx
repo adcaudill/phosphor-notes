@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { Task } from '../../../types/phosphor';
-import { todayString, isPastDate, isTodayDate, formatTimestamp, type Priority } from '../../../shared/tasks';
+import {
+  todayString,
+  isPastDate,
+  isTodayDate,
+  formatTimestamp,
+  type Priority
+} from '../../../shared/tasks';
 import { PRIORITY_ICON, PRIORITY_LABEL, dueDateLabel, recurrenceLabel } from '../utils/taskDisplay';
 import { TaskMetadataPopover, type TaskMetadataValue } from './TaskMetadataPopover';
 import '../styles/EditorTaskWidgets.css';
@@ -114,7 +120,9 @@ function TaskRow({
         {task.priority && (
           <span
             className={`cm-task-pill cm-task-pill-priority-${task.priority}`}
-            onClick={(e) => onOpenMetadata((e.currentTarget as HTMLElement).getBoundingClientRect())}
+            onClick={(e) =>
+              onOpenMetadata((e.currentTarget as HTMLElement).getBoundingClientRect())
+            }
             title={PRIORITY_LABEL[task.priority]}
           >
             <span className="material-symbols-outlined cm-task-pill-icon">
@@ -128,7 +136,9 @@ function TaskRow({
             return (
               <span
                 className={`cm-task-pill cm-task-pill-date-${status}`}
-                onClick={(e) => onOpenMetadata((e.currentTarget as HTMLElement).getBoundingClientRect())}
+                onClick={(e) =>
+                  onOpenMetadata((e.currentTarget as HTMLElement).getBoundingClientRect())
+                }
               >
                 <span className="material-symbols-outlined cm-task-pill-icon">calendar_today</span>
                 <span className="cm-task-pill-label">{text}</span>
@@ -138,11 +148,17 @@ function TaskRow({
         {task.recurrence && (
           <span
             className={`cm-task-pill cm-task-pill-recurrence ${task.recurrence.supported ? '' : 'cm-task-pill-unsupported'}`}
-            onClick={(e) => onOpenMetadata((e.currentTarget as HTMLElement).getBoundingClientRect())}
+            onClick={(e) =>
+              onOpenMetadata((e.currentTarget as HTMLElement).getBoundingClientRect())
+            }
           >
             <span className="material-symbols-outlined cm-task-pill-icon">repeat</span>
             <span className="cm-task-pill-label">
-              {recurrenceLabel(task.recurrence.amount, task.recurrence.unit, task.recurrence.supported)}
+              {recurrenceLabel(
+                task.recurrence.amount,
+                task.recurrence.unit,
+                task.recurrence.supported
+              )}
             </span>
           </span>
         )}
@@ -150,7 +166,9 @@ function TaskRow({
           <button
             type="button"
             className="cm-task-add-metadata"
-            onClick={(e) => onOpenMetadata((e.currentTarget as HTMLElement).getBoundingClientRect())}
+            onClick={(e) =>
+              onOpenMetadata((e.currentTarget as HTMLElement).getBoundingClientRect())
+            }
             title="Add due date, recurrence, or priority"
           >
             <span className="material-symbols-outlined">add_circle</span>

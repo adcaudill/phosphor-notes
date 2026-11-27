@@ -218,7 +218,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
           : undefined,
         priority: parsed.priority
       };
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- re-derive whenever the popover (re)opens on a line
+      // Re-derive whenever the popover (re)opens on a line.
     }, [taskPopover]);
 
     // Extract frontmatter and content, memoized to avoid re-extraction on every render
@@ -292,10 +292,10 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
           keymap.of([...closeBracketsKeymap, ...baseKeymap, ...foldKeymap]), // base keymap + folding
           ...(isOutlinerMode
             ? [
-              outlinerKeymapExtension,
-              outlinerHangingIndentExtension,
-              outlinerNestingGuidesExtension
-            ]
+                outlinerKeymapExtension,
+                outlinerHangingIndentExtension,
+                outlinerNestingGuidesExtension
+              ]
             : []), // outliner behavior + wrapped indent + nesting guides
           EditorView.lineWrapping, // Soft wrap long lines
           markdown(), // Markdown syntax support

@@ -54,6 +54,19 @@ function getTitleFromContent(content: string, filename: string | null): string {
   return filename.replace(/\.md$/, '');
 }
 
+const KONAMI_SEQUENCE = [
+  'ArrowUp',
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowLeft',
+  'ArrowRight',
+  'b',
+  'a'
+];
+
 function AppContent(): React.JSX.Element {
   const { settings, updateSetting } = useSettings();
   const [content, setContent] = useState('');
@@ -92,18 +105,6 @@ function AppContent(): React.JSX.Element {
   const [predictionModel, setPredictionModel] = useState<PredictionModelSnapshot | null>(null);
   const [konamisCodeOpen, setKonamiCodeOpen] = useState(false); // Toggle for Konami code easter egg
   const konamiSequenceRef = useRef<string[]>([]); // Track Konami code sequence
-  const konamiSequence = [
-    'ArrowUp',
-    'ArrowUp',
-    'ArrowDown',
-    'ArrowDown',
-    'ArrowLeft',
-    'ArrowRight',
-    'ArrowLeft',
-    'ArrowRight',
-    'b',
-    'a'
-  ];
   const editorRef = useRef<EditorHandle>(null);
   const wikiPageSuggestions = useMemo(() => {
     const unique = new Set<string>();
@@ -115,7 +116,10 @@ function AppContent(): React.JSX.Element {
   const taskAlertCount = useMemo(() => {
     const today = todayString();
     return tasks.filter(
-      (t) => t.status !== 'done' && t.dueDate && (isPastDate(t.dueDate, today) || isTodayDate(t.dueDate, today))
+      (t) =>
+        t.status !== 'done' &&
+        t.dueDate &&
+        (isPastDate(t.dueDate, today) || isTodayDate(t.dueDate, today))
     ).length;
   }, [tasks]);
 
@@ -147,13 +151,13 @@ function AppContent(): React.JSX.Element {
       konamiSequenceRef.current.push(key);
 
       // Keep only the last 10 keys
-      if (konamiSequenceRef.current.length > konamiSequence.length) {
+      if (konamiSequenceRef.current.length > KONAMI_SEQUENCE.length) {
         konamiSequenceRef.current.shift();
       }
 
       // Check if the sequence matches
-      if (konamiSequenceRef.current.length === konamiSequence.length) {
-        if (konamiSequenceRef.current.every((k, i) => k === konamiSequence[i])) {
+      if (konamiSequenceRef.current.length === KONAMI_SEQUENCE.length) {
+        if (konamiSequenceRef.current.every((k, i) => k === KONAMI_SEQUENCE[i])) {
           setKonamiCodeOpen(true);
           konamiSequenceRef.current = [];
         }
@@ -183,9 +187,7 @@ function AppContent(): React.JSX.Element {
   // Sync feature toggles with settings. Adjusted during render rather than in an
   // effect, to avoid an extra render pass:
   // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
-  const [syncedDimmingSetting, setSyncedDimmingSetting] = useState(
-    settings.enableParagraphDimming
-  );
+  const [syncedDimmingSetting, setSyncedDimmingSetting] = useState(settings.enableParagraphDimming);
   if (settings.enableParagraphDimming !== syncedDimmingSetting) {
     setSyncedDimmingSetting(settings.enableParagraphDimming);
     setParagraphDimming(settings.enableParagraphDimming);
@@ -748,7 +750,12 @@ function AppContent(): React.JSX.Element {
    */
   const writeTaskLines = async (task: Task, newLines: string[]): Promise<void> => {
     try {
-      const result = await window.phosphor.updateTaskLine(task.file, task.line, task.rawText, newLines);
+      const result = await window.phosphor.updateTaskLine(
+        task.file,
+        task.line,
+        task.rawText,
+        newLines
+      );
       if (!result.ok) {
         setStatus({ type: 'error', message: `Couldn't update task: ${result.error}` });
       }
@@ -772,7 +779,10 @@ function AppContent(): React.JSX.Element {
   };
 
   const handleTaskUpdateMetadata = (task: Task, value: TaskMetadataValue): void => {
-    if (task.file === currentFile && editorRef.current?.updateTaskMetadataAtLine(task.line, value)) {
+    if (
+      task.file === currentFile &&
+      editorRef.current?.updateTaskMetadataAtLine(task.line, value)
+    ) {
       return;
     }
     const match = TASK_LINE_RE.exec(task.rawText);
@@ -805,7 +815,8 @@ function AppContent(): React.JSX.Element {
 
       const hasFrontmatter = extractFrontmatter(noteContent).frontmatter !== null;
       if (!hasFrontmatter) {
-        noteContent = generateDefaultFrontmatter(target, settings.defaultJournalMode) + '\n' + noteContent;
+        noteContent =
+          generateDefaultFrontmatter(target, settings.defaultJournalMode) + '\n' + noteContent;
       }
 
       const mode = detectNoteMode(noteContent);
@@ -996,7 +1007,7 @@ function AppContent(): React.JSX.Element {
       const list = backlinks[currentFile] || [];
       console.debug(`Backlinks for ${currentFile}:`, list.length, list);
     }
-  }, [currentFile]);
+  }, [currentFile, backlinks]);
 
   useEffect(() => {
     console.debug('Backlinks changed ->', backlinks);
