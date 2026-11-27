@@ -20,7 +20,8 @@ import {
   BulletNotFoundError,
   NoteChangedError,
   replaceLines,
-  restoreVersion
+  restoreVersion,
+  modifyNote
 } from '../vaultWriter';
 import { listVersions, readVersion } from '../noteHistory';
 import { contentHash } from '../contentHash';
@@ -629,6 +630,104 @@ describe('vaultWriter', () => {
       const raw = fs.readFileSync(path.join(vault, 'E.md'));
       expect(crypto.isEncrypted(raw)).toBe(true);
       expect(crypto.decryptBuffer(raw, key).toString('utf-8')).toBe('plain v1\n');
+    });
+  });
+
+  describe('modifyNote', () => {
+    const upper = (doc: string): { doc: string; meta: { len: number } } => ({
+      doc: doc.toUpperCase(),
+      meta: { len: doc.length }
+    });
+
+    it('writes the transformed text, records history, and returns the transform metadata', async () => {
+      fs.writeFileSync(path.join(vault, 'M.md'), 'hello\n');
+      const result = await modifyNote(vault, 'M.md', upper, {
+        expectedGeneration: vaultState.getGeneration(),
+        history: { tool: 'edit_note' }
+      });
+      expect(fs.readFileSync(path.join(vault, 'M.md'), 'utf-8')).toBe('HELLO\n');
+      expect(result).toMatchObject({ changed: true, dryRun: false, meta: { len: 6 } });
+      expect(result.hash).toBe(contentHash('HELLO\n'));
+      expect((await readVersion(vault, result.versionId!)).raw.toString()).toBe('hello\n');
+    });
+
+    it('a dry run returns the would-be hash and writes nothing', async () => {
+      fs.writeFileSync(path.join(vault, 'M.md'), 'hello\n');
+      const result = await modifyNote(vault, 'M.md', upper, {
+        expectedGeneration: vaultState.getGeneration(),
+        dryRun: true,
+        history: { tool: 'edit_note' }
+      });
+      expect(result).toMatchObject({ changed: true, dryRun: true, hash: contentHash('HELLO\n') });
+      expect(result.versionId).toBeUndefined();
+      expect(fs.readFileSync(path.join(vault, 'M.md'), 'utf-8')).toBe('hello\n');
+      expect(await listVersions(vault)).toEqual([]);
+    });
+
+    it('writes nothing (and records no version) when the transform changes nothing', async () => {
+      fs.writeFileSync(path.join(vault, 'M.md'), 'SAME\n');
+      const result = await modifyNote(vault, 'M.md', upper, {
+        expectedGeneration: vaultState.getGeneration(),
+        history: { tool: 'edit_note' }
+      });
+      expect(result.changed).toBe(false);
+      expect(await listVersions(vault)).toEqual([]);
+    });
+
+    it('refuses a stale expectedHash, a missing note, and a transform that throws', async () => {
+      fs.writeFileSync(path.join(vault, 'M.md'), 'hello\n');
+      const gen = vaultState.getGeneration();
+      await expect(
+        modifyNote(vault, 'M.md', upper, {
+          expectedGeneration: gen,
+          expectedHash: contentHash('x')
+        })
+      ).rejects.toBeInstanceOf(NoteChangedError);
+      await expect(
+        modifyNote(vault, 'Missing.md', upper, { expectedGeneration: gen })
+      ).rejects.toBeInstanceOf(NoteNotFoundError);
+      await expect(
+        modifyNote(
+          vault,
+          'M.md',
+          () => {
+            throw new Error('refused');
+          },
+          { expectedGeneration: gen }
+        )
+      ).rejects.toThrow('refused');
+      expect(fs.readFileSync(path.join(vault, 'M.md'), 'utf-8')).toBe('hello\n');
+    });
+  });
+
+  describe('dryRun', () => {
+    it('insertUnderBullet and restoreVersion compute results without writing', async () => {
+      const doc = '---\nmode: outliner\n---\n- P\n';
+      fs.writeFileSync(path.join(vault, 'D.md'), doc);
+      const gen = vaultState.getGeneration();
+
+      const inserted = await insertUnderBullet(vault, 'D.md', 'P', 'child', {
+        expectedGeneration: gen,
+        history: { tool: 't' },
+        dryRun: true
+      });
+      expect(inserted).toMatchObject({ dryRun: true, appended: '    - child' });
+      expect(inserted.versionId).toBeUndefined();
+      expect(fs.readFileSync(path.join(vault, 'D.md'), 'utf-8')).toBe(doc);
+
+      const real = await appendToNote(vault, 'D.md', 'Q', {
+        expectedGeneration: gen,
+        history: { tool: 't' }
+      });
+      const afterAppend = fs.readFileSync(path.join(vault, 'D.md'), 'utf-8');
+      const restored = await restoreVersion(vault, real.versionId!, {
+        expectedGeneration: gen,
+        history: { tool: 't' },
+        dryRun: true
+      });
+      expect(restored).toMatchObject({ dryRun: true, hash: contentHash(doc) });
+      expect(fs.readFileSync(path.join(vault, 'D.md'), 'utf-8')).toBe(afterAppend);
+      expect(await listVersions(vault)).toHaveLength(1);
     });
   });
 });

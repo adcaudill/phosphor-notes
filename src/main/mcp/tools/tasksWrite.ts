@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpDeps } from '../deps';
 import { withVaultWriteGuard } from '../toolkit';
+import { editCommonInput } from './notesEdit';
 import { buildNewNoteFrontmatter, InvalidArgumentError } from '../../../shared/noteFormat';
 import {
   formatTaskLine,
@@ -53,14 +54,16 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
           .optional()
           .describe('e.g. +1d, +2w, +1m, +1y'),
         priority: z.enum(['high', 'medium', 'low']).optional(),
-        status: z.enum(['todo', 'doing']).optional().default('todo')
+        status: z.enum(['todo', 'doing']).optional().default('todo'),
+        dryRun: editCommonInput.dryRun
       },
       outputSchema: {
         path: z.string(),
         created: z.boolean(),
         mode: z.enum(['freeform', 'outliner']),
         line: z.number(),
-        taskLine: z.string()
+        taskLine: z.string(),
+        dryRun: z.boolean()
       },
       annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
     },
@@ -74,7 +77,8 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
           due,
           recurrence,
           priority,
-          status
+          status,
+          dryRun
         }: {
           text: string;
           file?: string;
@@ -82,6 +86,7 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
           recurrence?: string;
           priority?: 'high' | 'medium' | 'low';
           status?: 'todo' | 'doing';
+          dryRun?: boolean;
         },
         ctx
       ) => {
@@ -94,13 +99,14 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
               }
             : undefined;
 
-        const result = await deps.appendToNote(target, taskLine, ctx, createIfMissing);
+        const result = await deps.appendToNote(target, taskLine, ctx, createIfMissing, { dryRun });
         return {
           path: result.path,
           created: result.created,
           mode: result.mode,
           line: result.endLine,
-          taskLine
+          taskLine,
+          dryRun: result.dryRun === true
         };
       },
       (args) => args.file
@@ -119,7 +125,8 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
       inputSchema: {
         file: z.string(),
         line: z.number().int().min(1),
-        rawText: z.string()
+        rawText: z.string(),
+        dryRun: editCommonInput.dryRun
       },
       outputSchema: {
         path: z.string(),
@@ -127,14 +134,23 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
         completedLine: z.string(),
         nextLine: z.string().optional(),
         nextLineNumber: z.number().optional(),
-        versionId: z.string().optional()
+        versionId: z.string().optional(),
+        dryRun: z.boolean()
       },
       annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
     },
     withVaultWriteGuard(
       'complete_task',
       deps,
-      async ({ file, line, rawText }: { file: string; line: number; rawText: string }, ctx) => {
+      async (
+        {
+          file,
+          line,
+          rawText,
+          dryRun
+        }: { file: string; line: number; rawText: string; dryRun?: boolean },
+        ctx
+      ) => {
         requireTaskLine(rawText);
         const { completedLine, nextLine } = buildRecurrenceAdvance(rawText);
         const newLines = nextLine ? [completedLine, nextLine] : [completedLine];
@@ -143,7 +159,8 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
           file,
           { line, expectedText: rawText },
           newLines,
-          ctx
+          ctx,
+          { dryRun }
         );
         return {
           path: result.path,
@@ -151,7 +168,8 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
           completedLine,
           nextLine: nextLine ?? undefined,
           nextLineNumber: nextLine ? line + 1 : undefined,
-          versionId: result.versionId
+          versionId: result.versionId,
+          dryRun: result.dryRun === true
         };
       },
       (args) => args.file
@@ -177,13 +195,15 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
         due: z.union([z.string().regex(DUE_DATE_RE), z.literal('')]).optional(),
         recurrence: z.union([z.string().regex(RECURRENCE_RE), z.literal('')]).optional(),
         priority: z.enum(['high', 'medium', 'low', 'none']).optional(),
-        status: z.enum(['todo', 'doing', 'done']).optional()
+        status: z.enum(['todo', 'doing', 'done']).optional(),
+        dryRun: editCommonInput.dryRun
       },
       outputSchema: {
         path: z.string(),
         line: z.number(),
         taskLine: z.string(),
-        versionId: z.string().optional()
+        versionId: z.string().optional(),
+        dryRun: z.boolean()
       },
       annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
     },
@@ -200,6 +220,7 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
           recurrence?: string;
           priority?: 'high' | 'medium' | 'low' | 'none';
           status?: 'todo' | 'doing' | 'done';
+          dryRun?: boolean;
         },
         ctx
       ) => {
@@ -256,9 +277,16 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
           args.file,
           { line: args.line, expectedText: args.rawText },
           [taskLine],
-          ctx
+          ctx,
+          { dryRun: args.dryRun }
         );
-        return { path: result.path, line: result.line, taskLine, versionId: result.versionId };
+        return {
+          path: result.path,
+          line: result.line,
+          taskLine,
+          versionId: result.versionId,
+          dryRun: result.dryRun === true
+        };
       },
       (args) => args.file
     )
@@ -275,13 +303,15 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
         file: z.string(),
         line: z.number().int().min(1),
         rawText: z.string(),
-        due: z.union([z.string().regex(DUE_DATE_RE), z.literal('')])
+        due: z.union([z.string().regex(DUE_DATE_RE), z.literal('')]),
+        dryRun: editCommonInput.dryRun
       },
       outputSchema: {
         path: z.string(),
         line: z.number(),
         taskLine: z.string(),
-        versionId: z.string().optional()
+        versionId: z.string().optional(),
+        dryRun: z.boolean()
       },
       annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
     },
@@ -289,7 +319,13 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
       'reschedule_task',
       deps,
       async (
-        { file, line, rawText, due }: { file: string; line: number; rawText: string; due: string },
+        {
+          file,
+          line,
+          rawText,
+          due,
+          dryRun
+        }: { file: string; line: number; rawText: string; due: string; dryRun?: boolean },
         ctx
       ) => {
         const parsed = requireTaskLine(rawText);
@@ -308,9 +344,16 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
           file,
           { line, expectedText: rawText },
           [taskLine],
-          ctx
+          ctx,
+          { dryRun }
         );
-        return { path: result.path, line: result.line, taskLine, versionId: result.versionId };
+        return {
+          path: result.path,
+          line: result.line,
+          taskLine,
+          versionId: result.versionId,
+          dryRun: result.dryRun === true
+        };
       },
       (args) => args.file
     )
@@ -325,18 +368,29 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
       inputSchema: {
         file: z.string(),
         line: z.number().int().min(1),
-        rawText: z.string()
+        rawText: z.string(),
+        dryRun: editCommonInput.dryRun
       },
-      outputSchema: { path: z.string(), versionId: z.string().optional() },
+      outputSchema: { path: z.string(), versionId: z.string().optional(), dryRun: z.boolean() },
       annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: true }
     },
     withVaultWriteGuard(
       'delete_task',
       deps,
-      async ({ file, line, rawText }: { file: string; line: number; rawText: string }, ctx) => {
+      async (
+        {
+          file,
+          line,
+          rawText,
+          dryRun
+        }: { file: string; line: number; rawText: string; dryRun?: boolean },
+        ctx
+      ) => {
         requireTaskLine(rawText);
-        const result = await deps.replaceLines(file, { line, expectedText: rawText }, [], ctx);
-        return { path: result.path, versionId: result.versionId };
+        const result = await deps.replaceLines(file, { line, expectedText: rawText }, [], ctx, {
+          dryRun
+        });
+        return { path: result.path, versionId: result.versionId, dryRun: result.dryRun === true };
       },
       (args) => args.file
     )
