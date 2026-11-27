@@ -1,3 +1,4 @@
+import type { Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { convertHtmlToMarkdown } from '../../utils/htmlToMarkdown';
 
@@ -64,7 +65,7 @@ export const shouldNormalizeOutlinerPaste = (text: string): boolean => {
   return /^\s*(?:#{1,6}\s|[-+*]\s|\d+[.)]\s)/.test(text);
 };
 
-export const createSmartPaste = (isOutlinerMode = false) =>
+export const createSmartPaste = (isOutlinerMode = false): Extension =>
   EditorView.domEventHandlers({
     paste: (event, view) => {
       // If Shift key is held, allow default paste behavior; check safely for shiftKey.

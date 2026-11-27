@@ -599,7 +599,7 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
           return decrypted.toString('utf-8');
         } catch (err) {
           safeError(`[Encryption] Decryption error for ${filename}`, err);
-          throw new Error('Could not decrypt file');
+          throw new Error('Could not decrypt file', { cause: err });
         }
       }
 
@@ -1326,7 +1326,7 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
                 // Start worker from transpiled code using eval
                 worker = new Worker(transpiled, { eval: true });
               } catch (err) {
-                throw new Error(`Failed to start importer worker: ${String(err)}`);
+                throw new Error(`Failed to start importer worker: ${String(err)}`, { cause: err });
               }
             } else {
               throw new Error(

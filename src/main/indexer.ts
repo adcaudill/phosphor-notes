@@ -297,7 +297,7 @@ async function updatePredictionModelForFile(
 ): Promise<void> {
   try {
     const filePath = join(vaultPath, filename);
-    const content = await readMarkdownFile(filePath, vaultPath);
+    const content = await readMarkdownFile(filePath);
     const stats = computePredictionStats(content);
     applyFileStats(filename, stats);
     rebuildPredictionSnapshot(mainWindow);
@@ -370,7 +370,7 @@ async function getFilesRecursively(dir: string): Promise<string[]> {
 // throws instead of ever returning ciphertext as if it were plaintext. If
 // the vault is locked or the file fails to decrypt, this returns an empty
 // string rather than indexing garbage bytes as note content.
-async function readMarkdownFile(filePath: string, _vaultPath: string): Promise<string> {
+async function readMarkdownFile(filePath: string): Promise<string> {
   try {
     const buffer = await vaultReader.readDecrypted(filePath);
     return buffer.toString('utf-8');
@@ -543,7 +543,7 @@ async function tryStartWorkerFromFile(
 
     for (const filePath of mdFiles) {
       try {
-        const content = await readMarkdownFile(filePath, vaultPath);
+        const content = await readMarkdownFile(filePath);
         const filename = filePath.substring(vaultPath.length + 1).replace(/\\/g, '/');
         fileContents.push({ filename, content });
       } catch (err) {
@@ -802,7 +802,7 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
 
           for (const filePath of mdFiles) {
             try {
-              const content = await readMarkdownFile(filePath, vaultPath);
+              const content = await readMarkdownFile(filePath);
               const filename = filePath.substring(vaultPath.length + 1).replace(/\\/g, '/');
               fileContents.push({ filename, content });
             } catch (err) {
@@ -957,7 +957,7 @@ export async function updateSearchIndexForFile(vaultPath: string, filename: stri
     if (!indexerWorker) return;
     let content: string;
     try {
-      content = await readMarkdownFile(join(vaultPath, filename), vaultPath);
+      content = await readMarkdownFile(join(vaultPath, filename));
     } catch (err) {
       if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') {
         removeFromSearchIndex(filename);
@@ -1001,7 +1001,7 @@ export async function updateTasksForFile(
     }
     const filePath = join(vaultPath, filename);
     // Use shared reader so encrypted vaults are handled the same way as the worker
-    const content = await readMarkdownFile(filePath, vaultPath);
+    const content = await readMarkdownFile(filePath);
 
     // Same extraction function the full-vault worker scan uses, so this
     // incremental path can never again drop fields (dueDate/recurrence/
@@ -1118,7 +1118,7 @@ async function updateGraphForSingleFile(
       return;
     }
 
-    const content = await readMarkdownFile(filePath, vaultPath);
+    const content = await readMarkdownFile(filePath);
 
     // Extract wikilinks and implicit parent links from the file
     const wikilinks = extractWikilinks(content);
