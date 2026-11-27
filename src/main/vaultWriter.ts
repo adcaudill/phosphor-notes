@@ -2,7 +2,8 @@ import { promises as fsp } from 'fs';
 import * as path from 'path';
 import { writeFileAtomic } from './atomicWrite';
 import { contentHash } from './contentHash';
-import { recordSnapshot, readVersion } from './noteHistory';
+import { recordSnapshot, recordRename, newOperationId, readVersion } from './noteHistory';
+import { rewriteLinks, type LinkRename } from '../shared/linkRewrite';
 import { encryptBuffer, isEncrypted } from './crypto';
 import * as vaultState from './vaultState';
 import { resolveWritableNotePath } from './vaultPaths';
@@ -82,6 +83,8 @@ export interface HistoryOption {
   tool: string;
   /** Short, content-free description of the change. */
   summary?: string;
+  /** Groups this entry with the others one operation produced (e.g. the link rewrites of a rename). */
+  opId?: string;
 }
 
 /**
@@ -113,7 +116,8 @@ async function commitWrite(
       path: relPath,
       raw: o.previousRaw,
       tool: o.history.tool,
-      summary: o.history.summary
+      summary: o.history.summary,
+      opId: o.history.opId
     });
     versionId = entry.id;
   }
@@ -775,6 +779,13 @@ export async function restoreVersion(
   opts: RestoreVersionOptions
 ): Promise<RestoreVersionResult> {
   const { entry, raw: snapshotRaw } = await readVersion(vaultPath, id);
+  if (entry.kind === 'rename') {
+    // Undoing a rename means moving the note back (and its links with it), which
+    // needs the link candidates only the caller has - see renameNote.
+    throw new InvalidArgumentError(
+      `version ${id} records a rename, not content; revert it by renaming the note back`
+    );
+  }
   await opts.beforeWrite?.(entry.path);
   const absPath = await resolveWritableNotePath(vaultPath, entry.path);
 
@@ -899,5 +910,324 @@ export async function modifyNote<M>(
       history: opts.history
     });
     return { ...base, dryRun: false, versionId };
+  });
+}
+
+export class HasChildNotesError extends Error {
+  constructor(
+    public readonly relPath: string,
+    public readonly children: string[]
+  ) {
+    super(
+      `${relPath} has child notes (${children.slice(0, 5).join(', ')}${children.length > 5 ? ', ...' : ''}). ` +
+        'Pass includeChildren to move them together with it, or move the children first.'
+    );
+    this.name = 'HasChildNotesError';
+  }
+}
+
+async function pathExists(absPath: string): Promise<boolean> {
+  try {
+    await fsp.lstat(absPath);
+    return true;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw err;
+  }
+}
+
+/** True if both paths name the same file on disk (e.g. a case-only rename on a case-insensitive filesystem). */
+async function isSameFile(a: string, b: string): Promise<boolean> {
+  try {
+    const [sa, sb] = await Promise.all([fsp.lstat(a), fsp.lstat(b)]);
+    return sa.ino === sb.ino && sa.dev === sb.dev;
+  } catch {
+    return false;
+  }
+}
+
+/** Vault-relative paths of the .md notes under `dirAbs` (skipping hidden folders/files). */
+async function listNotesUnder(vaultPath: string, dirAbs: string): Promise<string[]> {
+  let entries: string[];
+  try {
+    entries = (await fsp.readdir(dirAbs, { recursive: true })) as string[];
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw err;
+  }
+  return entries
+    .map((e) => e.split(path.sep).join('/'))
+    .filter(
+      (e) => e.toLowerCase().endsWith('.md') && !e.split('/').some((seg) => seg.startsWith('.'))
+    )
+    .map((e) => path.relative(vaultPath, path.join(dirAbs, e)).split(path.sep).join('/'))
+    .sort();
+}
+
+export interface RenameNoteOptions {
+  expectedGeneration: number;
+  /** Notes that may contain links to the note(s) being moved - e.g. their backlinks from the link graph. */
+  linkCandidates: string[];
+  /** Move the note's child notes (the same-named folder) along with it, and update links to them. */
+  includeChildren?: boolean;
+  /** Refuse (NoteChangedError) unless the note being moved still has this content hash. */
+  expectedHash?: string;
+  dryRun?: boolean;
+  /** Record the rename (and each link rewrite, grouped under one opId) in note history. */
+  history?: HistoryOption;
+  /**
+   * Called with every vault-relative path the operation will move, create, or
+   * rewrite - before anything is changed. Throw to veto (e.g. an MCP write
+   * scope or unsaved-edits check). `role` says why the path is involved.
+   */
+  beforeWrite?: (relPath: string, role: 'source' | 'destination' | 'link') => Promise<void>;
+  canCreateParent?: (relPath: string) => boolean;
+}
+
+export interface RenameNoteResult {
+  from: string;
+  to: string;
+  /** Child notes moved with it, as [oldPath, newPath] pairs. */
+  movedChildren: Array<[string, string]>;
+  /** Notes whose links were rewritten (paths after the move), with how many links each. */
+  linksUpdated: Array<{ path: string; links: number }>;
+  /** Notes whose links could not be rewritten (the move itself still happened). */
+  linksFailed: Array<{ path: string; error: string }>;
+  parentsCreated: string[];
+  /** History id of the rename entry, when history was requested. */
+  versionId?: string;
+  dryRun?: boolean;
+}
+
+/**
+ * Renames or moves a note (and, with `includeChildren`, its child notes) and
+ * rewrites links to it across the vault - the one implementation behind both
+ * the app's Rename/Move and MCP's move_note.
+ *
+ * Everything is checked before anything changes: the source exists, the
+ * destination is free (never overwritten), child notes are handled, and every
+ * note whose links will change has been read and decrypted and passed
+ * `beforeWrite`. Then the file (and folder) is renamed atomically, and each
+ * link rewrite goes through the same atomic, history-recording write path as
+ * every other edit. A link rewrite that fails at that point is reported in
+ * `linksFailed` rather than undoing the move.
+ */
+export async function renameNote(
+  vaultPath: string,
+  from: string,
+  to: string,
+  opts: RenameNoteOptions
+): Promise<RenameNoteResult> {
+  if (from === to) throw new InvalidArgumentError('the new path is the same as the current one');
+  const fromAbs = await resolveWritableNotePath(vaultPath, from);
+  const toAbs = await resolveWritableNotePath(vaultPath, to);
+
+  if (!(await pathExists(fromAbs))) throw new NoteNotFoundError(from);
+  if ((await pathExists(toAbs)) && !(await isSameFile(fromAbs, toAbs))) {
+    throw new NoteAlreadyExistsError(to);
+  }
+
+  // Child notes live in the folder named after the note: People.md -> People/.
+  const fromDirRel = from.replace(/\.md$/i, '');
+  const toDirRel = to.replace(/\.md$/i, '');
+  const fromDirAbs = fromAbs.replace(/\.md$/i, '');
+  const toDirAbs = toAbs.replace(/\.md$/i, '');
+  const children = await listNotesUnder(vaultPath, fromDirAbs);
+  const includeChildren = opts.includeChildren === true;
+  if (children.length > 0 && !includeChildren) throw new HasChildNotesError(from, children);
+  const movesFolder = includeChildren && (await pathExists(fromDirAbs));
+  if (movesFolder) {
+    if (toDirRel === fromDirRel || to.startsWith(fromDirRel + '/')) {
+      throw new InvalidArgumentError("a note can't be moved into its own child folder");
+    }
+    if ((await pathExists(toDirAbs)) && !(await isSameFile(fromDirAbs, toDirAbs))) {
+      throw new NoteAlreadyExistsError(toDirRel + '/');
+    }
+  }
+
+  const mapPath = (rel: string): string => {
+    if (rel === from) return to;
+    if (movesFolder && rel.startsWith(fromDirRel + '/'))
+      return toDirRel + rel.slice(fromDirRel.length);
+    return rel;
+  };
+  const movedChildren: Array<[string, string]> = movesFolder
+    ? children.map((c) => [c, mapPath(c)])
+    : [];
+  const renames: LinkRename[] = [{ from, to, prefix: movesFolder }];
+
+  await opts.beforeWrite?.(from, 'source');
+  await opts.beforeWrite?.(to, 'destination');
+  for (const [oldPath, newPath] of movedChildren) {
+    await opts.beforeWrite?.(oldPath, 'source');
+    await opts.beforeWrite?.(newPath, 'destination');
+  }
+
+  if (opts.expectedHash !== undefined) {
+    const raw = await fsp.readFile(fromAbs);
+    checkExpectedHash(from, decodeBuffer(raw, fromAbs).toString('utf-8'), opts.expectedHash);
+  }
+
+  // Plan the link rewrites: the candidates, plus the moved notes themselves
+  // (they can link to each other). Reading/decrypting everything now means a
+  // locked vault or unreadable note stops the operation before anything moves.
+  const candidates = [...new Set([...opts.linkCandidates, from, ...movedChildren.map(([c]) => c)])];
+  const planned: Array<{ oldPath: string; finalPath: string; links: number }> = [];
+  for (const rel of candidates) {
+    let abs: string;
+    try {
+      abs = await resolveWritableNotePath(vaultPath, rel);
+    } catch {
+      continue; // not a writable note path (e.g. a virtual graph node)
+    }
+    let raw: Buffer;
+    try {
+      raw = await fsp.readFile(abs);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') continue;
+      throw err;
+    }
+    const { linksChanged } = rewriteLinks(decodeBuffer(raw, abs).toString('utf-8'), renames);
+    if (linksChanged === 0) continue;
+    const finalPath = mapPath(rel);
+    if (rel !== from && !movedChildren.some(([c]) => c === rel)) {
+      await opts.beforeWrite?.(rel, 'link');
+    }
+    planned.push({ oldPath: rel, finalPath, links: linksChanged });
+  }
+
+  if (opts.dryRun) {
+    return {
+      from,
+      to,
+      movedChildren,
+      linksUpdated: planned.map((p) => ({ path: p.finalPath, links: p.links })),
+      linksFailed: [],
+      parentsCreated: await plannedParentStubs(vaultPath, toAbs, opts.canCreateParent),
+      dryRun: true
+    };
+  }
+
+  if (vaultState.getGeneration() !== opts.expectedGeneration) throw new VaultStateChangedError();
+
+  const parentsCreated = await withFileLock(fromAbs, async () => {
+    await fsp.mkdir(path.dirname(toAbs), { recursive: true });
+    const stubs = await ensureParentFilesExist(vaultPath, toAbs, opts.canCreateParent);
+    await fsp.rename(fromAbs, toAbs);
+    if (movesFolder) {
+      await fsp.mkdir(path.dirname(toDirAbs), { recursive: true });
+      await fsp.rename(fromDirAbs, toDirAbs);
+    }
+    return stubs;
+  });
+
+  const opId = opts.history ? newOperationId() : undefined;
+  let versionId: string | undefined;
+  if (opts.history) {
+    const entry = await recordRename(vaultPath, {
+      from,
+      to,
+      includeChildren: movesFolder,
+      tool: opts.history.tool,
+      summary:
+        planned.length > 0
+          ? `links updated in ${planned.length} note${planned.length === 1 ? '' : 's'}`
+          : opts.history.summary,
+      opId
+    });
+    versionId = entry.id;
+  }
+
+  const linksUpdated: RenameNoteResult['linksUpdated'] = [];
+  const linksFailed: RenameNoteResult['linksFailed'] = [];
+  for (const p of planned) {
+    try {
+      const abs = await resolveWritableNotePath(vaultPath, p.finalPath);
+      await withFileLock(abs, async () => {
+        // Re-read: the note may have changed since planning; rewrite what's there now.
+        const raw = await fsp.readFile(abs);
+        const doc = decodeBuffer(raw, abs).toString('utf-8');
+        const rewritten = rewriteLinks(doc, renames);
+        if (rewritten.linksChanged === 0) return;
+        await commitWrite(vaultPath, p.finalPath, abs, rewritten.doc, {
+          previousRaw: raw,
+          forceEncrypt: isEncrypted(raw),
+          expectedGeneration: opts.expectedGeneration,
+          history: opts.history && {
+            tool: opts.history.tool,
+            summary: `links to ${to}`,
+            opId
+          }
+        });
+        linksUpdated.push({ path: p.finalPath, links: rewritten.linksChanged });
+      });
+    } catch (err) {
+      linksFailed.push({
+        path: p.finalPath,
+        error: err instanceof Error ? err.message : String(err)
+      });
+    }
+  }
+
+  return { from, to, movedChildren, linksUpdated, linksFailed, parentsCreated, versionId };
+}
+
+export interface DeleteNoteOptions {
+  expectedGeneration: number;
+  /** Refuse (NoteChangedError) unless the note still has this content hash. */
+  expectedHash?: string;
+  dryRun?: boolean;
+  /** Save the note's content to note history (as a 'delete' entry) before deleting it. */
+  history?: HistoryOption;
+  /** Removes the file - e.g. moving it to the OS trash. Defaults to unlinking it. */
+  trash?: (absPath: string) => Promise<void>;
+}
+
+export interface DeleteNoteResult {
+  path: string;
+  /** History id of the saved content, when history was requested. */
+  versionId?: string;
+  dryRun?: boolean;
+}
+
+/**
+ * Deletes a note: saves its exact bytes to note history first (when asked),
+ * so restore_note_version / Revert can recreate it, then removes the file
+ * via `trash`. Child notes are not touched.
+ */
+export async function deleteNote(
+  vaultPath: string,
+  relPath: string,
+  opts: DeleteNoteOptions
+): Promise<DeleteNoteResult> {
+  const absPath = await resolveWritableNotePath(vaultPath, relPath);
+  return withFileLock(absPath, async () => {
+    let raw: Buffer;
+    try {
+      raw = await fsp.readFile(absPath);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') throw new NoteNotFoundError(relPath);
+      throw err;
+    }
+    if (opts.expectedHash !== undefined) {
+      checkExpectedHash(relPath, decodeBuffer(raw, absPath).toString('utf-8'), opts.expectedHash);
+    }
+    if (opts.dryRun) return { path: relPath, dryRun: true };
+    if (vaultState.getGeneration() !== opts.expectedGeneration) throw new VaultStateChangedError();
+
+    let versionId: string | undefined;
+    if (opts.history) {
+      const entry = await recordSnapshot(vaultPath, {
+        path: relPath,
+        raw,
+        tool: opts.history.tool,
+        summary: opts.history.summary,
+        kind: 'delete',
+        opId: opts.history.opId
+      });
+      versionId = entry.id;
+    }
+    await (opts.trash ?? ((p: string) => fsp.unlink(p)))(absPath);
+    return { path: relPath, versionId };
   });
 }
