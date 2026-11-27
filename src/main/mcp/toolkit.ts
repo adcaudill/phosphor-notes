@@ -1,7 +1,17 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { McpDeps } from './deps';
 import { auditLog } from './audit';
-import { redactText, redactValue } from './redact';
+import { assertNoRedactionMasks, redactText, redactValue } from './redact';
+
+/** Every string anywhere inside a tool's arguments (nested objects/arrays included). */
+function collectStrings(value: unknown, out: string[] = []): string[] {
+  if (typeof value === 'string') out.push(value);
+  else if (Array.isArray(value)) value.forEach((v) => collectStrings(v, out));
+  else if (value !== null && typeof value === 'object') {
+    Object.values(value).forEach((v) => collectStrings(v, out));
+  }
+  return out;
+}
 
 /** All tool output passes through here (or `toErrorResult`), so PII is masked before it leaves the app. */
 export function toCallToolResult<T extends Record<string, unknown>>(data: T): CallToolResult {
@@ -60,6 +70,8 @@ function errorCodeFor(err: unknown): string {
         return 'LINE_MISMATCH';
       case 'NoteChangedError':
         return 'NOTE_CHANGED';
+      case 'RedactedContentError':
+        return 'REDACTED_CONTENT';
       default:
         return 'INTERNAL_ERROR';
     }
@@ -156,6 +168,9 @@ export function withVaultWriteGuard<TArgs, T extends Record<string, unknown>>(
     }
     const generation = deps.getGeneration();
     try {
+      // Every string argument of every write tool: none may carry a redaction
+      // placeholder copied from a read (see assertNoRedactionMasks).
+      assertNoRedactionMasks(...collectStrings(args));
       const result = await handler(args, { generation });
       record(true);
       return toCallToolResult(result);

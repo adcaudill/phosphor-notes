@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { redactText, redactValue, SSN_MASK, CARD_MASK } from '../mcp/redact';
+import {
+  redactText,
+  redactValue,
+  assertNoRedactionMasks,
+  assertRegionHasNoRedactedValues,
+  RedactedContentError,
+  SSN_MASK,
+  CARD_MASK
+} from '../mcp/redact';
 import { toCallToolResult, toErrorResult } from '../mcp/toolkit';
 
 describe('MCP PII redaction', () => {
@@ -69,5 +77,23 @@ describe('MCP PII redaction', () => {
     expect((error.content[0] as { text: string }).text).toBe(
       `LINE_MISMATCH: expected "${CARD_MASK}"`
     );
+  });
+
+  describe('write guards', () => {
+    it('refuses content carrying a redaction placeholder', () => {
+      expect(() => assertNoRedactionMasks('fine', undefined)).not.toThrow();
+      expect(() => assertNoRedactionMasks('ok', `SSN ${SSN_MASK}`)).toThrow(RedactedContentError);
+      expect(() => assertNoRedactionMasks(`card ${CARD_MASK}`)).toThrow(RedactedContentError);
+    });
+
+    it('refuses to replace a region that holds a value the client only saw masked', () => {
+      expect(() => assertRegionHasNoRedactedValues('just text 2026-09-23')).not.toThrow();
+      expect(() => assertRegionHasNoRedactedValues('SSN 123-45-6789')).toThrow(
+        RedactedContentError
+      );
+      expect(() => assertRegionHasNoRedactedValues('card 4111 1111 1111 1111')).toThrow(
+        RedactedContentError
+      );
+    });
   });
 });

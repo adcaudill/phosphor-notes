@@ -958,5 +958,31 @@ describe('MCP server (integration)', () => {
       expect((reread.structuredContent as { hash: string }).hash).toBe(newHash);
       await client.close();
     });
+
+    it('refuses any write whose arguments contain a redaction placeholder (REDACTED_CONTENT)', async () => {
+      fs.writeFileSync(path.join(vault, 'Secret.md'), 'SSN 123-45-6789\n');
+      const client = await makeClient(token);
+
+      // What the client sees when it reads the note:
+      const read = await client.callTool({ name: 'read_note', arguments: { path: 'Secret.md' } });
+      const shown = (read.structuredContent as { content: string }).content;
+      expect(shown).toContain('[REDACTED SSN]');
+
+      // Writing that text back must be refused rather than replacing the real number.
+      for (const call of [
+        { name: 'append_to_note', arguments: { path: 'Secret.md', content: shown } },
+        {
+          name: 'create_note',
+          arguments: { path: 'Secret.md', content: shown, overwrite: true }
+        },
+        { name: 'add_task', arguments: { text: `call about ${shown}` } }
+      ]) {
+        const result = await client.callTool(call);
+        expect(result.isError).toBe(true);
+        expect((result.content as Array<{ text: string }>)[0].text).toContain('REDACTED_CONTENT');
+      }
+      expect(fs.readFileSync(path.join(vault, 'Secret.md'), 'utf-8')).toBe('SSN 123-45-6789\n');
+      await client.close();
+    });
   });
 });

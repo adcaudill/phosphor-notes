@@ -72,6 +72,47 @@ export function redactText(text: string): string {
 }
 
 /**
+ * Thrown when a write would lose data the client was never shown: either the
+ * content to write contains one of the masks above (so it was copied from a
+ * redacted read and would overwrite the real value with the placeholder), or
+ * the text a write would replace/delete contains a value that reads mask.
+ */
+export class RedactedContentError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RedactedContentError';
+  }
+}
+
+/** Refuses content that contains a redaction placeholder - it can only have come from a redacted read. */
+export function assertNoRedactionMasks(...values: Array<string | undefined>): void {
+  for (const value of values) {
+    if (value !== undefined && (value.includes(SSN_MASK) || value.includes(CARD_MASK))) {
+      throw new RedactedContentError(
+        `The content contains a redaction placeholder (${SSN_MASK} or ${CARD_MASK}). That text was ` +
+          'masked when you read it, so writing it back would replace the real value. Leave that ' +
+          'part out, or ask the user to make this change in the app.'
+      );
+    }
+  }
+}
+
+/**
+ * Refuses to replace or delete `region` (existing note text) if it contains
+ * anything the client saw only in masked form: the client can't reproduce it,
+ * so the real value would be lost.
+ */
+export function assertRegionHasNoRedactedValues(region: string): void {
+  if (redactText(region) !== region) {
+    throw new RedactedContentError(
+      'The text this change would replace or remove contains a value that was redacted when you ' +
+        'read it (e.g. an SSN or card number), so it cannot be changed through this connection ' +
+        'without losing it. Ask the user to make this change in the app.'
+    );
+  }
+}
+
+/**
  * Deep-copies `value`, masking every string (including object keys, which
  * can carry note paths or titles) via `redactText`. Non-string leaves are
  * returned as-is.
