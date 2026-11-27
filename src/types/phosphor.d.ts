@@ -103,6 +103,8 @@ export interface PhosphorAPI {
   onFileDeleted: (cb: (filename: string) => void) => () => void;
   onFileAdded: (cb: (filename: string) => void) => () => void;
   onCheckUnsavedChanges: (cb: (hasUnsaved: boolean) => boolean) => () => void;
+  /** Answers main's pre-MCP-write check: is `relPath` open in the editor with unsaved edits? */
+  onQueryNoteDirty: (cb: (relPath: string) => boolean) => () => void;
   getLatestGraph: () => Promise<Record<string, string[]> | null>;
   search: (
     query: string

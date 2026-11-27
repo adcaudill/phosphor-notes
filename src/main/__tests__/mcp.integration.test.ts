@@ -1174,5 +1174,28 @@ describe('MCP server (integration)', () => {
       expect(fs.readFileSync(path.join(vault, 'Scoped.md'), 'utf-8')).toBe('a\n\nb\n');
       await client.close();
     });
+
+    it('refuses to write a note that is open in the app with unsaved edits (NOTE_HAS_UNSAVED_EDITS)', async () => {
+      fs.writeFileSync(path.join(vault, 'Busy.md'), 'mine\n');
+      dirtyNotes.add('Busy.md');
+      const client = await makeClient(token);
+      const refused = await client.callTool({
+        name: 'append_to_note',
+        arguments: { path: 'Busy.md', content: 'theirs' }
+      });
+      expect((refused.content as Array<{ text: string }>)[0].text).toContain(
+        'NOTE_HAS_UNSAVED_EDITS'
+      );
+      expect(fs.readFileSync(path.join(vault, 'Busy.md'), 'utf-8')).toBe('mine\n');
+
+      // Once the user's edit is saved, the same call goes through.
+      dirtyNotes.delete('Busy.md');
+      const ok = await client.callTool({
+        name: 'append_to_note',
+        arguments: { path: 'Busy.md', content: 'theirs' }
+      });
+      expect(ok.isError).toBeFalsy();
+      await client.close();
+    });
   });
 });

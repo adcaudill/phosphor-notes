@@ -132,6 +132,25 @@ const api = {
     return () => ipcRenderer.removeListener('app:check-unsaved-changes', handler);
   },
 
+  // Answer the main process's "is this note open with unsaved edits?" check,
+  // made before an AI (MCP) write so it doesn't race the user's own autosave.
+  onQueryNoteDirty: (cb: (relPath: string) => boolean) => {
+    const handler = (
+      _event: IpcRendererEvent,
+      payload: { requestId: number; path: string }
+    ): void => {
+      let dirty = false;
+      try {
+        dirty = cb(payload.path) === true;
+      } catch (err) {
+        console.error('onQueryNoteDirty callback failed:', err);
+      }
+      ipcRenderer.send('mcp:note-dirty-result', { requestId: payload.requestId, dirty });
+    };
+    ipcRenderer.on('mcp:query-note-dirty', handler);
+    return () => ipcRenderer.removeListener('mcp:query-note-dirty', handler);
+  },
+
   getDailyNoteFilename: () => {
     const today = new Date();
     // Use local date components to avoid UTC-based rollovers

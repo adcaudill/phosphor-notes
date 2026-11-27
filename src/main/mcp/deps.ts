@@ -21,6 +21,7 @@ import type { Task, UserSettings } from '../../types/phosphor.d';
 import type { WikiGraph } from '../graphBuilder';
 import type { WriteScope } from './scope';
 import { createWriteGate } from './writeGate';
+import { queryNoteDirty } from './rendererQuery';
 
 /** Passed by withVaultWriteGuard to every write: the vault generation captured before the call, and which tool is writing (recorded in note history). */
 export interface WriteCtx {
@@ -162,7 +163,10 @@ export interface BuildDepsOptions {
 }
 
 export function buildDefaultDeps(opts: BuildDepsOptions): McpDeps {
-  const gate = createWriteGate({ getWriteScope: opts.getWriteScope });
+  const gate = createWriteGate({
+    getWriteScope: opts.getWriteScope,
+    isNoteDirty: (relPath) => queryNoteDirty(opts.getMainWindow(), relPath)
+  });
 
   return {
     getVaultPath: () => vaultState.getVaultPath(),
