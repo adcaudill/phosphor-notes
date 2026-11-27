@@ -18,6 +18,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Nothing in this workflow launches Electron (packaging downloads its own copy),
+# so skip the binary download that our postinstall otherwise does.
+env:
+  ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+
 jobs:
   build:
     name: Build on ${{ matrix.os }}

@@ -18,6 +18,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Nothing in this workflow launches Electron (packaging downloads its own copy),
+# so skip the binary download that our postinstall otherwise does.
+env:
+  ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+
 jobs:
   # Lint results don't depend on the OS, so this runs once on Ubuntu. The lint
   # script uses --max-warnings 0, so warnings (including prettier/prettier
