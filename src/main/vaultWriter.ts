@@ -1,5 +1,6 @@
 import { promises as fsp } from 'fs';
 import * as path from 'path';
+import { writeFileAtomic } from './atomicWrite';
 import { encryptBuffer, isEncrypted } from './crypto';
 import * as vaultState from './vaultState';
 import { resolveWritableNotePath } from './vaultPaths';
@@ -82,7 +83,7 @@ interface EncodeOptions {
  * generation check, key fetch, and `encryptBuffer` call all happen in one
  * synchronous section with no `await` between them, so a concurrent
  * `clearMasterKey()` (which zeroes the key buffer in place) cannot corrupt
- * the encryption. The caller must `fsp.writeFile` the result immediately,
+ * the encryption. The caller must write the result (via `writeFileAtomic`) immediately,
  * with no `await` in between.
  */
 export async function encodeForVault(
@@ -132,7 +133,7 @@ export async function ensureParentFilesExist(
     const parentAbs = path.join(vaultPath, parentRel);
     try {
       const buf = await encodeForVault(vaultPath, Buffer.from('', 'utf-8'));
-      await fsp.writeFile(parentAbs, buf, { flag: 'wx' });
+      await writeFileAtomic(parentAbs, buf, { exclusive: true });
       created.push(parentRel);
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === 'EEXIST') continue;
@@ -231,7 +232,7 @@ export async function createNote(
         expectedGeneration: opts.expectedGeneration
       });
       try {
-        await fsp.writeFile(absPath, buf, { flag: 'wx' });
+        await writeFileAtomic(absPath, buf, { exclusive: true });
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
           throw new NoteAlreadyExistsError(relPath);
@@ -247,7 +248,7 @@ export async function createNote(
       const raw = await fsp.readFile(absPath);
       wasEncrypted = isEncrypted(raw);
       const backupAbs = backupPathFor(absPath);
-      await fsp.writeFile(backupAbs, raw);
+      await writeFileAtomic(backupAbs, raw);
       backupPath = path.relative(vaultPath, backupAbs).split(path.sep).join('/');
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
@@ -258,7 +259,7 @@ export async function createNote(
       forceEncrypt: wasEncrypted,
       expectedGeneration: opts.expectedGeneration
     });
-    await fsp.writeFile(absPath, buf);
+    await writeFileAtomic(absPath, buf);
 
     return {
       path: relPath,
@@ -343,7 +344,7 @@ export async function appendToNote(
       forceEncrypt: wasEncrypted,
       expectedGeneration: opts.expectedGeneration
     });
-    await fsp.writeFile(absPath, buf, created ? { flag: 'wx' } : undefined);
+    await writeFileAtomic(absPath, buf, { exclusive: created });
 
     // nextDoc always ends in exactly one trailing newline, so trimming it
     // before counting gives the 1-based line number of the last real line.
@@ -414,7 +415,7 @@ export async function replaceLines(
       forceEncrypt: wasEncrypted,
       expectedGeneration: opts.expectedGeneration
     });
-    await fsp.writeFile(absPath, buf);
+    await writeFileAtomic(absPath, buf);
 
     return { path: relPath, line: target.line, linesAdded: newLines.length - 1 };
   });
@@ -475,7 +476,7 @@ export async function insertUnderBullet(
       forceEncrypt: wasEncrypted,
       expectedGeneration: opts.expectedGeneration
     });
-    await fsp.writeFile(absPath, buf);
+    await writeFileAtomic(absPath, buf);
 
     return {
       path: relPath,
