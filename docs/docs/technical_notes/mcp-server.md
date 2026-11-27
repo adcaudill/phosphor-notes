@@ -24,7 +24,8 @@ Once enabled, any AI app you authorize can read your vault's contents, and that 
 |---|---|
 | `get_vault_status` | Vault name, open/locked/readable state, and what AI apps may change - the only tool that works before unlocking |
 | `list_notes` | List notes, optionally scoped to a folder |
-| `read_note` | Full text and parsed frontmatter of one note, plus a `hash` used for the version check described below |
+| `read_note` | Full text and parsed frontmatter of one note (or just a range of its lines), plus a `hash` used for the version check described below |
+| `get_note_outline` | A note's headings (freeform) or bullets (outliner), with line numbers - for finding your way around a long note |
 | `search_notes` | Full-text search. Requires every query word to match (unlike the app's own Cmd+K search, which is deliberately forgiving) - a compound query like an email address won't return unrelated notes that only share one word with it. |
 | `list_tasks` | Filter checkbox tasks by status, file, or due date |
 | `get_note_links` | A note's outgoing wikilinks and backlinks |
@@ -42,6 +43,7 @@ A second toggle, off by default even when read access is on, controls write acce
 | `create_note` | Creates a new note. Refuses to overwrite an existing one unless you're explicitly asked to allow it, in which case the old content is saved as a version first (see "Undo and history" below). |
 | `append_to_note` | Adds content to the *end* of an existing note. |
 | `insert_under_bullet` | Adds content under a *specific existing bullet* elsewhere in an outliner note (found by matching its text), rather than only at the very end - useful for filing new content under an already-existing heading-like bullet instead of creating a duplicate. |
+| `insert_at_section` | Adds content relative to an existing heading or bullet, in either note format: as its first or last child, or just before or after it. |
 | `add_task` | Adds one checkbox task, by default to today's daily journal (auto-created if needed). |
 | `complete_task` | Checks off a task; for a recurring task, also adds the next occurrence below it. |
 | `update_task` / `reschedule_task` | Changes a task's text, status, due date, recurrence, or priority. |
@@ -58,7 +60,13 @@ A further toggle, nested under write access and off by default, lets AI apps cha
 
 | Tool | What it does |
 |---|---|
+| `edit_note` | Replaces or deletes specific existing text by exact match. Each match must be unique, and a set of edits applies all at once or not at all. |
+| `update_frontmatter` | Changes individual frontmatter keys and tags without touching the rest of the note. It can't change a note's outliner/freeform `mode`. |
+| `replace_section` / `delete_section` | Rewrites or removes everything under a heading or bullet. |
+| `move_section` | Moves a heading or bullet, with everything under it, elsewhere in the same note, adjusting its level to fit. |
 | `restore_note_version` | Puts a saved version of a note back (see "Undo and history"). |
+
+A "section" is a heading plus everything up to the next heading of the same or higher level (freeform notes), or a bullet plus everything nested under it (outliner notes). Tools that replace or remove existing text refuse (`REDACTED_CONTENT`) if that text contains a value that was masked when the AI app read it, since the app could never put the real value back.
 
 Even with edit access, AI apps cannot delete, rename, or move whole notes.
 
@@ -80,6 +88,7 @@ A revert saves the content it replaces first, so a revert can itself be undone t
 - **Unsaved edits:** a write to a note you have open with unsaved changes is refused (`NOTE_HAS_UNSAVED_EDITS`) instead of racing your autosave; the AI app can retry once it's saved.
 - **Version check:** `read_note` returns a `hash` for the note. Write tools accept it back as `expectedHash` and refuse (`NOTE_CHANGED`) if the note changed since it was read. The hash is keyed with a secret that never leaves the app, so it can't be used to guess redacted values.
 - **Redacted values:** reads mask anything that looks like a US Social Security number or a payment card number. A write containing one of those masks is refused (`REDACTED_CONTENT`), so text copied from a read can never replace the real value with the placeholder.
+- **Dry runs:** every write tool accepts `dryRun`, which reports exactly what would change (and the resulting `hash`) without writing anything - useful for an AI app to show you a change before making it.
 - **Crash safety:** writes go to a temporary file that's then renamed over the note, so a crash or power loss mid-write can't leave a half-written note.
 
 **Outliner vs. freeform**
