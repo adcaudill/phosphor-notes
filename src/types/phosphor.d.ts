@@ -21,6 +21,12 @@ export interface McpStatus {
   vaultReadable: boolean;
   /** A second, separate opt-in from `enabled` - true only when both the server and write access are on. */
   writeEnabled: boolean;
+  /** A third opt-in on top of write access: editing/removing existing text in place. True only when the server, write access, and edit access are all on. */
+  editEnabled: boolean;
+  /** Folders AI writes are limited to (empty = whole vault). */
+  writeAllowFolders: string[];
+  /** Folders AI writes may never touch (wins over writeAllowFolders). */
+  writeDenyFolders: string[];
 }
 
 export interface McpActivityEntry {
@@ -140,6 +146,8 @@ export interface PhosphorAPI {
   mcpSetEnabled: (enabled: boolean) => Promise<McpStatus>;
   /** Refused (status unchanged) if the server itself is disabled - enable it first. */
   mcpSetWriteEnabled: (enabled: boolean) => Promise<McpStatus>;
+  mcpSetEditEnabled: (enabled: boolean) => Promise<McpStatus>;
+  mcpSetWriteScope: (allow: string[], deny: string[]) => Promise<McpStatus>;
   mcpSetPort: (port: number) => Promise<McpStatus>;
   /** Generates a new token and returns the plaintext ONCE - only its hash is persisted. */
   mcpRegenerateToken: () => Promise<string>;

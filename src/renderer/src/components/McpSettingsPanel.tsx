@@ -22,6 +22,25 @@ const WRITE_DISCLOSURE =
   'AI apps that are already connected may need to be restarted to see the new tools.\n\n' +
   'Allow AI apps to create and edit notes?';
 
+const EDIT_DISCLOSURE =
+  'This additionally lets connected AI apps change text that is already in your notes, not just ' +
+  'add to it. They will be able to:\n' +
+  '  - replace or remove specific passages, sections, and bullets,\n' +
+  '  - move sections and bullets around within a note,\n' +
+  '  - change frontmatter (title, tags, and other properties),\n' +
+  '  - restore an earlier version of a note they changed.\n\n' +
+  'Phosphor keeps the previous version of every note an AI app changes (see "Recent AI changes" ' +
+  'below), so any change can be reverted. AI apps still cannot delete, rename, or move whole ' +
+  'notes, and they are refused if you have unsaved edits open in the same note.\n\n' +
+  'Allow AI apps to edit existing text?';
+
+function parseFolderList(text: string): string[] {
+  return text
+    .split(/[\n,]/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
 function formatClientSnippet(config: McpClientConfig): string {
   const mcpRemoteJson = JSON.stringify(
     {
@@ -47,6 +66,8 @@ export const McpSettingsPanel: React.FC = () => {
   const [clientConfig, setClientConfig] = useState<McpClientConfig | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [allowDraft, setAllowDraft] = useState('');
+  const [denyDraft, setDenyDraft] = useState('');
 
   const refreshActivity = useCallback(() => {
     window.phosphor.mcpGetActivity().then(setActivity).catch(console.error);
@@ -58,13 +79,22 @@ export const McpSettingsPanel: React.FC = () => {
       .then((s) => {
         setStatus(s);
         setPortDraft(String(s.port));
+        setAllowDraft(s.writeAllowFolders.join('\n'));
+        setDenyDraft(s.writeDenyFolders.join('\n'));
       })
       .catch(console.error);
     refreshActivity();
 
     const unsubscribe = window.phosphor.onMcpStatusChange((s) => {
       setStatus(s);
-      setPortDraft((prev) => (document.activeElement?.id === 'mcp-port' ? prev : String(s.port)));
+      const focused = document.activeElement?.id;
+      setPortDraft((prev) => (focused === 'mcp-port' ? prev : String(s.port)));
+      setAllowDraft((prev) =>
+        focused === 'mcp-allow-folders' ? prev : s.writeAllowFolders.join('\n')
+      );
+      setDenyDraft((prev) =>
+        focused === 'mcp-deny-folders' ? prev : s.writeDenyFolders.join('\n')
+      );
     });
     return unsubscribe;
   }, [refreshActivity]);
@@ -105,6 +135,43 @@ export const McpSettingsPanel: React.FC = () => {
       setStatus(next);
     } catch (err) {
       console.error('Failed to toggle MCP write access:', err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleEditToggle = async (checked: boolean): Promise<void> => {
+    if (checked && !window.confirm(EDIT_DISCLOSURE)) return;
+    setBusy(true);
+    try {
+      const next = await window.phosphor.mcpSetEditEnabled(checked);
+      setStatus(next);
+    } catch (err) {
+      console.error('Failed to toggle MCP edit access:', err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleScopeBlur = async (): Promise<void> => {
+    if (!status) return;
+    const allow = parseFolderList(allowDraft);
+    const deny = parseFolderList(denyDraft);
+    if (
+      allow.join('\n') === status.writeAllowFolders.join('\n') &&
+      deny.join('\n') === status.writeDenyFolders.join('\n')
+    ) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const next = await window.phosphor.mcpSetWriteScope(allow, deny);
+      setStatus(next);
+      // Show the normalized result (e.g. trailing slashes and duplicates removed).
+      setAllowDraft(next.writeAllowFolders.join('\n'));
+      setDenyDraft(next.writeDenyFolders.join('\n'));
+    } catch (err) {
+      console.error('Failed to update MCP write scope:', err);
     } finally {
       setBusy(false);
     }
@@ -174,9 +241,11 @@ export const McpSettingsPanel: React.FC = () => {
       <p className="setting-hint">
         Let AI apps that support the Model Context Protocol (Claude Desktop, Claude Code, etc.)
         connect to this vault over a local, token-authenticated connection. Off by default.{' '}
-        {status.writeEnabled
-          ? 'Read and write: connected AI apps can create notes and append to existing ones, but cannot delete, rename, or unlock anything.'
-          : 'Read-only: connected AI apps can read but not change your vault.'}
+        {status.editEnabled
+          ? 'Read, write, and edit: connected AI apps can create notes, add to them, and edit existing text, but cannot delete, rename, or move notes, or unlock anything.'
+          : status.writeEnabled
+            ? 'Read and write: connected AI apps can create notes and append to existing ones, but cannot edit existing text, delete, rename, or unlock anything.'
+            : 'Read-only: connected AI apps can read but not change your vault.'}
       </p>
 
       <div className="setting-item setting-checkbox">
@@ -206,6 +275,52 @@ export const McpSettingsPanel: React.FC = () => {
         {!status.enabled && <p className="setting-hint">Turn on the MCP server first.</p>}
       </div>
 
+      <div className="setting-item setting-checkbox mcp-subsetting mcp-subsetting-nested">
+        <label htmlFor="mcp-edit-enabled">
+          <input
+            id="mcp-edit-enabled"
+            type="checkbox"
+            checked={status.editEnabled}
+            disabled={busy || !status.writeEnabled}
+            onChange={(e) => handleEditToggle(e.target.checked)}
+          />
+          Also allow editing existing text (replace and remove passages, sections, and frontmatter)
+        </label>
+        {status.enabled && !status.writeEnabled && (
+          <p className="setting-hint">Allow creating and adding to notes first.</p>
+        )}
+      </div>
+
+      {status.writeEnabled && (
+        <div className="setting-item mcp-subsetting">
+          <label htmlFor="mcp-allow-folders">Only allow changes in these folders</label>
+          <textarea
+            id="mcp-allow-folders"
+            rows={2}
+            placeholder="One folder per line, e.g. Inbox. Leave empty for the whole vault."
+            value={allowDraft}
+            disabled={busy}
+            onChange={(e) => setAllowDraft(e.target.value)}
+            onBlur={() => void handleScopeBlur()}
+          />
+          <label htmlFor="mcp-deny-folders">Never allow changes in these folders</label>
+          <textarea
+            id="mcp-deny-folders"
+            rows={2}
+            placeholder="One folder per line, e.g. Private"
+            value={denyDraft}
+            disabled={busy}
+            onChange={(e) => setDenyDraft(e.target.value)}
+            onBlur={() => void handleScopeBlur()}
+          />
+          <p className="setting-hint">
+            A folder includes its subfolders and its own index note (e.g. People.md for People).
+            Excluded folders win over allowed ones. Today&apos;s daily note lives at the top of the
+            vault, so limiting changes to folders also stops AI apps adding tasks to it.
+          </p>
+        </div>
+      )}
+
       <div className="mcp-status-row">
         <span
           className={`mcp-status-dot ${status.listening ? 'ok' : status.enabled ? 'warn' : ''}`}
@@ -217,7 +332,14 @@ export const McpSettingsPanel: React.FC = () => {
       </div>
       {status.enabled && (
         <div className="mcp-status-row mcp-status-secondary">
-          <span>Access: {status.writeEnabled ? 'read and write' : 'read-only'}</span>
+          <span>
+            Access:{' '}
+            {status.editEnabled
+              ? 'read, write, and edit'
+              : status.writeEnabled
+                ? 'read and write'
+                : 'read-only'}
+          </span>
         </div>
       )}
 

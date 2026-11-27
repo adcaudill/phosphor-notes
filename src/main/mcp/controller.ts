@@ -6,6 +6,7 @@ import { generateToken, hashToken } from './auth';
 import { createRequestListener } from './httpServer';
 import { createPhosphorMcpServer } from './server';
 import { buildDefaultDeps } from './deps';
+import { normalizeFolderList, type WriteScope } from './scope';
 import type { McpStatus } from '../../types/phosphor.d';
 
 export type { McpStatus };
@@ -24,7 +25,10 @@ class McpController {
     port: DEFAULT_PORT,
     tokenHash: null,
     tokenCreatedAt: null,
-    writeEnabled: false
+    writeEnabled: false,
+    editEnabled: false,
+    writeAllowFolders: [],
+    writeDenyFolders: []
   };
   private server: http.Server | null = null;
   private lastError: string | null = null;
@@ -66,9 +70,21 @@ class McpController {
       hasToken: this.config.tokenHash !== null,
       tokenCreatedAt: this.config.tokenCreatedAt,
       vaultReadable: await vaultState.isReadable(),
-      writeEnabled: this.config.enabled && this.config.writeEnabled
+      writeEnabled: this.isWriteEnabled(),
+      editEnabled: this.isEditEnabled(),
+      writeAllowFolders: [...this.config.writeAllowFolders],
+      writeDenyFolders: [...this.config.writeDenyFolders]
     };
   }
+
+  private isWriteEnabled = (): boolean => this.config.enabled && this.config.writeEnabled;
+
+  private isEditEnabled = (): boolean => this.isWriteEnabled() && this.config.editEnabled;
+
+  private getWriteScope = (): WriteScope => ({
+    allow: this.config.writeAllowFolders,
+    deny: this.config.writeDenyFolders
+  });
 
   async enable(): Promise<McpStatus> {
     this.config.enabled = true;
@@ -79,9 +95,10 @@ class McpController {
 
   async disable(): Promise<McpStatus> {
     this.config.enabled = false;
-    // Re-enabling read access later must never silently restore write
-    // access without a fresh confirmation from the user.
+    // Re-enabling read access later must never silently restore write (or
+    // edit) access without a fresh confirmation from the user.
     this.config.writeEnabled = false;
+    this.config.editEnabled = false;
     await this.persist();
     await this.stopListening();
     return this.getStatus();
@@ -93,6 +110,30 @@ class McpController {
       return this.getStatus();
     }
     this.config.writeEnabled = enabled;
+    if (!enabled) {
+      // Same rule as disable(): turning write access back on later must not
+      // silently bring edit access back with it.
+      this.config.editEnabled = false;
+    }
+    await this.persist();
+    this.notify();
+    return this.getStatus();
+  }
+
+  /** Refused (config/status unchanged) unless write access is already on - edit access builds on it. */
+  async setEditEnabled(enabled: boolean): Promise<McpStatus> {
+    if (enabled && !this.isWriteEnabled()) {
+      return this.getStatus();
+    }
+    this.config.editEnabled = enabled;
+    await this.persist();
+    this.notify();
+    return this.getStatus();
+  }
+
+  async setWriteScope(allow: unknown, deny: unknown): Promise<McpStatus> {
+    this.config.writeAllowFolders = normalizeFolderList(allow);
+    this.config.writeDenyFolders = normalizeFolderList(deny);
     await this.persist();
     this.notify();
     return this.getStatus();
@@ -146,7 +187,9 @@ class McpController {
       buildServer: () =>
         createPhosphorMcpServer(
           buildDefaultDeps({
-            isWriteEnabled: () => this.config.enabled && this.config.writeEnabled,
+            isWriteEnabled: this.isWriteEnabled,
+            isEditEnabled: this.isEditEnabled,
+            getWriteScope: this.getWriteScope,
             getMainWindow: this.getMainWindow
           })
         )

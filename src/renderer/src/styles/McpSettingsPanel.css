@@ -187,3 +187,25 @@
   margin-left: 24px;
   margin-top: -4px;
 }
+
+.mcp-subsetting-nested {
+  margin-left: 48px;
+}
+
+.mcp-subsetting textarea {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color, #d0d0d0);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  background: var(--input-bg, white);
+  color: var(--text-primary, #000);
+  max-width: 360px;
+  resize: vertical;
+}
+
+.mcp-subsetting textarea:focus {
+  outline: none;
+  border-color: var(--accent-color, #007acc);
+  box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.1);
+}

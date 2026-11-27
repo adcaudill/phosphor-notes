@@ -72,6 +72,10 @@ function errorCodeFor(err: unknown): string {
         return 'NOTE_CHANGED';
       case 'RedactedContentError':
         return 'REDACTED_CONTENT';
+      case 'PathNotInWriteScopeError':
+        return 'PATH_NOT_IN_WRITE_SCOPE';
+      case 'NoteHasUnsavedEditsError':
+        return 'NOTE_HAS_UNSAVED_EDITS';
       default:
         return 'INTERNAL_ERROR';
     }
@@ -137,9 +141,10 @@ export function withVaultGuard<Args extends unknown[], T extends Record<string, 
  */
 export function withVaultWriteGuard<TArgs, T extends Record<string, unknown>>(
   toolName: string,
-  deps: Pick<McpDeps, 'isReadable' | 'getGeneration' | 'isWriteEnabled'>,
+  deps: Pick<McpDeps, 'isReadable' | 'getGeneration' | 'isWriteEnabled' | 'isEditEnabled'>,
   handler: (args: TArgs, ctx: { generation: number }) => Promise<T>,
-  targetOf?: (args: TArgs) => string | undefined
+  targetOf?: (args: TArgs) => string | undefined,
+  opts: { tier?: 'write' | 'edit' } = {}
 ): (args: TArgs) => Promise<CallToolResult> {
   return async (args: TArgs) => {
     const record = (ok: boolean, errorCode?: string): void =>
@@ -157,6 +162,13 @@ export function withVaultWriteGuard<TArgs, T extends Record<string, unknown>>(
       return toErrorResult(
         'WRITE_DISABLED',
         "Write access is turned off. Ask the user to enable it in Phosphor Notes' Settings > AI Access."
+      );
+    }
+    if (opts.tier === 'edit' && !deps.isEditEnabled()) {
+      record(false, 'EDIT_DISABLED');
+      return toErrorResult(
+        'EDIT_DISABLED',
+        "Editing existing text is turned off. Ask the user to enable it in Phosphor Notes' Settings > AI Access."
       );
     }
     if (!(await deps.isReadable())) {

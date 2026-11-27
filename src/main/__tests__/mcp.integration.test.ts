@@ -16,6 +16,8 @@ import { auditLog } from '../mcp/audit';
 import { buildWikiGraph } from '../graphBuilder';
 import type { NoteMode } from '../../shared/noteFormat';
 import type { McpDeps } from '../mcp/deps';
+import { createWriteGate } from '../mcp/writeGate';
+import { UNRESTRICTED_SCOPE, type WriteScope } from '../mcp/scope';
 import type { Task } from '../../types/phosphor.d';
 
 // End-to-end test: a real StreamableHTTPServerTransport on an ephemeral
@@ -29,6 +31,9 @@ describe('MCP server (integration)', () => {
   let deps: McpDeps;
   let readable: boolean;
   let writeEnabled: boolean;
+  let editEnabled: boolean;
+  let writeScope: WriteScope;
+  const dirtyNotes = new Set<string>();
   let journalMode: NoteMode;
   let vault: string;
   const TODAY = '2026-09-23.md';
@@ -74,7 +79,13 @@ describe('MCP server (integration)', () => {
     token = generateToken();
     readable = true;
     writeEnabled = true;
+    editEnabled = true;
+    writeScope = UNRESTRICTED_SCOPE;
     journalMode = 'outliner';
+    const gate = createWriteGate({
+      getWriteScope: () => writeScope,
+      isNoteDirty: async (relPath) => dirtyNotes.has(relPath)
+    });
     deps = {
       getVaultPath: () => vault,
       isReadable: async () => readable,
@@ -88,31 +99,43 @@ describe('MCP server (integration)', () => {
       listNotes: (folder?: string) => vaultReader.listNotes(vault, folder),
       readNote: (relPath: string) => vaultReader.readNoteText(vault, relPath),
       isWriteEnabled: () => writeEnabled,
+      isEditEnabled: () => writeEnabled && editEnabled,
+      getWriteScope: () => writeScope,
       getDefaultJournalMode: async () => journalMode,
       todayDailyNotePath: () => TODAY,
-      createNote: (relPath, body, opts, ctx) =>
-        vaultWriter.createNote(vault, relPath, body, {
+      createNote: async (relPath, body, opts, ctx) => {
+        await gate.check(relPath);
+        return vaultWriter.createNote(vault, relPath, body, {
           mode: opts.mode,
           overwrite: opts.overwrite,
           expectedHash: opts.expectedHash,
+          canCreateParent: gate.canCreateParent,
           expectedGeneration: ctx.generation
-        }),
-      appendToNote: (relPath, addition, ctx, createIfMissing, appendOpts) =>
-        vaultWriter.appendToNote(vault, relPath, addition, {
+        });
+      },
+      appendToNote: async (relPath, addition, ctx, createIfMissing, appendOpts) => {
+        await gate.check(relPath);
+        return vaultWriter.appendToNote(vault, relPath, addition, {
           expectedGeneration: ctx.generation,
           createIfMissing,
-          expectedHash: appendOpts?.expectedHash
-        }),
-      insertUnderBullet: (relPath, matchText, addition, ctx, insertOpts) =>
-        vaultWriter.insertUnderBullet(vault, relPath, matchText, addition, {
+          expectedHash: appendOpts?.expectedHash,
+          canCreateParent: gate.canCreateParent
+        });
+      },
+      insertUnderBullet: async (relPath, matchText, addition, ctx, insertOpts) => {
+        await gate.check(relPath);
+        return vaultWriter.insertUnderBullet(vault, relPath, matchText, addition, {
           expectedGeneration: ctx.generation,
           occurrence: insertOpts?.occurrence,
           expectedHash: insertOpts?.expectedHash
-        }),
-      replaceLines: (relPath, target, newLines, ctx) =>
-        vaultWriter.replaceLines(vault, relPath, target, newLines, {
+        });
+      },
+      replaceLines: async (relPath, target, newLines, ctx) => {
+        await gate.check(relPath);
+        return vaultWriter.replaceLines(vault, relPath, target, newLines, {
           expectedGeneration: ctx.generation
-        }),
+        });
+      },
       searchNotes: async (query: string) => [
         { filename: 'top.md', title: 'Top', snippet: `...${query}...` }
       ],
@@ -145,6 +168,9 @@ describe('MCP server (integration)', () => {
   beforeEach(() => {
     readable = true;
     writeEnabled = true;
+    editEnabled = true;
+    writeScope = UNRESTRICTED_SCOPE;
+    dirtyNotes.clear();
     journalMode = 'outliner';
   });
 
@@ -982,6 +1008,59 @@ describe('MCP server (integration)', () => {
         expect((result.content as Array<{ text: string }>)[0].text).toContain('REDACTED_CONTENT');
       }
       expect(fs.readFileSync(path.join(vault, 'Secret.md'), 'utf-8')).toBe('SSN 123-45-6789\n');
+      await client.close();
+    });
+
+    it('reports the access level and folder scope in get_vault_status', async () => {
+      editEnabled = false;
+      writeScope = { allow: ['Inbox'], deny: ['Inbox/Private'] };
+      const client = await makeClient(token);
+      const status = await client.callTool({ name: 'get_vault_status', arguments: {} });
+      expect((status.structuredContent as { access: unknown }).access).toEqual({
+        write: true,
+        edit: false,
+        writeAllowFolders: ['Inbox'],
+        writeDenyFolders: ['Inbox/Private']
+      });
+      await client.close();
+    });
+
+    it('refuses writes outside the folder scope (PATH_NOT_IN_WRITE_SCOPE), including the default daily note', async () => {
+      writeScope = { allow: ['Inbox'], deny: ['Inbox/Private'] };
+      const before = snapshot();
+      const client = await makeClient(token);
+      for (const call of [
+        { name: 'create_note', arguments: { path: 'Elsewhere.md', content: 'x' } },
+        { name: 'create_note', arguments: { path: 'Inbox/Private/x.md', content: 'x' } },
+        { name: 'append_to_note', arguments: { path: 'top.md', content: 'x' } },
+        // No file: defaults to today's daily note at the vault root - also out of scope.
+        { name: 'add_task', arguments: { text: 'x' } }
+      ]) {
+        const result = await client.callTool(call);
+        expect(result.isError).toBe(true);
+        expect((result.content as Array<{ text: string }>)[0].text).toContain(
+          'PATH_NOT_IN_WRITE_SCOPE'
+        );
+      }
+      expect(snapshot()).toEqual(before);
+      await client.close();
+    });
+
+    it('writes inside the scope, skipping parent stubs that fall outside it', async () => {
+      writeScope = { allow: ['Scoped/Area'], deny: [] };
+      const client = await makeClient(token);
+      const result = await client.callTool({
+        name: 'create_note',
+        arguments: { path: 'Scoped/Area/Deep/Note.md', content: 'hi' }
+      });
+      expect(result.isError).toBeFalsy();
+      // Scoped.md is outside Scoped/Area and is skipped; the in-scope stubs are created.
+      expect((result.structuredContent as { parentsCreated: string[] }).parentsCreated).toEqual([
+        'Scoped/Area.md',
+        'Scoped/Area/Deep.md'
+      ]);
+      expect(fs.existsSync(path.join(vault, 'Scoped.md'))).toBe(false);
+      expect(fs.existsSync(path.join(vault, 'Scoped/Area/Deep/Note.md'))).toBe(true);
       await client.close();
     });
   });

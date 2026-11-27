@@ -17,6 +17,8 @@ import { getSettings } from '../store';
 import { localDailyNoteFilename, type NoteMode } from '../../shared/noteFormat';
 import type { Task, UserSettings } from '../../types/phosphor.d';
 import type { WikiGraph } from '../graphBuilder';
+import type { WriteScope } from './scope';
+import { createWriteGate } from './writeGate';
 
 /**
  * Dependency-injection seam between MCP tool handlers and the rest of the
@@ -38,6 +40,10 @@ export interface McpDeps {
   getGraph(): WikiGraph | null;
 
   isWriteEnabled(): boolean;
+  /** Edit tier (in-place edits of existing text) - only ever true when isWriteEnabled() is too. */
+  isEditEnabled(): boolean;
+  /** The user's folder restrictions for writes. Every write method below enforces it itself. */
+  getWriteScope(): WriteScope;
   getDefaultJournalMode(): Promise<NoteMode>;
   /** `YYYY-MM-DD.md` for today, local date. */
   todayDailyNotePath(): string;
@@ -132,10 +138,14 @@ async function afterNoteWritten(
 
 export interface BuildDepsOptions {
   isWriteEnabled: () => boolean;
+  isEditEnabled: () => boolean;
+  getWriteScope: () => WriteScope;
   getMainWindow: () => BrowserWindow | null;
 }
 
 export function buildDefaultDeps(opts: BuildDepsOptions): McpDeps {
+  const gate = createWriteGate({ getWriteScope: opts.getWriteScope });
+
   return {
     getVaultPath: () => vaultState.getVaultPath(),
     isReadable: () => vaultState.isReadable(),
@@ -154,6 +164,8 @@ export function buildDefaultDeps(opts: BuildDepsOptions): McpDeps {
     getGraph: () => getLastGraph(),
 
     isWriteEnabled: opts.isWriteEnabled,
+    isEditEnabled: opts.isEditEnabled,
+    getWriteScope: opts.getWriteScope,
     getDefaultJournalMode: async () => {
       const settings: UserSettings = await getSettings();
       return settings.defaultJournalMode;
@@ -162,10 +174,12 @@ export function buildDefaultDeps(opts: BuildDepsOptions): McpDeps {
 
     createNote: async (relPath, body, createOpts, ctx) => {
       const vp = requireVaultPath();
+      await gate.check(relPath);
       const result = await vaultWriter.createNote(vp, relPath, body, {
         mode: createOpts.mode,
         overwrite: createOpts.overwrite,
         expectedHash: createOpts.expectedHash,
+        canCreateParent: gate.canCreateParent,
         expectedGeneration: ctx.generation
       });
       await afterNoteWritten(vp, relPath, result, opts.getMainWindow());
@@ -174,10 +188,12 @@ export function buildDefaultDeps(opts: BuildDepsOptions): McpDeps {
 
     appendToNote: async (relPath, addition, ctx, createIfMissing, appendOpts) => {
       const vp = requireVaultPath();
+      await gate.check(relPath);
       const result = await vaultWriter.appendToNote(vp, relPath, addition, {
         expectedGeneration: ctx.generation,
         createIfMissing,
-        expectedHash: appendOpts?.expectedHash
+        expectedHash: appendOpts?.expectedHash,
+        canCreateParent: gate.canCreateParent
       });
       await afterNoteWritten(vp, relPath, result, opts.getMainWindow());
       return result;
@@ -185,6 +201,7 @@ export function buildDefaultDeps(opts: BuildDepsOptions): McpDeps {
 
     insertUnderBullet: async (relPath, matchText, addition, ctx, insertOpts) => {
       const vp = requireVaultPath();
+      await gate.check(relPath);
       const result = await vaultWriter.insertUnderBullet(vp, relPath, matchText, addition, {
         expectedGeneration: ctx.generation,
         occurrence: insertOpts?.occurrence,
@@ -202,6 +219,7 @@ export function buildDefaultDeps(opts: BuildDepsOptions): McpDeps {
 
     replaceLines: async (relPath, target, newLines, ctx) => {
       const vp = requireVaultPath();
+      await gate.check(relPath);
       const result = await vaultWriter.replaceLines(vp, relPath, target, newLines, {
         expectedGeneration: ctx.generation
       });

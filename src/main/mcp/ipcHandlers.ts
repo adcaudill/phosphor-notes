@@ -23,6 +23,14 @@ export function setupMcpIPC(mainWindow: BrowserWindow): void {
     mcpController.setWriteEnabled(enabled === true)
   );
 
+  ipcMain.handle('mcp:set-edit-enabled', (_, enabled: boolean) =>
+    mcpController.setEditEnabled(enabled === true)
+  );
+
+  ipcMain.handle('mcp:set-write-scope', (_, allow: unknown, deny: unknown) =>
+    mcpController.setWriteScope(allow, deny)
+  );
+
   ipcMain.handle('mcp:set-port', (_, port: number) => mcpController.setPort(port));
 
   ipcMain.handle('mcp:regenerate-token', () => mcpController.regenerateToken());

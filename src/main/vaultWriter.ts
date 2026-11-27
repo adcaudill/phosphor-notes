@@ -136,10 +136,13 @@ export async function encodeForVault(
  * another write can never be clobbered with an empty file, and skips (logs,
  * doesn't throw) a stub whose encoding fails - e.g. a locked encrypted
  * vault - rather than writing a plaintext stub into an encrypted vault.
+ * `canCreate`, if given, can veto individual stubs (e.g. ones outside an
+ * MCP client's permitted folders); vetoed stubs are skipped, not errors.
  */
 export async function ensureParentFilesExist(
   vaultPath: string,
-  absPath: string
+  absPath: string,
+  canCreate?: (relPath: string) => boolean
 ): Promise<string[]> {
   const relativePath = path.relative(vaultPath, absPath).split(path.sep).join('/');
   const parts = relativePath.split('/');
@@ -149,6 +152,7 @@ export async function ensureParentFilesExist(
   for (let i = 1; i < parts.length; i++) {
     const parentRel = parts.slice(0, i).join('/') + '.md';
     const parentAbs = path.join(vaultPath, parentRel);
+    if (canCreate && !canCreate(parentRel)) continue;
     try {
       const buf = await encodeForVault(vaultPath, Buffer.from('', 'utf-8'));
       await writeFileAtomic(parentAbs, buf, { exclusive: true });
@@ -214,6 +218,8 @@ export interface CreateNoteOptions {
   expectedGeneration: number;
   /** Only meaningful with overwrite: refuse (NoteChangedError) unless the existing note still has this content hash. */
   expectedHash?: string;
+  /** Veto for auto-created parent stub notes (see ensureParentFilesExist). */
+  canCreateParent?: (relPath: string) => boolean;
 }
 
 /**
@@ -247,7 +253,7 @@ export async function createNote(
 
   return withFileLock(absPath, async () => {
     await fsp.mkdir(path.dirname(absPath), { recursive: true });
-    const parentsCreated = await ensureParentFilesExist(vaultPath, absPath);
+    const parentsCreated = await ensureParentFilesExist(vaultPath, absPath, opts.canCreateParent);
 
     if (!opts.overwrite) {
       const buf = await encodeForVault(vaultPath, Buffer.from(doc, 'utf-8'), {
@@ -323,6 +329,8 @@ export interface AppendToNoteOptions {
   createIfMissing?: { frontmatter: string };
   /** Refuse (NoteChangedError) unless the existing note still has this content hash. */
   expectedHash?: string;
+  /** Veto for auto-created parent stub notes (see ensureParentFilesExist). */
+  canCreateParent?: (relPath: string) => boolean;
 }
 
 /**
@@ -363,7 +371,7 @@ export async function appendToNote(
         throw new NoteNotFoundError(relPath);
       }
       await fsp.mkdir(path.dirname(absPath), { recursive: true });
-      parentsCreated = await ensureParentFilesExist(vaultPath, absPath);
+      parentsCreated = await ensureParentFilesExist(vaultPath, absPath, opts.canCreateParent);
       doc = opts.createIfMissing.frontmatter + '\n';
       created = true;
     } else {
