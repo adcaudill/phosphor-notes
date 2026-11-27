@@ -12,13 +12,17 @@ export function registerNoteWriteTools(server: McpServer, deps: McpDeps): void {
         'Create a new note at a vault-relative path. Refuses to overwrite an existing note unless ' +
         '`overwrite` is explicitly true (in which case the previous content is backed up to a ' +
         '.bak file first). If `content` already includes its own frontmatter, omit `mode`. ' +
-        "Otherwise: daily-note-named files (\"YYYY-MM-DD.md\") default to the user's own daily " +
+        'Otherwise: daily-note-named files ("YYYY-MM-DD.md") default to the user\'s own daily ' +
         'journal mode setting; anything else defaults to freeform. In outliner mode, each line of ' +
         '`content` becomes its own top-level bullet. Parent-folder stub notes are auto-created for ' +
         'nested paths, same as creating a note from the app itself.',
       inputSchema: {
         path: z.string().describe('Vault-relative path, e.g. "Projects/Plan.md"'),
-        content: z.string().max(200_000).optional().describe('Plain body text, or a full document including its own frontmatter.'),
+        content: z
+          .string()
+          .max(200_000)
+          .optional()
+          .describe('Plain body text, or a full document including its own frontmatter.'),
         mode: z.enum(['freeform', 'outliner']).optional(),
         overwrite: z.boolean().optional().default(false)
       },
@@ -66,13 +70,13 @@ export function registerNoteWriteTools(server: McpServer, deps: McpDeps): void {
         'Add content to the end of an existing note - the only way to modify an existing note ' +
         'through this connection (there is no tool that replaces or edits the middle of a note; ' +
         'to add content under a specific existing bullet elsewhere in an outliner note, use ' +
-        'insert_under_bullet instead). Mode is always detected from the note\'s own frontmatter, ' +
+        "insert_under_bullet instead). Mode is always detected from the note's own frontmatter, " +
         'never a parameter here. In a freeform note, content becomes a new paragraph. In an ' +
         'outliner note, each line of content becomes its own bullet and relative indentation is ' +
-        'preserved (re-based to the app\'s 4-space convention): an unindented line becomes a new ' +
+        "preserved (re-based to the app's 4-space convention): an unindented line becomes a new " +
         'top-level bullet, an indented line becomes a child of the line above it - so send nested ' +
         'lines if you want nested bullets. Fails with NOTE_NOT_FOUND rather than creating the ' +
-        'file - use create_note first if it doesn\'t exist yet.',
+        "file - use create_note first if it doesn't exist yet.",
       inputSchema: {
         path: z.string().describe('Vault-relative path, e.g. "People/John.md"'),
         content: z.string().min(1).max(100_000)

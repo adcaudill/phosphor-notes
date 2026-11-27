@@ -14,7 +14,12 @@ import { ViewPlugin, Decoration, DecorationSet, WidgetType } from '@codemirror/v
 import type { EditorView, ViewUpdate } from '@codemirror/view';
 import type { Range } from '@codemirror/state';
 import { parseTaskLine, findMetadataSpans, type TaskMetadataSpan } from '../../../../shared/tasks';
-import { PRIORITY_ICON, PRIORITY_LABEL, dueDateLabel, recurrenceLabel } from '../../utils/taskDisplay';
+import {
+  PRIORITY_ICON,
+  PRIORITY_LABEL,
+  dueDateLabel,
+  recurrenceLabel
+} from '../../utils/taskDisplay';
 
 class TaskPillWidget extends WidgetType {
   constructor(

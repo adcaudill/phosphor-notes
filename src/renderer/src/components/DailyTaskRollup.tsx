@@ -53,7 +53,9 @@ export function DailyTaskRollup({
           className="daily-task-rollup-header"
           onClick={() => setCollapsed((v) => !v)}
         >
-          <span className={`material-symbols-outlined daily-task-rollup-chevron ${collapsed ? '' : 'open'}`}>
+          <span
+            className={`material-symbols-outlined daily-task-rollup-chevron ${collapsed ? '' : 'open'}`}
+          >
             chevron_right
           </span>
           <span className="material-symbols-outlined daily-task-rollup-icon">

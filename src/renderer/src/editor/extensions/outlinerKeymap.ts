@@ -425,8 +425,7 @@ export const outlinerNestingGuidesExtension: Extension = ViewPlugin.fromClass(
           // that render incorrectly when this background-gradient line
           // decoration and the hanging-indent line decoration compound on
           // the same line.
-          const isBulletLine =
-            /^(\s*)-\s/.test(line.text) && !/^\s*-\s*\[[ x/]\]/.test(line.text);
+          const isBulletLine = /^(\s*)-\s/.test(line.text) && !/^\s*-\s*\[[ x/]\]/.test(line.text);
 
           if (isBulletLine) {
             // Get the indentation level (number of spaces before the dash)

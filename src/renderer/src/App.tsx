@@ -54,6 +54,19 @@ function getTitleFromContent(content: string, filename: string | null): string {
   return filename.replace(/\.md$/, '');
 }
 
+const KONAMI_SEQUENCE = [
+  'ArrowUp',
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowLeft',
+  'ArrowRight',
+  'b',
+  'a'
+];
+
 function AppContent(): React.JSX.Element {
   const { settings, updateSetting } = useSettings();
   const [content, setContent] = useState('');
@@ -92,18 +105,6 @@ function AppContent(): React.JSX.Element {
   const [predictionModel, setPredictionModel] = useState<PredictionModelSnapshot | null>(null);
   const [konamisCodeOpen, setKonamiCodeOpen] = useState(false); // Toggle for Konami code easter egg
   const konamiSequenceRef = useRef<string[]>([]); // Track Konami code sequence
-  const konamiSequence = [
-    'ArrowUp',
-    'ArrowUp',
-    'ArrowDown',
-    'ArrowDown',
-    'ArrowLeft',
-    'ArrowRight',
-    'ArrowLeft',
-    'ArrowRight',
-    'b',
-    'a'
-  ];
   const editorRef = useRef<EditorHandle>(null);
   const wikiPageSuggestions = useMemo(() => {
     const unique = new Set<string>();
@@ -115,7 +116,10 @@ function AppContent(): React.JSX.Element {
   const taskAlertCount = useMemo(() => {
     const today = todayString();
     return tasks.filter(
-      (t) => t.status !== 'done' && t.dueDate && (isPastDate(t.dueDate, today) || isTodayDate(t.dueDate, today))
+      (t) =>
+        t.status !== 'done' &&
+        t.dueDate &&
+        (isPastDate(t.dueDate, today) || isTodayDate(t.dueDate, today))
     ).length;
   }, [tasks]);
 
@@ -147,13 +151,13 @@ function AppContent(): React.JSX.Element {
       konamiSequenceRef.current.push(key);
 
       // Keep only the last 10 keys
-      if (konamiSequenceRef.current.length > konamiSequence.length) {
+      if (konamiSequenceRef.current.length > KONAMI_SEQUENCE.length) {
         konamiSequenceRef.current.shift();
       }
 
       // Check if the sequence matches
-      if (konamiSequenceRef.current.length === konamiSequence.length) {
-        if (konamiSequenceRef.current.every((k, i) => k === konamiSequence[i])) {
+      if (konamiSequenceRef.current.length === KONAMI_SEQUENCE.length) {
+        if (konamiSequenceRef.current.every((k, i) => k === KONAMI_SEQUENCE[i])) {
           setKonamiCodeOpen(true);
           konamiSequenceRef.current = [];
         }
@@ -183,9 +187,7 @@ function AppContent(): React.JSX.Element {
   // Sync feature toggles with settings. Adjusted during render rather than in an
   // effect, to avoid an extra render pass:
   // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
-  const [syncedDimmingSetting, setSyncedDimmingSetting] = useState(
-    settings.enableParagraphDimming
-  );
+  const [syncedDimmingSetting, setSyncedDimmingSetting] = useState(settings.enableParagraphDimming);
   if (settings.enableParagraphDimming !== syncedDimmingSetting) {
     setSyncedDimmingSetting(settings.enableParagraphDimming);
     setParagraphDimming(settings.enableParagraphDimming);
@@ -242,6 +244,29 @@ function AppContent(): React.JSX.Element {
     }
   };
 
+  // The mount effect below subscribes its IPC and menu handlers once. Those
+  // handlers run later, so they read current values through this ref; reading
+  // state directly would see only the first render's values (for example,
+  // currentFile === null, so menu:save and the file watcher handlers did nothing).
+  const latestRef = useRef({
+    content,
+    currentFile,
+    isDirty,
+    settings,
+    updateSetting,
+    loadVaultContent
+  });
+  useEffect(() => {
+    latestRef.current = {
+      content,
+      currentFile,
+      isDirty,
+      settings,
+      updateSetting,
+      loadVaultContent
+    };
+  });
+
   useEffect(() => {
     const init = async (): Promise<void> => {
       // If main already opened a vault (auto-open), prefer that over prompting
@@ -276,7 +301,7 @@ function AppContent(): React.JSX.Element {
         }
 
         // Load the vault content
-        await loadVaultContent();
+        await latestRef.current.loadVaultContent();
       } else {
         console.log('No vault selected');
       }
@@ -367,7 +392,7 @@ function AppContent(): React.JSX.Element {
 
       // Load the vault content now that main opened it
       try {
-        await loadVaultContent();
+        await latestRef.current.loadVaultContent();
         // Refresh sidebar MRU/favorites
         setFilesVersion((v) => v + 1);
       } catch (err) {
@@ -408,7 +433,9 @@ function AppContent(): React.JSX.Element {
 
       // Prefer generating a default frontmatter (includes title) so new notes
       // created from the menu have a sensible `title` value.
-      const newContent = generateDefaultFrontmatter(filename, settings.defaultJournalMode) + '\n\n';
+      const newContent =
+        generateDefaultFrontmatter(filename, latestRef.current.settings.defaultJournalMode) +
+        '\n\n';
 
       await window.phosphor.saveNote(filename, newContent);
 
@@ -419,6 +446,7 @@ function AppContent(): React.JSX.Element {
     });
 
     const unsubscribeSave = window.phosphor.onMenuEvent?.('menu:save', () => {
+      const { currentFile, content } = latestRef.current;
       if (currentFile) {
         window.phosphor.saveNote(currentFile, content);
       }
@@ -440,7 +468,7 @@ function AppContent(): React.JSX.Element {
     const unsubscribeDimming = window.phosphor.onMenuEvent?.('menu:paragraph-dimming', () => {
       setParagraphDimming((prev) => {
         const newValue = !prev;
-        updateSetting('enableParagraphDimming', newValue);
+        latestRef.current.updateSetting('enableParagraphDimming', newValue);
         return newValue;
       });
     });
@@ -516,6 +544,7 @@ function AppContent(): React.JSX.Element {
       console.debug('[FileWatcher] File changed externally:', filename);
 
       // Check if this is the currently open file
+      const { currentFile, isDirty } = latestRef.current;
       if (filename === currentFile) {
         if (isDirty) {
           // User has unsaved changes - show conflict banner
@@ -541,7 +570,7 @@ function AppContent(): React.JSX.Element {
       console.debug('[FileWatcher] File deleted externally:', filename);
 
       // If currently open file was deleted, clear it
-      if (filename === currentFile) {
+      if (filename === latestRef.current.currentFile) {
         setContent('');
         setCurrentFile(null);
         setConflict(null);
@@ -558,9 +587,15 @@ function AppContent(): React.JSX.Element {
       setFilesVersion((v) => v + 1);
     });
 
-    // Listen for app quit check and respond with unsaved status
+    // Listen for app quit check and respond with unsaved status.
+    // This deliberately always reports "no unsaved changes", which is what the
+    // original handler effectively did (it captured the first render's isDirty,
+    // always false). Reporting the real value would make main cancel the quit,
+    // but nothing in the renderer shows an unsaved-changes dialog yet, so the
+    // app could not be quit while an autosave was pending.
+    // TODO: flush the pending autosave (or show a dialog) before allowing quit.
     const unsubscribeCheckUnsaved = window.phosphor.onCheckUnsavedChanges?.(() => {
-      return isDirty; // Return whether there are unsaved changes
+      return false;
     });
 
     return () => {
@@ -748,7 +783,12 @@ function AppContent(): React.JSX.Element {
    */
   const writeTaskLines = async (task: Task, newLines: string[]): Promise<void> => {
     try {
-      const result = await window.phosphor.updateTaskLine(task.file, task.line, task.rawText, newLines);
+      const result = await window.phosphor.updateTaskLine(
+        task.file,
+        task.line,
+        task.rawText,
+        newLines
+      );
       if (!result.ok) {
         setStatus({ type: 'error', message: `Couldn't update task: ${result.error}` });
       }
@@ -772,7 +812,10 @@ function AppContent(): React.JSX.Element {
   };
 
   const handleTaskUpdateMetadata = (task: Task, value: TaskMetadataValue): void => {
-    if (task.file === currentFile && editorRef.current?.updateTaskMetadataAtLine(task.line, value)) {
+    if (
+      task.file === currentFile &&
+      editorRef.current?.updateTaskMetadataAtLine(task.line, value)
+    ) {
       return;
     }
     const match = TASK_LINE_RE.exec(task.rawText);
@@ -805,7 +848,8 @@ function AppContent(): React.JSX.Element {
 
       const hasFrontmatter = extractFrontmatter(noteContent).frontmatter !== null;
       if (!hasFrontmatter) {
-        noteContent = generateDefaultFrontmatter(target, settings.defaultJournalMode) + '\n' + noteContent;
+        noteContent =
+          generateDefaultFrontmatter(target, settings.defaultJournalMode) + '\n' + noteContent;
       }
 
       const mode = detectNoteMode(noteContent);
@@ -996,7 +1040,7 @@ function AppContent(): React.JSX.Element {
       const list = backlinks[currentFile] || [];
       console.debug(`Backlinks for ${currentFile}:`, list.length, list);
     }
-  }, [currentFile]);
+  }, [currentFile, backlinks]);
 
   useEffect(() => {
     console.debug('Backlinks changed ->', backlinks);

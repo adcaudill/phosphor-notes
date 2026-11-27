@@ -31,7 +31,10 @@ describe('detectNoteMode', () => {
 
 describe('normalizeOutlinerLines', () => {
   it('bullets plain lines at the top level', () => {
-    expect(normalizeOutlinerLines('Call Bob\n\nEmail Alice')).toEqual(['- Call Bob', '- Email Alice']);
+    expect(normalizeOutlinerLines('Call Bob\n\nEmail Alice')).toEqual([
+      '- Call Bob',
+      '- Email Alice'
+    ]);
   });
 
   it('drops blank lines', () => {
@@ -44,12 +47,7 @@ describe('normalizeOutlinerLines', () => {
 
   it('re-derives a 2-space caller indent to the app convention of 4', () => {
     const result = normalizeOutlinerLines('- Project X\n  - [ ] draft spec\n  - notes\n    - sub');
-    expect(result).toEqual([
-      '- Project X',
-      '    - [ ] draft spec',
-      '    - notes',
-      '        - sub'
-    ]);
+    expect(result).toEqual(['- Project X', '    - [ ] draft spec', '    - notes', '        - sub']);
   });
 
   it('handles tab indentation', () => {
@@ -116,7 +114,9 @@ describe('formatAppend (freeform)', () => {
   it('appends a paragraph with blank-line separation', () => {
     const before = '---\ntitle: Ideas\n---\nFirst paragraph.\n\n';
     const { doc, appended } = formatAppend(before, 'Second thought.\nWith two lines.', 'freeform');
-    expect(doc).toBe('---\ntitle: Ideas\n---\nFirst paragraph.\n\nSecond thought.\nWith two lines.\n');
+    expect(doc).toBe(
+      '---\ntitle: Ideas\n---\nFirst paragraph.\n\nSecond thought.\nWith two lines.\n'
+    );
     expect(appended).toBe('Second thought.\nWith two lines.');
   });
 
@@ -193,7 +193,9 @@ describe('formatAppend (outliner)', () => {
   });
 
   it('throws when the addition normalizes to nothing', () => {
-    expect(() => formatAppend(outlinerBefore, '\n\n  \n', 'outliner')).toThrow(InvalidArgumentError);
+    expect(() => formatAppend(outlinerBefore, '\n\n  \n', 'outliner')).toThrow(
+      InvalidArgumentError
+    );
   });
 });
 
@@ -303,9 +305,7 @@ describe('insertUnderBullet', () => {
     const doc = '---\nmode: outliner\n---\n- [ ] Buy milk\n- Other\n';
     const result = insertUnderBullet(doc, 'Buy milk', 'Get 2%');
     expect(result.matchedText).toBe('Buy milk');
-    expect(result.doc).toBe(
-      '---\nmode: outliner\n---\n- [ ] Buy milk\n    - Get 2%\n- Other\n'
-    );
+    expect(result.doc).toBe('---\nmode: outliner\n---\n- [ ] Buy milk\n    - Get 2%\n- Other\n');
   });
 
   it('does not extend the children block across a top-level wikilink bullet with no relation', () => {
@@ -331,8 +331,7 @@ describe('insertUnderBullet', () => {
   });
 
   it('throws AmbiguousMatchError listing every match when matchText is not unique', () => {
-    const doc =
-      '---\nmode: outliner\n---\n- Notes\n- Project Notes\n- Other\n';
+    const doc = '---\nmode: outliner\n---\n- Notes\n- Project Notes\n- Other\n';
     let error: unknown;
     try {
       insertUnderBullet(doc, 'Notes', 'x');
@@ -373,8 +372,6 @@ describe('insertUnderBullet', () => {
   });
 
   it('rejects content that normalizes to nothing', () => {
-    expect(() => insertUnderBullet(fixture, 'Meetings', '\n\n  \n')).toThrow(
-      InvalidArgumentError
-    );
+    expect(() => insertUnderBullet(fixture, 'Meetings', '\n\n  \n')).toThrow(InvalidArgumentError);
   });
 });

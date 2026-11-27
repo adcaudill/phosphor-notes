@@ -31,7 +31,7 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
     {
       title: 'Add a task',
       description:
-        "Add one checkbox task (\"- [ ] ...\") to the end of a note - by default to today's daily " +
+        'Add one checkbox task ("- [ ] ...") to the end of a note - by default to today\'s daily ' +
         "journal, which is auto-created if it doesn't exist yet. An explicitly-named `file` is " +
         'never auto-created (use create_note first if needed). Encode the due date, recurrence, and ' +
         "priority as separate options, using the app's own syntax under the hood (📅 YYYY-MM-DD, " +
@@ -138,7 +138,12 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
         const { completedLine, nextLine } = buildRecurrenceAdvance(rawText);
         const newLines = nextLine ? [completedLine, nextLine] : [completedLine];
 
-        const result = await deps.replaceLines(file, { line, expectedText: rawText }, newLines, ctx);
+        const result = await deps.replaceLines(
+          file,
+          { line, expectedText: rawText },
+          newLines,
+          ctx
+        );
         return {
           path: result.path,
           line: result.line,
@@ -200,23 +205,31 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
         }
 
         const nextStatus = args.status ?? parsed.status;
-        const nextDue = args.due === undefined ? parsed.dueDate : args.due === '' ? undefined : args.due;
+        const nextDue =
+          args.due === undefined ? parsed.dueDate : args.due === '' ? undefined : args.due;
 
-        let nextRecurrence: { amount: number; unit: RecurrenceUnit } | undefined =
-          parsed.recurrence?.supported
-            ? { amount: parsed.recurrence.amount, unit: parsed.recurrence.unit }
-            : undefined;
+        let nextRecurrence: { amount: number; unit: RecurrenceUnit } | undefined = parsed.recurrence
+          ?.supported
+          ? { amount: parsed.recurrence.amount, unit: parsed.recurrence.unit }
+          : undefined;
         if (args.recurrence !== undefined) {
           if (args.recurrence === '') {
             nextRecurrence = undefined;
           } else {
             const m = /^\+(\d+)([dwmy])$/i.exec(args.recurrence)!;
-            nextRecurrence = { amount: parseInt(m[1], 10), unit: m[2].toLowerCase() as RecurrenceUnit };
+            nextRecurrence = {
+              amount: parseInt(m[1], 10),
+              unit: m[2].toLowerCase() as RecurrenceUnit
+            };
           }
         }
 
         const nextPriority =
-          args.priority === undefined ? parsed.priority : args.priority === 'none' ? undefined : args.priority;
+          args.priority === undefined
+            ? parsed.priority
+            : args.priority === 'none'
+              ? undefined
+              : args.priority;
 
         const nextCompletedAt =
           nextStatus === 'done'
@@ -279,7 +292,12 @@ export function registerTaskWriteTools(server: McpServer, deps: McpDeps): void {
           completedAt: parsed.completedAt
         });
 
-        const result = await deps.replaceLines(file, { line, expectedText: rawText }, [taskLine], ctx);
+        const result = await deps.replaceLines(
+          file,
+          { line, expectedText: rawText },
+          [taskLine],
+          ctx
+        );
         return { path: result.path, line: result.line, taskLine };
       },
       (args) => args.file

@@ -81,7 +81,8 @@ export function registerTagTools(server: McpServer, deps: McpDeps): void {
     'find_notes_by_tag',
     {
       title: 'Find notes by tag',
-      description: 'List notes whose frontmatter declares the given tag (matched case-insensitively).',
+      description:
+        'List notes whose frontmatter declares the given tag (matched case-insensitively).',
       inputSchema: {
         tag: z.string().min(1),
         limit: z.number().int().min(1).max(1000).optional().default(200)

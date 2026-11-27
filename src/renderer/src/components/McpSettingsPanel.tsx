@@ -207,7 +207,9 @@ export const McpSettingsPanel: React.FC = () => {
       </div>
 
       <div className="mcp-status-row">
-        <span className={`mcp-status-dot ${status.listening ? 'ok' : status.enabled ? 'warn' : ''}`} />
+        <span
+          className={`mcp-status-dot ${status.listening ? 'ok' : status.enabled ? 'warn' : ''}`}
+        />
         <span>{statusLabel}</span>
       </div>
       <div className="mcp-status-row mcp-status-secondary">

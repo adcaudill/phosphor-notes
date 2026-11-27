@@ -116,7 +116,11 @@ function extractMetadata(rawText: string): {
   for (const [emoji, level] of Object.entries(PRIORITY_BY_EMOJI) as [string, Priority][]) {
     if (text.includes(emoji)) {
       priority = level;
-      text = text.split(emoji).join('').replace(/\s{2,}/g, ' ').trim();
+      text = text
+        .split(emoji)
+        .join('')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
       break;
     }
   }
@@ -215,8 +219,7 @@ export function findMetadataSpans(lineText: string): TaskMetadataSpan[] {
     }
   }
 
-  const recurMatch =
-    /@repeat\(\d+[ymwdhMS]\)/.exec(lineText) ?? /🔁\s?\+\d+[dwmy]/i.exec(lineText);
+  const recurMatch = /@repeat\(\d+[ymwdhMS]\)/.exec(lineText) ?? /🔁\s?\+\d+[dwmy]/i.exec(lineText);
   if (recurMatch) {
     spans.push({
       field: 'recurrence',
@@ -535,16 +538,14 @@ export function formatTaskLine(opts: FormatTaskLineOptions): string {
   }
 
   const recurrenceMatch = recurrence ? /^\+(\d+)([dwmy])$/i.exec(recurrence) : null;
-  return serializeTaskLine(
-    '',
-    status === 'doing' ? 'doing' : 'todo',
-    text,
-    {
-      due,
-      priority,
-      recurrence: recurrenceMatch
-        ? { amount: parseInt(recurrenceMatch[1], 10), unit: recurrenceMatch[2].toLowerCase() as RecurrenceUnit }
-        : undefined
-    }
-  );
+  return serializeTaskLine('', status === 'doing' ? 'doing' : 'todo', text, {
+    due,
+    priority,
+    recurrence: recurrenceMatch
+      ? {
+          amount: parseInt(recurrenceMatch[1], 10),
+          unit: recurrenceMatch[2].toLowerCase() as RecurrenceUnit
+        }
+      : undefined
+  });
 }

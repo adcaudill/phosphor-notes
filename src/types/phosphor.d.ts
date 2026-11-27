@@ -2,7 +2,13 @@
 
 import type { PredictionModelSnapshot } from '../shared/predictionModel';
 
-export type { Task, Priority, Recurrence, RecurrenceUnit, Status as TaskStatus } from '../shared/tasks';
+export type {
+  Task,
+  Priority,
+  Recurrence,
+  RecurrenceUnit,
+  Status as TaskStatus
+} from '../shared/tasks';
 
 export interface McpStatus {
   enabled: boolean;

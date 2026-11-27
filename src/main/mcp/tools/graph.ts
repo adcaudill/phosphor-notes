@@ -45,7 +45,8 @@ export function registerGraphTools(server: McpServer, deps: McpDeps): void {
     'get_graph_stats',
     {
       title: 'Get graph stats',
-      description: 'Vault-wide link graph statistics: file/link counts, isolated notes, cycles, and the most-linked-to notes.',
+      description:
+        'Vault-wide link graph statistics: file/link counts, isolated notes, cycles, and the most-linked-to notes.',
       inputSchema: {
         includeIsolated: z.boolean().optional().default(false)
       },

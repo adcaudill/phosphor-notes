@@ -43,7 +43,9 @@ export class NoteAlreadyExistsError extends Error {
 
 export class VaultStateChangedError extends Error {
   constructor() {
-    super('The vault was locked, switched, or closed while this write was in progress; nothing was written');
+    super(
+      'The vault was locked, switched, or closed while this write was in progress; nothing was written'
+    );
     this.name = 'VaultStateChangedError';
   }
 }
@@ -91,7 +93,10 @@ export async function encodeForVault(
   const shouldEncrypt = opts.forceEncrypt || (await vaultState.isEncryptionEnabled(vaultPath));
 
   // ---- synchronous section: no `await` below until the caller's writeFile ----
-  if (opts.expectedGeneration !== undefined && vaultState.getGeneration() !== opts.expectedGeneration) {
+  if (
+    opts.expectedGeneration !== undefined &&
+    vaultState.getGeneration() !== opts.expectedGeneration
+  ) {
     throw new VaultStateChangedError();
   }
   if (!shouldEncrypt) return plaintext;
@@ -113,7 +118,10 @@ export async function encodeForVault(
  * doesn't throw) a stub whose encoding fails - e.g. a locked encrypted
  * vault - rather than writing a plaintext stub into an encrypted vault.
  */
-export async function ensureParentFilesExist(vaultPath: string, absPath: string): Promise<string[]> {
+export async function ensureParentFilesExist(
+  vaultPath: string,
+  absPath: string
+): Promise<string[]> {
   const relativePath = path.relative(vaultPath, absPath).split(path.sep).join('/');
   const parts = relativePath.split('/');
   if (parts.length <= 1) return [];
@@ -137,7 +145,9 @@ export async function ensureParentFilesExist(vaultPath: string, absPath: string)
 const fileLocks = new Map<string, Promise<void>>();
 
 function lockKeyFor(absPath: string): string {
-  return process.platform === 'win32' || process.platform === 'darwin' ? absPath.toLowerCase() : absPath;
+  return process.platform === 'win32' || process.platform === 'darwin'
+    ? absPath.toLowerCase()
+    : absPath;
 }
 
 /** Serializes concurrent MCP writes to the same file (a read-modify-write race between two stateless requests). Does not protect against a simultaneous GUI save. */
@@ -198,7 +208,9 @@ export async function createNote(
   opts: CreateNoteOptions
 ): Promise<CreateNoteResult> {
   if (body.length > MAX_CREATE_BODY_CHARS) {
-    throw new InvalidArgumentError(`content is too large (max ${MAX_CREATE_BODY_CHARS} characters)`);
+    throw new InvalidArgumentError(
+      `content is too large (max ${MAX_CREATE_BODY_CHARS} characters)`
+    );
   }
 
   const absPath = await resolveWritableNotePath(vaultPath, relPath);

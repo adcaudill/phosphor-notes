@@ -624,7 +624,10 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
 
             // Strip this module's own imports of other shared modules (they're
             // either inlined separately above/below, or stubbed - see stubImports).
-            sharedCode = sharedCode.replace(/(^|\n)import\s+[^;]*from\s+['"]\.\/[^'"]+['"];?/g, '$1');
+            sharedCode = sharedCode.replace(
+              /(^|\n)import\s+[^;]*from\s+['"]\.\/[^'"]+['"];?/g,
+              '$1'
+            );
             // Remove top-level export keywords so declarations are available when wrapped
             sharedCode = sharedCode.replace(
               /(^|\n)export\s+(?=(async\s+function|function|const|let|var|class|interface|type|enum))/g,
