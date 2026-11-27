@@ -211,6 +211,26 @@ export async function ensureParentFilesExist(
   return created;
 }
 
+/** The parent stubs ensureParentFilesExist would create for `absPath`, without creating them (for dry runs). */
+async function plannedParentStubs(
+  vaultPath: string,
+  absPath: string,
+  canCreate?: (relPath: string) => boolean
+): Promise<string[]> {
+  const parts = path.relative(vaultPath, absPath).split(path.sep).join('/').split('/');
+  const planned: string[] = [];
+  for (let i = 1; i < parts.length; i++) {
+    const parentRel = parts.slice(0, i).join('/') + '.md';
+    if (canCreate && !canCreate(parentRel)) continue;
+    try {
+      await fsp.access(path.join(vaultPath, parentRel));
+    } catch {
+      planned.push(parentRel);
+    }
+  }
+  return planned;
+}
+
 const fileLocks = new Map<string, Promise<void>>();
 
 function lockKeyFor(absPath: string): string {
@@ -259,9 +279,13 @@ export interface CreateNoteResult {
   versionId?: string;
   /** Content hash of the note as written (see contentHash). */
   hash: string;
+  /** True when this was a dry run and nothing was written. */
+  dryRun?: boolean;
 }
 
 export interface CreateNoteOptions {
+  /** Compute and return the result without writing anything (no parent stubs, no history). */
+  dryRun?: boolean;
   mode?: NoteMode;
   overwrite?: boolean;
   expectedGeneration: number;
@@ -303,6 +327,32 @@ export async function createNote(
   const doc = ownFrontmatter ? body : buildNewNoteDoc(relPath, body, opts.mode);
 
   return withFileLock(absPath, async () => {
+    if (opts.dryRun) {
+      let existing: Buffer | null = null;
+      try {
+        existing = await fsp.readFile(absPath);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+      }
+      if (existing !== null && !opts.overwrite) throw new NoteAlreadyExistsError(relPath);
+      if (existing !== null && opts.expectedHash !== undefined) {
+        checkExpectedHash(
+          relPath,
+          decodeBuffer(existing, absPath).toString('utf-8'),
+          opts.expectedHash
+        );
+      }
+      return {
+        path: relPath,
+        created: existing === null,
+        overwritten: existing !== null,
+        mode,
+        parentsCreated: await plannedParentStubs(vaultPath, absPath, opts.canCreateParent),
+        hash: contentHash(doc),
+        dryRun: true
+      };
+    }
+
     await fsp.mkdir(path.dirname(absPath), { recursive: true });
     const parentsCreated = await ensureParentFilesExist(vaultPath, absPath, opts.canCreateParent);
 
@@ -385,9 +435,13 @@ export interface AppendResult {
   hash: string;
   /** Note-history id of the replaced version, when `history` was requested. */
   versionId?: string;
+  /** True when this was a dry run and nothing was written. */
+  dryRun?: boolean;
 }
 
 export interface AppendToNoteOptions {
+  /** Compute and return the result without writing anything (no parent stubs, no history). */
+  dryRun?: boolean;
   expectedGeneration: number;
   /** Save the version this write replaces to note history. */
   history?: HistoryOption;
@@ -436,8 +490,12 @@ export async function appendToNote(
       if (!opts.createIfMissing) {
         throw new NoteNotFoundError(relPath);
       }
-      await fsp.mkdir(path.dirname(absPath), { recursive: true });
-      parentsCreated = await ensureParentFilesExist(vaultPath, absPath, opts.canCreateParent);
+      if (opts.dryRun) {
+        parentsCreated = await plannedParentStubs(vaultPath, absPath, opts.canCreateParent);
+      } else {
+        await fsp.mkdir(path.dirname(absPath), { recursive: true });
+        parentsCreated = await ensureParentFilesExist(vaultPath, absPath, opts.canCreateParent);
+      }
       doc = opts.createIfMissing.frontmatter + '\n';
       created = true;
     } else {
@@ -452,6 +510,23 @@ export async function appendToNote(
     const mode = detectNoteMode(doc);
     const { doc: nextDoc, appended } = formatAppend(doc, addition, mode);
 
+    // nextDoc always ends in exactly one trailing newline, so trimming it
+    // before counting gives the 1-based line number of the last real line.
+    const endLine = nextDoc.replace(/\n$/, '').split('\n').length;
+
+    if (opts.dryRun) {
+      return {
+        path: relPath,
+        created,
+        mode,
+        appended,
+        parentsCreated,
+        endLine,
+        hash: contentHash(nextDoc),
+        dryRun: true
+      };
+    }
+
     const versionId = await commitWrite(vaultPath, relPath, absPath, nextDoc, {
       previousRaw: raw,
       forceEncrypt: wasEncrypted,
@@ -459,10 +534,6 @@ export async function appendToNote(
       history: opts.history,
       exclusive: created
     });
-
-    // nextDoc always ends in exactly one trailing newline, so trimming it
-    // before counting gives the 1-based line number of the last real line.
-    const endLine = nextDoc.replace(/\n$/, '').split('\n').length;
 
     return {
       path: relPath,
@@ -486,9 +557,13 @@ export interface ReplaceLinesResult {
   hash: string;
   /** Note-history id of the replaced version, when `history` was requested. */
   versionId?: string;
+  /** True when this was a dry run and nothing was written. */
+  dryRun?: boolean;
 }
 
 export interface ReplaceLinesOptions {
+  /** Compute and return the result without writing anything (no parent stubs, no history). */
+  dryRun?: boolean;
   expectedGeneration: number;
   /** Save the version this write replaces to note history. */
   history?: HistoryOption;
@@ -540,6 +615,16 @@ export async function replaceLines(
     const nextLines = [...lines.slice(0, idx), ...newLines, ...lines.slice(idx + 1)];
     const nextDoc = nextLines.join('\n');
 
+    if (opts.dryRun) {
+      return {
+        path: relPath,
+        line: target.line,
+        linesAdded: newLines.length - 1,
+        hash: contentHash(nextDoc),
+        dryRun: true
+      };
+    }
+
     const versionId = await commitWrite(vaultPath, relPath, absPath, nextDoc, {
       previousRaw: raw,
       forceEncrypt: wasEncrypted,
@@ -567,9 +652,13 @@ export interface InsertUnderBulletResult {
   hash: string;
   /** Note-history id of the replaced version, when `history` was requested. */
   versionId?: string;
+  /** True when this was a dry run and nothing was written. */
+  dryRun?: boolean;
 }
 
 export interface InsertUnderBulletOptions {
+  /** Compute and return the result without writing anything (no parent stubs, no history). */
+  dryRun?: boolean;
   expectedGeneration: number;
   /** Save the version this write replaces to note history. */
   history?: HistoryOption;
@@ -617,6 +706,18 @@ export async function insertUnderBullet(
       occurrence: opts.occurrence
     });
 
+    if (opts.dryRun) {
+      return {
+        path: relPath,
+        mode: 'outliner',
+        matchedLine: result.matchedLine,
+        matchedText: result.matchedText,
+        appended: result.appended,
+        hash: contentHash(result.doc),
+        dryRun: true
+      };
+    }
+
     const versionId = await commitWrite(vaultPath, relPath, absPath, result.doc, {
       previousRaw: raw,
       forceEncrypt: wasEncrypted,
@@ -645,9 +746,13 @@ export interface RestoreVersionResult {
   /** True if the note no longer existed and the restore recreated it. */
   created: boolean;
   hash: string;
+  /** True when this was a dry run and nothing was written. */
+  dryRun?: boolean;
 }
 
 export interface RestoreVersionOptions {
+  /** Compute and return the result without writing anything (no parent stubs, no history). */
+  dryRun?: boolean;
   expectedGeneration: number;
   /** Refuse (NoteChangedError) unless the note's current content still has this hash. */
   expectedHash?: string;
@@ -686,11 +791,20 @@ export async function restoreVersion(
         decodeBuffer(currentRaw, absPath).toString('utf-8'),
         opts.expectedHash
       );
-    } else {
+    } else if (!opts.dryRun) {
       await fsp.mkdir(path.dirname(absPath), { recursive: true });
     }
 
     const restoredDoc = decodeBuffer(snapshotRaw, absPath).toString('utf-8');
+    if (opts.dryRun) {
+      return {
+        path: entry.path,
+        restoredFrom: id,
+        created: currentRaw === null,
+        hash: contentHash(restoredDoc),
+        dryRun: true
+      };
+    }
     const versionId = await commitWrite(vaultPath, entry.path, absPath, restoredDoc, {
       previousRaw: currentRaw,
       forceEncrypt: isEncrypted(snapshotRaw) || (currentRaw !== null && isEncrypted(currentRaw)),

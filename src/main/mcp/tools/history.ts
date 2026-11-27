@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpDeps } from '../deps';
 import { withVaultGuard, withVaultWriteGuard } from '../toolkit';
+import { editCommonInput } from './notesEdit';
 
 const versionSchema = z.object({
   id: z.string(),
@@ -100,28 +101,34 @@ export function registerHistoryRestoreTool(server: McpServer, deps: McpDeps): vo
         expectedHash: z
           .string()
           .optional()
-          .describe('The hash read_note last returned for the note being restored.')
+          .describe('The hash read_note last returned for the note being restored.'),
+        dryRun: editCommonInput.dryRun
       },
       outputSchema: {
         path: z.string(),
         restoredFrom: z.string(),
         versionId: z.string().optional(),
         created: z.boolean(),
-        hash: z.string()
+        hash: z.string(),
+        dryRun: z.boolean()
       },
       annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: true }
     },
     withVaultWriteGuard(
       'restore_note_version',
       deps,
-      async ({ id, expectedHash }: { id: string; expectedHash?: string }, ctx) => {
-        const result = await deps.restoreVersion(id, ctx, { expectedHash });
+      async (
+        { id, expectedHash, dryRun }: { id: string; expectedHash?: string; dryRun?: boolean },
+        ctx
+      ) => {
+        const result = await deps.restoreVersion(id, ctx, { expectedHash, dryRun });
         return {
           path: result.path,
           restoredFrom: result.restoredFrom,
           versionId: result.versionId,
           created: result.created,
-          hash: result.hash
+          hash: result.hash,
+          dryRun: result.dryRun === true
         };
       },
       undefined,

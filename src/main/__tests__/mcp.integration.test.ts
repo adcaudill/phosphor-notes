@@ -105,40 +105,44 @@ describe('MCP server (integration)', () => {
       getDefaultJournalMode: async () => journalMode,
       todayDailyNotePath: () => TODAY,
       createNote: async (relPath, body, opts, ctx) => {
-        await gate.check(relPath);
+        await gate.check(relPath, { dryRun: opts.dryRun });
         return vaultWriter.createNote(vault, relPath, body, {
           mode: opts.mode,
           overwrite: opts.overwrite,
           expectedHash: opts.expectedHash,
           canCreateParent: gate.canCreateParent,
           expectedGeneration: ctx.generation,
-          history: { tool: ctx.tool }
+          history: { tool: ctx.tool },
+          dryRun: opts.dryRun
         });
       },
       appendToNote: async (relPath, addition, ctx, createIfMissing, appendOpts) => {
-        await gate.check(relPath);
+        await gate.check(relPath, { dryRun: appendOpts?.dryRun });
         return vaultWriter.appendToNote(vault, relPath, addition, {
           expectedGeneration: ctx.generation,
           createIfMissing,
           expectedHash: appendOpts?.expectedHash,
           canCreateParent: gate.canCreateParent,
-          history: { tool: ctx.tool }
+          history: { tool: ctx.tool },
+          dryRun: appendOpts?.dryRun
         });
       },
       insertUnderBullet: async (relPath, matchText, addition, ctx, insertOpts) => {
-        await gate.check(relPath);
+        await gate.check(relPath, { dryRun: insertOpts?.dryRun });
         return vaultWriter.insertUnderBullet(vault, relPath, matchText, addition, {
           expectedGeneration: ctx.generation,
           occurrence: insertOpts?.occurrence,
           expectedHash: insertOpts?.expectedHash,
-          history: { tool: ctx.tool }
+          history: { tool: ctx.tool },
+          dryRun: insertOpts?.dryRun
         });
       },
-      replaceLines: async (relPath, target, newLines, ctx) => {
-        await gate.check(relPath);
+      replaceLines: async (relPath, target, newLines, ctx, replaceOpts) => {
+        await gate.check(relPath, { dryRun: replaceOpts?.dryRun });
         return vaultWriter.replaceLines(vault, relPath, target, newLines, {
           expectedGeneration: ctx.generation,
-          history: { tool: ctx.tool }
+          history: { tool: ctx.tool },
+          dryRun: replaceOpts?.dryRun
         });
       },
       listVersions: (listOpts) => noteHistory.listVersions(vault, listOpts),
@@ -160,7 +164,8 @@ describe('MCP server (integration)', () => {
           expectedGeneration: ctx.generation,
           expectedHash: restoreOpts?.expectedHash,
           history: { tool: ctx.tool },
-          beforeWrite: (relPath) => gate.check(relPath)
+          dryRun: restoreOpts?.dryRun,
+          beforeWrite: (relPath) => gate.check(relPath, { dryRun: restoreOpts?.dryRun })
         }),
       searchNotes: async (query: string) => [
         { filename: 'top.md', title: 'Top', snippet: `...${query}...` }
@@ -1213,6 +1218,20 @@ describe('MCP server (integration)', () => {
       return (result as { content: Array<{ text: string }> }).content[0].text;
     }
 
+    /** Every file in the vault (history excluded), so tests can assert nothing on disk changed. */
+    function snapshot(): string[] {
+      const out: string[] = [];
+      const walk = (dir: string): void => {
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          const full = path.join(dir, entry.name);
+          if (entry.isDirectory()) walk(full);
+          else out.push(`${path.relative(vault, full)}:${fs.readFileSync(full, 'utf-8').length}`);
+        }
+      };
+      walk(vault);
+      return out.sort();
+    }
+
     it('lists edit tools only when edit access is on', async () => {
       editEnabled = false;
       const off = await makeClient(token);
@@ -1493,6 +1512,70 @@ describe('MCP server (integration)', () => {
         expect(errorText(await client.callTool(call))).toContain('REDACTED_CONTENT');
       }
       expect(fs.readFileSync(path.join(vault, 'SecSecret.md'), 'utf-8')).toBe(original);
+      await client.close();
+    });
+
+    it('dryRun on the existing write tools reports the result but changes nothing on disk', async () => {
+      fs.writeFileSync(path.join(vault, 'DryExisting.md'), '- [ ] Call Sam\n');
+      const before = snapshot();
+      const versionsBefore = await noteHistory.listVersions(vault, { limit: 1000 });
+      const client = await makeClient(token);
+
+      const created = await client.callTool({
+        name: 'create_note',
+        arguments: { path: 'DryNew/Sub/Note.md', content: 'x', dryRun: true }
+      });
+      expect(created.structuredContent).toMatchObject({
+        dryRun: true,
+        created: true,
+        parentsCreated: ['DryNew.md', 'DryNew/Sub.md']
+      });
+
+      const appended = await client.callTool({
+        name: 'append_to_note',
+        arguments: { path: 'DryExisting.md', content: 'more', dryRun: true }
+      });
+      expect(appended.structuredContent).toMatchObject({ dryRun: true });
+
+      // Defaults to today's daily note, which must not be auto-created on a dry run.
+      const task = await client.callTool({
+        name: 'add_task',
+        arguments: { text: 'Dry task', dryRun: true }
+      });
+      expect(task.structuredContent).toMatchObject({ dryRun: true, path: TODAY });
+
+      const completed = await client.callTool({
+        name: 'complete_task',
+        arguments: { file: 'DryExisting.md', line: 1, rawText: '- [ ] Call Sam', dryRun: true }
+      });
+      expect(completed.structuredContent).toMatchObject({ dryRun: true });
+
+      const deleted = await client.callTool({
+        name: 'delete_task',
+        arguments: { file: 'DryExisting.md', line: 1, rawText: '- [ ] Call Sam', dryRun: true }
+      });
+      expect(deleted.structuredContent).toMatchObject({ dryRun: true });
+
+      expect(snapshot()).toEqual(before);
+      expect(await noteHistory.listVersions(vault, { limit: 1000 })).toEqual(versionsBefore);
+      await client.close();
+    });
+
+    it('dryRun still enforces NOTE_ALREADY_EXISTS and the folder scope', async () => {
+      fs.writeFileSync(path.join(vault, 'DryExists.md'), 'x\n');
+      const client = await makeClient(token);
+      const exists = await client.callTool({
+        name: 'create_note',
+        arguments: { path: 'DryExists.md', content: 'y', dryRun: true }
+      });
+      expect(errorText(exists)).toContain('NOTE_ALREADY_EXISTS');
+
+      writeScope = { allow: ['Inbox'], deny: [] };
+      const scoped = await client.callTool({
+        name: 'append_to_note',
+        arguments: { path: 'DryExists.md', content: 'y', dryRun: true }
+      });
+      expect(errorText(scoped)).toContain('PATH_NOT_IN_WRITE_SCOPE');
       await client.close();
     });
   });

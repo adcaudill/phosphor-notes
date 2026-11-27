@@ -699,4 +699,35 @@ describe('vaultWriter', () => {
       expect(fs.readFileSync(path.join(vault, 'M.md'), 'utf-8')).toBe('hello\n');
     });
   });
+
+  describe('dryRun', () => {
+    it('insertUnderBullet and restoreVersion compute results without writing', async () => {
+      const doc = '---\nmode: outliner\n---\n- P\n';
+      fs.writeFileSync(path.join(vault, 'D.md'), doc);
+      const gen = vaultState.getGeneration();
+
+      const inserted = await insertUnderBullet(vault, 'D.md', 'P', 'child', {
+        expectedGeneration: gen,
+        history: { tool: 't' },
+        dryRun: true
+      });
+      expect(inserted).toMatchObject({ dryRun: true, appended: '    - child' });
+      expect(inserted.versionId).toBeUndefined();
+      expect(fs.readFileSync(path.join(vault, 'D.md'), 'utf-8')).toBe(doc);
+
+      const real = await appendToNote(vault, 'D.md', 'Q', {
+        expectedGeneration: gen,
+        history: { tool: 't' }
+      });
+      const afterAppend = fs.readFileSync(path.join(vault, 'D.md'), 'utf-8');
+      const restored = await restoreVersion(vault, real.versionId!, {
+        expectedGeneration: gen,
+        history: { tool: 't' },
+        dryRun: true
+      });
+      expect(restored).toMatchObject({ dryRun: true, hash: contentHash(doc) });
+      expect(fs.readFileSync(path.join(vault, 'D.md'), 'utf-8')).toBe(afterAppend);
+      expect(await listVersions(vault)).toHaveLength(1);
+    });
+  });
 });
