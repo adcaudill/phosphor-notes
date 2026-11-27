@@ -82,6 +82,10 @@ function errorCodeFor(err: unknown): string {
         return 'TEXT_NOT_FOUND';
       case 'AmbiguousTextError':
         return 'AMBIGUOUS_MATCH';
+      case 'SectionNotFoundError':
+        return 'SECTION_NOT_FOUND';
+      case 'AmbiguousSectionError':
+        return 'AMBIGUOUS_MATCH';
       default:
         return 'INTERNAL_ERROR';
     }

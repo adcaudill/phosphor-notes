@@ -1362,5 +1362,138 @@ describe('MCP server (integration)', () => {
       expect(fs.readFileSync(path.join(vault, 'FrontSecret.md'), 'utf-8')).toBe(original);
       await client.close();
     });
+
+    const SECTIONED = '---\ntitle: S\n---\n# Doc\n\n## A\n\nAlpha.\n\n## B\n\nBeta.\n';
+
+    it('read_note reads a line range and get_note_outline maps the structure', async () => {
+      fs.writeFileSync(path.join(vault, 'Sections.md'), SECTIONED);
+      const client = await makeClient(token);
+      const ranged = await client.callTool({
+        name: 'read_note',
+        arguments: { path: 'Sections.md', startLine: 6, endLine: 8 }
+      });
+      expect(ranged.structuredContent).toMatchObject({
+        content: '## A\n\nAlpha.',
+        totalLines: 12,
+        startLine: 6,
+        endLine: 8
+      });
+
+      const outline = await client.callTool({
+        name: 'get_note_outline',
+        arguments: { path: 'Sections.md' }
+      });
+      expect(outline.structuredContent).toMatchObject({
+        mode: 'freeform',
+        totalLines: 12,
+        items: [
+          { line: 4, endLine: 12, level: 1, kind: 'heading', text: 'Doc' },
+          { line: 6, endLine: 8, level: 2, kind: 'heading', text: 'A' },
+          { line: 10, endLine: 12, level: 2, kind: 'heading', text: 'B' }
+        ]
+      });
+      expect((outline.structuredContent as { hash: string }).hash).toBe(
+        (ranged.structuredContent as { hash: string }).hash
+      );
+      await client.close();
+    });
+
+    it('registers insert_at_section with write access, and the other section tools only with edit access', async () => {
+      editEnabled = false;
+      const writeOnly = await makeClient(token);
+      const names = (await writeOnly.listTools()).tools.map((t) => t.name);
+      expect(names).toContain('insert_at_section');
+      expect(names).toContain('get_note_outline');
+      for (const n of ['replace_section', 'delete_section', 'move_section']) {
+        expect(names).not.toContain(n);
+      }
+      await writeOnly.close();
+    });
+
+    it('section tools edit by heading text, and line targets require expectedHash', async () => {
+      fs.writeFileSync(path.join(vault, 'Sec2.md'), SECTIONED);
+      const client = await makeClient(token);
+
+      const noHash = await client.callTool({
+        name: 'delete_section',
+        arguments: { path: 'Sec2.md', section: { line: 6 } }
+      });
+      expect(errorText(noHash)).toContain('INVALID_ARGUMENT');
+
+      const replaced = await client.callTool({
+        name: 'replace_section',
+        arguments: { path: 'Sec2.md', section: { match: 'a' }, content: 'Alpha, revised.' }
+      });
+      // Case-insensitive: "a" matches only the "A" heading, not "Doc" or "B".
+      expect(replaced.isError).toBeFalsy();
+
+      const moved = await client.callTool({
+        name: 'move_section',
+        arguments: {
+          path: 'Sec2.md',
+          section: { match: 'B' },
+          target: { match: 'A' },
+          position: 'before'
+        }
+      });
+      expect(moved.isError).toBeFalsy();
+      expect(fs.readFileSync(path.join(vault, 'Sec2.md'), 'utf-8')).toBe(
+        '---\ntitle: S\n---\n# Doc\n\n## B\n\nBeta.\n\n## A\n\nAlpha, revised.\n'
+      );
+
+      const outline = await client.callTool({
+        name: 'get_note_outline',
+        arguments: { path: 'Sec2.md' }
+      });
+      const { hash } = outline.structuredContent as { hash: string };
+      const deleted = await client.callTool({
+        name: 'delete_section',
+        arguments: { path: 'Sec2.md', section: { line: 6 }, expectedHash: hash }
+      });
+      expect(deleted.structuredContent).toMatchObject({ section: { line: 6, text: 'B' } });
+      expect(fs.readFileSync(path.join(vault, 'Sec2.md'), 'utf-8')).toBe(
+        '---\ntitle: S\n---\n# Doc\n\n## A\n\nAlpha, revised.\n'
+      );
+      await client.close();
+    });
+
+    it('insert_at_section adds bullets at the right depth in an outliner note', async () => {
+      fs.writeFileSync(
+        path.join(vault, 'OutIns.md'),
+        '---\nmode: outliner\n---\n- Parent\n- Other\n'
+      );
+      const client = await makeClient(token);
+      const result = await client.callTool({
+        name: 'insert_at_section',
+        arguments: {
+          path: 'OutIns.md',
+          section: { match: 'Parent' },
+          position: 'last_child',
+          content: 'Child\n  Grandchild'
+        }
+      });
+      expect(result.structuredContent).toMatchObject({ insertedAtLine: 5 });
+      expect(fs.readFileSync(path.join(vault, 'OutIns.md'), 'utf-8')).toBe(
+        '---\nmode: outliner\n---\n- Parent\n    - Child\n        - Grandchild\n- Other\n'
+      );
+      await client.close();
+    });
+
+    it('refuses to delete or replace a section holding a redacted value', async () => {
+      const original = '# Info\n\nSSN 123-45-6789\n\n# Other\n\nx\n';
+      fs.writeFileSync(path.join(vault, 'SecSecret.md'), original);
+      const client = await makeClient(token);
+      for (const call of [
+        { name: 'delete_section', arguments: { path: 'SecSecret.md', section: { match: 'Info' } } },
+        {
+          name: 'replace_section',
+          arguments: { path: 'SecSecret.md', section: { match: 'Info' }, content: 'gone' }
+        }
+      ]) {
+        expect(errorText(await client.callTool(call))).toContain('REDACTED_CONTENT');
+      }
+      expect(fs.readFileSync(path.join(vault, 'SecSecret.md'), 'utf-8')).toBe(original);
+      await client.close();
+    });
   });
 });
