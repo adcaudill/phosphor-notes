@@ -3,6 +3,9 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpDeps } from '../deps';
 import { withVaultWriteGuard } from '../toolkit';
 import { applyTextEdits, type TextEdit } from '../../../shared/textEdits';
+import { updateFrontmatter, type FrontmatterEdit } from '../../../shared/frontmatterEdit';
+import { extractFrontmatter } from '../../../renderer/src/utils/frontmatterUtils';
+import { assertRegionHasNoRedactedValues } from '../redact';
 
 /** Inputs every edit-tier tool shares. */
 export const editCommonInput = {
@@ -108,6 +111,74 @@ export function registerNoteEditTools(server: McpServer, deps: McpDeps): void {
           versionId: result.versionId,
           replacements: result.meta.replacements,
           changes: result.meta.changes
+        };
+      },
+      (args) => args.path,
+      { tier: 'edit' }
+    )
+  );
+
+  server.registerTool(
+    'update_frontmatter',
+    {
+      title: "Update a note's frontmatter",
+      description:
+        'Change individual frontmatter keys and tags without rewriting the rest of the note: every ' +
+        'other frontmatter line and the whole body stay exactly as they are. `set` adds or replaces ' +
+        'keys (string, number, boolean, or a list of strings); `remove` deletes keys; `addTags` / ' +
+        '`removeTags` edit the tags list (matched case-insensitively; a leading # is ignored). ' +
+        'Creates the frontmatter block if the note has none. Values are single-line and quoted ' +
+        'automatically where needed. Changing `title` does not rename the file. `mode` ' +
+        "(outliner/freeform) can't be changed here, since that wouldn't convert the body.",
+      inputSchema: {
+        path: z.string().describe('Vault-relative path, e.g. "Projects/Plan.md"'),
+        set: z
+          .record(
+            z.string(),
+            z.union([z.string().max(2_000), z.number(), z.boolean(), z.array(z.string().max(500))])
+          )
+          .optional(),
+        remove: z.array(z.string()).optional(),
+        addTags: z.array(z.string().max(200)).optional(),
+        removeTags: z.array(z.string().max(200)).optional(),
+        ...editCommonInput
+      },
+      outputSchema: {
+        ...editCommonOutput,
+        keysChanged: z.array(z.string()),
+        tags: z.array(z.string()),
+        frontmatter: z.record(z.string(), z.unknown()).nullable()
+      },
+      annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: true }
+    },
+    withVaultWriteGuard(
+      'update_frontmatter',
+      deps,
+      async (
+        args: FrontmatterEdit & { path: string; expectedHash?: string; dryRun?: boolean },
+        ctx
+      ) => {
+        const result = await deps.modifyNote(
+          args.path,
+          (doc) => {
+            const edited = updateFrontmatter(doc, args);
+            // Don't let a replaced or removed value take a redacted secret with it.
+            edited.replacedText.forEach(assertRegionHasNoRedactedValues);
+            return { doc: edited.doc, meta: edited };
+          },
+          ctx,
+          { expectedHash: args.expectedHash, dryRun: args.dryRun, summary: 'frontmatter' }
+        );
+        const { frontmatter } = extractFrontmatter(result.meta.doc);
+        return {
+          path: result.path,
+          hash: result.hash,
+          changed: result.changed,
+          dryRun: result.dryRun,
+          versionId: result.versionId,
+          keysChanged: result.meta.keysChanged,
+          tags: result.meta.tags,
+          frontmatter: frontmatter ? frontmatter.content : null
         };
       },
       (args) => args.path,

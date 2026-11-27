@@ -1209,8 +1209,8 @@ describe('MCP server (integration)', () => {
   });
 
   describe('edit tools', () => {
-    function errorText(result: { content: unknown }): string {
-      return (result.content as Array<{ text: string }>)[0].text;
+    function errorText(result: unknown): string {
+      return (result as { content: Array<{ text: string }> }).content[0].text;
     }
 
     it('lists edit tools only when edit access is on', async () => {
@@ -1320,6 +1320,46 @@ describe('MCP server (integration)', () => {
       });
       expect(errorText(dirty)).toContain('NOTE_HAS_UNSAVED_EDITS');
       expect(fs.readFileSync(path.join(vault, 'Guarded.md'), 'utf-8')).toBe('x\n');
+      await client.close();
+    });
+
+    it('update_frontmatter changes keys and tags, leaving the body alone', async () => {
+      fs.writeFileSync(
+        path.join(vault, 'Front.md'),
+        '---\ntitle: Front\ntags: [a]\n---\nBody stays.\n'
+      );
+      const client = await makeClient(token);
+      const result = await client.callTool({
+        name: 'update_frontmatter',
+        arguments: { path: 'Front.md', set: { status: 'done' }, addTags: ['b'], removeTags: ['a'] }
+      });
+      expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toMatchObject({
+        changed: true,
+        tags: ['b'],
+        frontmatter: { title: 'Front', status: 'done', tags: '[b]' }
+      });
+      expect(fs.readFileSync(path.join(vault, 'Front.md'), 'utf-8')).toBe(
+        '---\ntitle: Front\ntags: [b]\nstatus: done\n---\nBody stays.\n'
+      );
+      await client.close();
+    });
+
+    it('update_frontmatter refuses to discard a redacted value, and to change mode', async () => {
+      const original = '---\nssn: 123-45-6789\nmode: outliner\n---\n- x\n';
+      fs.writeFileSync(path.join(vault, 'FrontSecret.md'), original);
+      const client = await makeClient(token);
+      const redacted = await client.callTool({
+        name: 'update_frontmatter',
+        arguments: { path: 'FrontSecret.md', remove: ['ssn'] }
+      });
+      expect(errorText(redacted)).toContain('REDACTED_CONTENT');
+      const mode = await client.callTool({
+        name: 'update_frontmatter',
+        arguments: { path: 'FrontSecret.md', set: { mode: 'freeform' } }
+      });
+      expect(errorText(mode)).toContain('INVALID_ARGUMENT');
+      expect(fs.readFileSync(path.join(vault, 'FrontSecret.md'), 'utf-8')).toBe(original);
       await client.close();
     });
   });
