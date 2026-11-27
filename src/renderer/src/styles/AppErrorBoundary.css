@@ -1,0 +1,55 @@
+.app-error {
+  max-width: 640px;
+  margin: 12vh auto;
+  padding: 0 24px;
+  line-height: 1.5;
+  color: var(--color-text-primary, #1d1d1f);
+}
+
+.app-error h1 {
+  font-size: 20px;
+  margin: 0 0 12px;
+}
+
+.app-error p {
+  margin: 0 0 12px;
+}
+
+.app-error pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  background: var(--color-background-secondary, #f2f2f4);
+  border-radius: 8px;
+  padding: 12px;
+  max-height: 40vh;
+  overflow: auto;
+}
+
+.app-error summary {
+  cursor: pointer;
+  margin: 8px 0;
+}
+
+.app-error-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.app-error-actions button {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border, #c7c7cc);
+  background: var(--color-surface, #fff);
+  color: inherit;
+  cursor: pointer;
+}
+
+.app-error-actions button.primary {
+  background: var(--color-primary, #007aff);
+  border-color: var(--color-primary, #007aff);
+  color: #fff;
+}

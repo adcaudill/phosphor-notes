@@ -11,8 +11,11 @@ import { createRequire } from 'node:module';
 const reactVersion = createRequire(import.meta.url)('react/package.json').version;
 
 export default defineConfig(
-  // docs/ is the Jekyll site (built and deployed separately); coverage/ is generated.
-  { ignores: ['**/node_modules', '**/dist', '**/out', 'coverage', 'docs'] },
+  // docs/ is the Jekyll site (built and deployed separately); coverage/ is generated;
+  // src/renderer/public/ holds plain browser scripts served as-is (no TypeScript rules apply).
+  {
+    ignores: ['**/node_modules', '**/dist', '**/out', 'coverage', 'docs', 'src/renderer/public']
+  },
   tseslint.configs.recommended,
   eslintPluginReact.configs.flat.recommended,
   eslintPluginReact.configs.flat['jsx-runtime'],
