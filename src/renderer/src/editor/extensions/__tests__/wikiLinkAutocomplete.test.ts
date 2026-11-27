@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { EditorSelection, EditorState } from '@codemirror/state';
-import { CompletionContext } from '@codemirror/autocomplete';
+import { CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
 import { wikiLinkCompletionSource } from '../wikiLinkAutocomplete';
 
 const pages = ['Fred Smith.md', 'Alice Jones.md', 'Project Plan.md'];
 
-function runSource(doc: string, selection: EditorSelection) {
+function runSource(doc: string, selection: EditorSelection): CompletionResult | null {
   const state = EditorState.create({ doc, selection });
   // CodeMirror builds the context at the start of the main selection
   const context = new CompletionContext(state, state.selection.main.from, false);

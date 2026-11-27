@@ -180,10 +180,67 @@ function AppContent(): React.JSX.Element {
     html.setAttribute('data-theme-mode', effectiveTheme);
   }, [settings.theme, settings.colorPalette]);
 
-  // Sync feature toggles with settings
-  useEffect(() => {
+  // Sync feature toggles with settings. Adjusted during render rather than in an
+  // effect, to avoid an extra render pass:
+  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+  const [syncedDimmingSetting, setSyncedDimmingSetting] = useState(
+    settings.enableParagraphDimming
+  );
+  if (settings.enableParagraphDimming !== syncedDimmingSetting) {
+    setSyncedDimmingSetting(settings.enableParagraphDimming);
     setParagraphDimming(settings.enableParagraphDimming);
-  }, [settings.enableParagraphDimming]);
+  }
+
+  /**
+   * Load vault content (daily note, files, graph)
+   */
+  const loadVaultContent = async (): Promise<void> => {
+    try {
+      const dailyNoteFilename = await window.phosphor.getDailyNoteFilename();
+      setCurrentFile(dailyNoteFilename);
+      let noteContent = await window.phosphor.readNote(dailyNoteFilename);
+
+      // Ensure frontmatter exists and capture mode/content
+      let { frontmatter, content: contentOnly } = extractFrontmatter(noteContent);
+      if (!frontmatter) {
+        const defaultFrontmatter = generateDefaultFrontmatter(
+          dailyNoteFilename,
+          settings.defaultJournalMode
+        );
+        noteContent = defaultFrontmatter + '\n' + noteContent;
+        await window.phosphor.saveNote(dailyNoteFilename, noteContent);
+
+        const parts = extractFrontmatter(noteContent);
+        frontmatter = parts.frontmatter;
+        contentOnly = parts.content;
+      }
+
+      const isOutliner = frontmatter?.content?.mode === 'outliner';
+
+      // Seed empty outliner daily notes with a single bullet
+      if (isOutliner && contentOnly.trim() === '') {
+        noteContent = `${frontmatter?.raw ?? ''}\n- `;
+        await window.phosphor.saveNote(dailyNoteFilename, noteContent);
+      }
+
+      setContent(noteContent);
+      try {
+        await window.phosphor.updateMRU(dailyNoteFilename);
+      } catch (err) {
+        console.debug('Failed to update MRU:', err);
+      }
+      // Initialize navigation history with the daily note on first load
+      setFileHistory((prev) => {
+        if (prev.length === 0 || historyIndex === -1) {
+          setHistoryIndex(0);
+          return [dailyNoteFilename];
+        }
+        return prev;
+      });
+    } catch (err) {
+      console.error('Failed to load vault content:', err);
+    }
+  };
 
   useEffect(() => {
     const init = async (): Promise<void> => {
@@ -798,57 +855,6 @@ function AppContent(): React.JSX.Element {
   };
 
   /**
-   * Load vault content (daily note, files, graph)
-   */
-  const loadVaultContent = async (): Promise<void> => {
-    try {
-      const dailyNoteFilename = await window.phosphor.getDailyNoteFilename();
-      setCurrentFile(dailyNoteFilename);
-      let noteContent = await window.phosphor.readNote(dailyNoteFilename);
-
-      // Ensure frontmatter exists and capture mode/content
-      let { frontmatter, content: contentOnly } = extractFrontmatter(noteContent);
-      if (!frontmatter) {
-        const defaultFrontmatter = generateDefaultFrontmatter(
-          dailyNoteFilename,
-          settings.defaultJournalMode
-        );
-        noteContent = defaultFrontmatter + '\n' + noteContent;
-        await window.phosphor.saveNote(dailyNoteFilename, noteContent);
-
-        const parts = extractFrontmatter(noteContent);
-        frontmatter = parts.frontmatter;
-        contentOnly = parts.content;
-      }
-
-      const isOutliner = frontmatter?.content?.mode === 'outliner';
-
-      // Seed empty outliner daily notes with a single bullet
-      if (isOutliner && contentOnly.trim() === '') {
-        noteContent = `${frontmatter?.raw ?? ''}\n- `;
-        await window.phosphor.saveNote(dailyNoteFilename, noteContent);
-      }
-
-      setContent(noteContent);
-      try {
-        await window.phosphor.updateMRU(dailyNoteFilename);
-      } catch (err) {
-        console.debug('Failed to update MRU:', err);
-      }
-      // Initialize navigation history with the daily note on first load
-      setFileHistory((prev) => {
-        if (prev.length === 0 || historyIndex === -1) {
-          setHistoryIndex(0);
-          return [dailyNoteFilename];
-        }
-        return prev;
-      });
-    } catch (err) {
-      console.error('Failed to load vault content:', err);
-    }
-  };
-
-  /**
    * Handle header mouse down for window dragging
    * (Double-click is handled via onDoubleClick on the title element)
    */
@@ -997,12 +1003,11 @@ function AppContent(): React.JSX.Element {
   }, [backlinks]);
 
   // If user leaves the editor view (switches to tasks or graph)
-  // and the information sidebar is open, close it automatically.
-  useEffect(() => {
-    if (viewMode !== 'editor' && showInformationSidebar) {
-      setShowInformationSidebar(false);
-    }
-  }, [viewMode, showInformationSidebar]);
+  // and the information sidebar is open, close it automatically. Adjusted during
+  // render rather than in an effect, to avoid an extra render pass.
+  if (viewMode !== 'editor' && showInformationSidebar) {
+    setShowInformationSidebar(false);
+  }
 
   const handleLinkClick = async (linkText: string): Promise<void> => {
     const filename = linkText.endsWith('.md') ? linkText : `${linkText}.md`;

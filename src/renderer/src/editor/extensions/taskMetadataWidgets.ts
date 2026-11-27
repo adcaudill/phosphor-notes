@@ -82,9 +82,9 @@ export const taskMetadataWidgetsPlugin = ViewPlugin.fromClass(
         const spans = findMetadataSpans(line.text).filter((s) => s.field !== 'completedAt');
 
         for (const span of spans) {
-          let icon = '';
-          let label = '';
-          let statusClass = '';
+          let icon: string;
+          let label: string;
+          let statusClass: string;
 
           if (span.field === 'priority' && parsed.priority) {
             icon = PRIORITY_ICON[parsed.priority];

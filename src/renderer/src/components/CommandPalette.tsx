@@ -74,12 +74,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     ...fileResults.map((r): FileEntry => ({ ...r, type: 'file' }))
   ];
 
-  // Commands recompute synchronously on every keystroke, so reset selection
-  // immediately rather than waiting for the debounced file search below.
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [query]);
-
   // 2. Handle Typing (Search)
   useEffect(() => {
     if (!query) {
@@ -157,7 +151,12 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           ref={inputRef}
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            // Commands recompute synchronously on every keystroke, so reset selection
+            // immediately rather than waiting for the debounced file search.
+            setSelectedIndex(0);
+          }}
           onKeyDown={handleKeyDown}
           placeholder="Search files or type a command..."
           className="command-palette-search-input"
