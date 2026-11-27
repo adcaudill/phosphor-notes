@@ -17,7 +17,7 @@
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
-    "postinstall": "electron-builder install-app-deps",
+    "postinstall": "node scripts/install-electron.mjs && electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build && electron-builder --win",
     "build:mac": "electron-vite build && electron-builder --mac",
@@ -97,7 +97,6 @@
     "vitest": "^5.0.0"
   },
   "allowScripts": {
-    "electron@39.8.10": true,
     "esbuild@0.25.12": true,
     "electron-winstaller@5.4.0": true,
     "fsevents@2.3.3": true,
