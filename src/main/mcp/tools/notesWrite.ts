@@ -24,7 +24,13 @@ export function registerNoteWriteTools(server: McpServer, deps: McpDeps): void {
           .optional()
           .describe('Plain body text, or a full document including its own frontmatter.'),
         mode: z.enum(['freeform', 'outliner']).optional(),
-        overwrite: z.boolean().optional().default(false)
+        overwrite: z.boolean().optional().default(false),
+        expectedHash: z
+          .string()
+          .optional()
+          .describe(
+            'The hash read_note last returned for this note; only checked with overwrite: true - the overwrite is refused with NOTE_CHANGED if the note has changed since.'
+          )
       },
       outputSchema: {
         path: z.string(),
@@ -32,7 +38,8 @@ export function registerNoteWriteTools(server: McpServer, deps: McpDeps): void {
         overwritten: z.boolean(),
         mode: z.enum(['freeform', 'outliner']),
         parentsCreated: z.array(z.string()),
-        backupPath: z.string().optional()
+        backupPath: z.string().optional(),
+        hash: z.string()
       },
       annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: true }
     },
@@ -44,18 +51,31 @@ export function registerNoteWriteTools(server: McpServer, deps: McpDeps): void {
           path: relPath,
           content,
           mode,
-          overwrite
-        }: { path: string; content?: string; mode?: 'freeform' | 'outliner'; overwrite?: boolean },
+          overwrite,
+          expectedHash
+        }: {
+          path: string;
+          content?: string;
+          mode?: 'freeform' | 'outliner';
+          overwrite?: boolean;
+          expectedHash?: string;
+        },
         ctx
       ) => {
-        const result = await deps.createNote(relPath, content ?? '', { mode, overwrite }, ctx);
+        const result = await deps.createNote(
+          relPath,
+          content ?? '',
+          { mode, overwrite, expectedHash },
+          ctx
+        );
         return {
           path: result.path,
           created: result.created,
           overwritten: result.overwritten,
           mode: result.mode,
           parentsCreated: result.parentsCreated,
-          backupPath: result.backupPath
+          backupPath: result.backupPath,
+          hash: result.hash
         };
       },
       (args) => args.path
@@ -79,21 +99,40 @@ export function registerNoteWriteTools(server: McpServer, deps: McpDeps): void {
         "file - use create_note first if it doesn't exist yet.",
       inputSchema: {
         path: z.string().describe('Vault-relative path, e.g. "People/John.md"'),
-        content: z.string().min(1).max(100_000)
+        content: z.string().min(1).max(100_000),
+        expectedHash: z
+          .string()
+          .optional()
+          .describe(
+            'The hash read_note last returned for this note; the write is refused with NOTE_CHANGED if the note has changed since.'
+          )
       },
       outputSchema: {
         path: z.string(),
         mode: z.enum(['freeform', 'outliner']),
-        appended: z.string()
+        appended: z.string(),
+        hash: z.string()
       },
       annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
     },
     withVaultWriteGuard(
       'append_to_note',
       deps,
-      async ({ path: relPath, content }: { path: string; content: string }, ctx) => {
-        const result = await deps.appendToNote(relPath, content, ctx);
-        return { path: result.path, mode: result.mode, appended: result.appended };
+      async (
+        {
+          path: relPath,
+          content,
+          expectedHash
+        }: { path: string; content: string; expectedHash?: string },
+        ctx
+      ) => {
+        const result = await deps.appendToNote(relPath, content, ctx, undefined, { expectedHash });
+        return {
+          path: result.path,
+          mode: result.mode,
+          appended: result.appended,
+          hash: result.hash
+        };
       },
       (args) => args.path
     )
@@ -129,14 +168,21 @@ export function registerNoteWriteTools(server: McpServer, deps: McpDeps): void {
           .int()
           .min(1)
           .optional()
-          .describe('1-based index to disambiguate when matchText matches more than one bullet.')
+          .describe('1-based index to disambiguate when matchText matches more than one bullet.'),
+        expectedHash: z
+          .string()
+          .optional()
+          .describe(
+            'The hash read_note last returned for this note; the write is refused with NOTE_CHANGED if the note has changed since.'
+          )
       },
       outputSchema: {
         path: z.string(),
         mode: z.literal('outliner'),
         matchedLine: z.number(),
         matchedText: z.string(),
-        appended: z.string()
+        appended: z.string(),
+        hash: z.string()
       },
       annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
     },
@@ -148,19 +194,28 @@ export function registerNoteWriteTools(server: McpServer, deps: McpDeps): void {
           path: relPath,
           matchText,
           content,
-          occurrence
-        }: { path: string; matchText: string; content: string; occurrence?: number },
+          occurrence,
+          expectedHash
+        }: {
+          path: string;
+          matchText: string;
+          content: string;
+          occurrence?: number;
+          expectedHash?: string;
+        },
         ctx
       ) => {
         const result = await deps.insertUnderBullet(relPath, matchText, content, ctx, {
-          occurrence
+          occurrence,
+          expectedHash
         });
         return {
           path: result.path,
           mode: result.mode,
           matchedLine: result.matchedLine,
           matchedText: result.matchedText,
-          appended: result.appended
+          appended: result.appended,
+          hash: result.hash
         };
       },
       (args) => args.path

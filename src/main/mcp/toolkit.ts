@@ -58,6 +58,8 @@ function errorCodeFor(err: unknown): string {
         return 'AMBIGUOUS_MATCH';
       case 'LineMismatchError':
         return 'LINE_MISMATCH';
+      case 'NoteChangedError':
+        return 'NOTE_CHANGED';
       default:
         return 'INTERNAL_ERROR';
     }

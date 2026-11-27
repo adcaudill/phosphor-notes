@@ -44,21 +44,22 @@ export interface McpDeps {
   createNote(
     relPath: string,
     body: string,
-    opts: { mode?: NoteMode; overwrite?: boolean },
+    opts: { mode?: NoteMode; overwrite?: boolean; expectedHash?: string },
     ctx: { generation: number }
   ): Promise<vaultWriter.CreateNoteResult>;
   appendToNote(
     relPath: string,
     addition: string,
     ctx: { generation: number },
-    createIfMissing?: { frontmatter: string }
+    createIfMissing?: { frontmatter: string },
+    opts?: { expectedHash?: string }
   ): Promise<vaultWriter.AppendResult>;
   insertUnderBullet(
     relPath: string,
     matchText: string,
     addition: string,
     ctx: { generation: number },
-    opts?: { occurrence?: number }
+    opts?: { occurrence?: number; expectedHash?: string }
   ): Promise<vaultWriter.InsertUnderBulletResult>;
   replaceLines(
     relPath: string,
@@ -164,17 +165,19 @@ export function buildDefaultDeps(opts: BuildDepsOptions): McpDeps {
       const result = await vaultWriter.createNote(vp, relPath, body, {
         mode: createOpts.mode,
         overwrite: createOpts.overwrite,
+        expectedHash: createOpts.expectedHash,
         expectedGeneration: ctx.generation
       });
       await afterNoteWritten(vp, relPath, result, opts.getMainWindow());
       return result;
     },
 
-    appendToNote: async (relPath, addition, ctx, createIfMissing) => {
+    appendToNote: async (relPath, addition, ctx, createIfMissing, appendOpts) => {
       const vp = requireVaultPath();
       const result = await vaultWriter.appendToNote(vp, relPath, addition, {
         expectedGeneration: ctx.generation,
-        createIfMissing
+        createIfMissing,
+        expectedHash: appendOpts?.expectedHash
       });
       await afterNoteWritten(vp, relPath, result, opts.getMainWindow());
       return result;
@@ -184,7 +187,8 @@ export function buildDefaultDeps(opts: BuildDepsOptions): McpDeps {
       const vp = requireVaultPath();
       const result = await vaultWriter.insertUnderBullet(vp, relPath, matchText, addition, {
         expectedGeneration: ctx.generation,
-        occurrence: insertOpts?.occurrence
+        occurrence: insertOpts?.occurrence,
+        expectedHash: insertOpts?.expectedHash
       });
       // Never creates the note or any parent stubs.
       await afterNoteWritten(

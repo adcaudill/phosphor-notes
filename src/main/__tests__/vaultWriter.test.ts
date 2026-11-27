@@ -17,8 +17,10 @@ import {
   NoteNotFoundError,
   DecryptError,
   InvalidArgumentError,
-  BulletNotFoundError
+  BulletNotFoundError,
+  NoteChangedError
 } from '../vaultWriter';
+import { contentHash } from '../contentHash';
 
 function listAllFiles(root: string): string[] {
   const out: string[] = [];
@@ -448,6 +450,58 @@ describe('vaultWriter', () => {
       ]);
       // 'b' finishes first since it doesn't wait behind 'a'.
       expect(order).toEqual(['b', 'a']);
+    });
+  });
+
+  describe('expectedHash', () => {
+    it('createNote overwrite refuses a stale expectedHash and leaves the note untouched', async () => {
+      fs.writeFileSync(path.join(vault, 'Doc.md'), 'current\n');
+      const gen = vaultState.getGeneration();
+      await expect(
+        createNote(vault, 'Doc.md', 'replacement', {
+          overwrite: true,
+          expectedHash: contentHash('something else\n'),
+          expectedGeneration: gen
+        })
+      ).rejects.toBeInstanceOf(NoteChangedError);
+      expect(fs.readFileSync(path.join(vault, 'Doc.md'), 'utf-8')).toBe('current\n');
+      expect(fs.readdirSync(vault)).toEqual(['Doc.md']); // no backup made either
+    });
+
+    it('createNote overwrite proceeds with a matching expectedHash and returns the new hash', async () => {
+      fs.writeFileSync(path.join(vault, 'Doc.md'), 'current\n');
+      const gen = vaultState.getGeneration();
+      const result = await createNote(vault, 'Doc.md', 'replacement', {
+        overwrite: true,
+        expectedHash: contentHash('current\n'),
+        expectedGeneration: gen
+      });
+      expect(result.overwritten).toBe(true);
+      const written = fs.readFileSync(path.join(vault, 'Doc.md'), 'utf-8');
+      expect(result.hash).toBe(contentHash(written));
+    });
+
+    it('appendToNote and insertUnderBullet refuse a stale expectedHash', async () => {
+      const doc = '---\nmode: outliner\n---\n- Parent\n';
+      fs.writeFileSync(path.join(vault, 'Out.md'), doc);
+      const gen = vaultState.getGeneration();
+      const stale = contentHash('not it');
+      await expect(
+        appendToNote(vault, 'Out.md', 'x', { expectedGeneration: gen, expectedHash: stale })
+      ).rejects.toBeInstanceOf(NoteChangedError);
+      await expect(
+        insertUnderBullet(vault, 'Out.md', 'Parent', 'child', {
+          expectedGeneration: gen,
+          expectedHash: stale
+        })
+      ).rejects.toBeInstanceOf(NoteChangedError);
+      expect(fs.readFileSync(path.join(vault, 'Out.md'), 'utf-8')).toBe(doc);
+
+      const ok = await insertUnderBullet(vault, 'Out.md', 'Parent', 'child', {
+        expectedGeneration: gen,
+        expectedHash: contentHash(doc)
+      });
+      expect(ok.hash).toBe(contentHash(fs.readFileSync(path.join(vault, 'Out.md'), 'utf-8')));
     });
   });
 });

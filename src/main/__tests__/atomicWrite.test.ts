@@ -51,9 +51,7 @@ describe('writeFileAtomic', () => {
   it('leaves the original untouched and cleans up when the rename fails', async () => {
     const target = path.join(dir, 'note.md');
     fs.writeFileSync(target, 'original\n');
-    vi.spyOn(fsp, 'rename').mockRejectedValue(
-      Object.assign(new Error('boom'), { code: 'EXDEV' })
-    );
+    vi.spyOn(fsp, 'rename').mockRejectedValue(Object.assign(new Error('boom'), { code: 'EXDEV' }));
     await expect(writeFileAtomic(target, 'replacement')).rejects.toThrow('boom');
     expect(fs.readFileSync(target, 'utf-8')).toBe('original\n');
     expect(fs.readdirSync(dir)).toEqual(['note.md']);

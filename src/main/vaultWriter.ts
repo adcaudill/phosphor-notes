@@ -1,6 +1,7 @@
 import { promises as fsp } from 'fs';
 import * as path from 'path';
 import { writeFileAtomic } from './atomicWrite';
+import { contentHash } from './contentHash';
 import { encryptBuffer, isEncrypted } from './crypto';
 import * as vaultState from './vaultState';
 import { resolveWritableNotePath } from './vaultPaths';
@@ -61,6 +62,23 @@ export class LineMismatchError extends Error {
       `Line ${line} in ${relPath} no longer matches the expected text - it may have been edited since it was last read.`
     );
     this.name = 'LineMismatchError';
+  }
+}
+
+/** The whole-note counterpart of LineMismatchError: the note's content hash no longer matches the `expectedHash` the caller read it with. */
+export class NoteChangedError extends Error {
+  constructor(public readonly relPath: string) {
+    super(
+      `${relPath} has changed since it was last read (its hash no longer matches expectedHash). Re-read it and retry.`
+    );
+    this.name = 'NoteChangedError';
+  }
+}
+
+/** Throws NoteChangedError if `expectedHash` is given and doesn't match `doc`'s current content hash. */
+function checkExpectedHash(relPath: string, doc: string, expectedHash: string | undefined): void {
+  if (expectedHash !== undefined && contentHash(doc) !== expectedHash) {
+    throw new NoteChangedError(relPath);
   }
 }
 
@@ -186,12 +204,16 @@ export interface CreateNoteResult {
   mode: NoteMode;
   parentsCreated: string[];
   backupPath?: string;
+  /** Content hash of the note as written (see contentHash). */
+  hash: string;
 }
 
 export interface CreateNoteOptions {
   mode?: NoteMode;
   overwrite?: boolean;
   expectedGeneration: number;
+  /** Only meaningful with overwrite: refuse (NoteChangedError) unless the existing note still has this content hash. */
+  expectedHash?: string;
 }
 
 /**
@@ -239,7 +261,14 @@ export async function createNote(
         }
         throw err;
       }
-      return { path: relPath, created: true, overwritten: false, mode, parentsCreated };
+      return {
+        path: relPath,
+        created: true,
+        overwritten: false,
+        mode,
+        parentsCreated,
+        hash: contentHash(doc)
+      };
     }
 
     let backupPath: string | undefined;
@@ -247,6 +276,9 @@ export async function createNote(
     try {
       const raw = await fsp.readFile(absPath);
       wasEncrypted = isEncrypted(raw);
+      if (opts.expectedHash !== undefined) {
+        checkExpectedHash(relPath, decodeBuffer(raw, absPath).toString('utf-8'), opts.expectedHash);
+      }
       const backupAbs = backupPathFor(absPath);
       await writeFileAtomic(backupAbs, raw);
       backupPath = path.relative(vaultPath, backupAbs).split(path.sep).join('/');
@@ -267,7 +299,8 @@ export async function createNote(
       overwritten: backupPath !== undefined,
       mode,
       parentsCreated,
-      backupPath
+      backupPath,
+      hash: contentHash(doc)
     };
   });
 }
@@ -280,12 +313,16 @@ export interface AppendResult {
   parentsCreated: string[];
   /** 1-based line number of the last line of the final document - since `appended` is always the tail, this is also where it ends. A snapshot, like list_tasks' line numbers. */
   endLine: number;
+  /** Content hash of the note as written. */
+  hash: string;
 }
 
 export interface AppendToNoteOptions {
   expectedGeneration: number;
   /** If the note doesn't exist, create it with this frontmatter first instead of throwing NoteNotFoundError. */
   createIfMissing?: { frontmatter: string };
+  /** Refuse (NoteChangedError) unless the existing note still has this content hash. */
+  expectedHash?: string;
 }
 
 /**
@@ -335,6 +372,7 @@ export async function appendToNote(
       // so a concurrent lock can't zero the key mid-decrypt.
       const decoded = decodeBuffer(raw, absPath);
       doc = decoded.toString('utf-8');
+      checkExpectedHash(relPath, doc, opts.expectedHash);
     }
 
     const mode = detectNoteMode(doc);
@@ -350,7 +388,15 @@ export async function appendToNote(
     // before counting gives the 1-based line number of the last real line.
     const endLine = nextDoc.replace(/\n$/, '').split('\n').length;
 
-    return { path: relPath, created, mode, appended, parentsCreated, endLine };
+    return {
+      path: relPath,
+      created,
+      mode,
+      appended,
+      parentsCreated,
+      endLine,
+      hash: contentHash(nextDoc)
+    };
   });
 }
 
@@ -359,6 +405,8 @@ export interface ReplaceLinesResult {
   line: number;
   /** newLines.length - 1: positive when the replacement grew the file (e.g. a recurring task's completion inserting a next-occurrence line), negative if it shrank it. */
   linesAdded: number;
+  /** Content hash of the note as written. */
+  hash: string;
 }
 
 export interface ReplaceLinesOptions {
@@ -417,7 +465,12 @@ export async function replaceLines(
     });
     await writeFileAtomic(absPath, buf);
 
-    return { path: relPath, line: target.line, linesAdded: newLines.length - 1 };
+    return {
+      path: relPath,
+      line: target.line,
+      linesAdded: newLines.length - 1,
+      hash: contentHash(nextDoc)
+    };
   });
 }
 
@@ -427,11 +480,15 @@ export interface InsertUnderBulletResult {
   matchedLine: number;
   matchedText: string;
   appended: string;
+  /** Content hash of the note as written. */
+  hash: string;
 }
 
 export interface InsertUnderBulletOptions {
   expectedGeneration: number;
   occurrence?: number;
+  /** Refuse (NoteChangedError) unless the note still has this content hash. */
+  expectedHash?: string;
 }
 
 /**
@@ -467,6 +524,7 @@ export async function insertUnderBullet(
     // so a concurrent lock can't zero the key mid-decrypt.
     const decoded = decodeBuffer(raw, absPath);
     const doc = decoded.toString('utf-8');
+    checkExpectedHash(relPath, doc, opts.expectedHash);
 
     const result = formatInsertUnderBullet(doc, matchText, addition, {
       occurrence: opts.occurrence
@@ -483,7 +541,8 @@ export async function insertUnderBullet(
       mode: 'outliner',
       matchedLine: result.matchedLine,
       matchedText: result.matchedText,
-      appended: result.appended
+      appended: result.appended,
+      hash: contentHash(result.doc)
     };
   });
 }

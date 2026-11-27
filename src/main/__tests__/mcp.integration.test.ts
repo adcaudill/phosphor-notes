@@ -94,17 +94,20 @@ describe('MCP server (integration)', () => {
         vaultWriter.createNote(vault, relPath, body, {
           mode: opts.mode,
           overwrite: opts.overwrite,
+          expectedHash: opts.expectedHash,
           expectedGeneration: ctx.generation
         }),
-      appendToNote: (relPath, addition, ctx, createIfMissing) =>
+      appendToNote: (relPath, addition, ctx, createIfMissing, appendOpts) =>
         vaultWriter.appendToNote(vault, relPath, addition, {
           expectedGeneration: ctx.generation,
-          createIfMissing
+          createIfMissing,
+          expectedHash: appendOpts?.expectedHash
         }),
       insertUnderBullet: (relPath, matchText, addition, ctx, insertOpts) =>
         vaultWriter.insertUnderBullet(vault, relPath, matchText, addition, {
           expectedGeneration: ctx.generation,
-          occurrence: insertOpts?.occurrence
+          occurrence: insertOpts?.occurrence,
+          expectedHash: insertOpts?.expectedHash
         }),
       replaceLines: (relPath, target, newLines, ctx) =>
         vaultWriter.replaceLines(vault, relPath, target, newLines, {
@@ -924,6 +927,36 @@ describe('MCP server (integration)', () => {
         .reverse()
         .find((e) => e.tool === 'create_note' && e.target === 'Audited.md');
       expect(entry).toMatchObject({ ok: true, write: true, target: 'Audited.md' });
+    });
+
+    it('returns a content hash from read_note and refuses a write with a stale expectedHash', async () => {
+      fs.writeFileSync(path.join(vault, 'Hashed.md'), 'first\n');
+      const client = await makeClient(token);
+      const read = await client.callTool({ name: 'read_note', arguments: { path: 'Hashed.md' } });
+      const hash = (read.structuredContent as { hash: string }).hash;
+      expect(hash).toMatch(/^[0-9a-f]{32}$/);
+
+      // Matching hash: the append goes through and returns the new hash.
+      const ok = await client.callTool({
+        name: 'append_to_note',
+        arguments: { path: 'Hashed.md', content: 'second', expectedHash: hash }
+      });
+      expect(ok.isError).toBeFalsy();
+      const newHash = (ok.structuredContent as { hash: string }).hash;
+      expect(newHash).not.toBe(hash);
+
+      // The original hash is now stale.
+      const stale = await client.callTool({
+        name: 'append_to_note',
+        arguments: { path: 'Hashed.md', content: 'third', expectedHash: hash }
+      });
+      expect(stale.isError).toBe(true);
+      expect((stale.content as Array<{ text: string }>)[0].text).toContain('NOTE_CHANGED');
+      expect(fs.readFileSync(path.join(vault, 'Hashed.md'), 'utf-8')).not.toContain('third');
+
+      const reread = await client.callTool({ name: 'read_note', arguments: { path: 'Hashed.md' } });
+      expect((reread.structuredContent as { hash: string }).hash).toBe(newHash);
+      await client.close();
     });
   });
 });
