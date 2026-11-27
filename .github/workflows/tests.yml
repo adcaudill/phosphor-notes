@@ -19,8 +19,9 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Lint results don't depend on the OS, so this runs once on Ubuntu. Only errors
-  # fail the job; warnings (mostly prettier/prettier formatting) are reported.
+  # Lint results don't depend on the OS, so this runs once on Ubuntu. The lint
+  # script uses --max-warnings 0, so warnings (including prettier/prettier
+  # formatting) fail the job as well as errors.
   lint:
     name: Lint
     runs-on: ubuntu-latest
