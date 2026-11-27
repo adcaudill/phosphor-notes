@@ -11,6 +11,8 @@ export interface AuditEntry {
   target?: string;
   /** True for a create/append/add-task style call. */
   write?: boolean;
+  /** Note-history id of the version this write replaced, if any (revertable from Settings). */
+  versionId?: string;
 }
 
 /** In-memory-only ring buffer of recent MCP tool calls, surfaced in Settings. Never written to disk. */

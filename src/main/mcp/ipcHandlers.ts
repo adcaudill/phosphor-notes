@@ -1,6 +1,10 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import { mcpController } from './controller';
 import { auditLog } from './audit';
+import * as vaultState from '../vaultState';
+import * as vaultWriter from '../vaultWriter';
+import * as noteHistory from '../noteHistory';
+import { notifyNoteWritten } from './deps';
 import type { McpClientConfig } from '../../types/phosphor.d';
 
 /**
@@ -36,6 +40,33 @@ export function setupMcpIPC(mainWindow: BrowserWindow): void {
   ipcMain.handle('mcp:regenerate-token', () => mcpController.regenerateToken());
 
   ipcMain.handle('mcp:get-activity', () => auditLog.recent());
+
+  // Versions of notes that MCP writes replaced ("Recent AI changes"), newest first.
+  ipcMain.handle('mcp:list-versions', async (_, limit?: number) => {
+    const vaultPath = vaultState.getVaultPath();
+    if (!vaultPath) return [];
+    return noteHistory.listVersions(vaultPath, {
+      limit: typeof limit === 'number' && limit > 0 ? Math.min(limit, 200) : 30
+    });
+  });
+
+  // Revert from Settings: a user action, so the MCP write scope doesn't apply,
+  // but the content being replaced is still saved so the revert can be undone.
+  ipcMain.handle('mcp:restore-version', async (_, id: string) => {
+    const vaultPath = vaultState.getVaultPath();
+    if (!vaultPath) throw new Error('No vault is open');
+    const result = await vaultWriter.restoreVersion(vaultPath, String(id), {
+      expectedGeneration: vaultState.getGeneration(),
+      history: { tool: 'revert (app)' }
+    });
+    await notifyNoteWritten(
+      vaultPath,
+      result.path,
+      { created: result.created, parentsCreated: [] },
+      mainWindow
+    );
+    return result;
+  });
 
   ipcMain.handle('mcp:get-client-config', async (_, token: string): Promise<McpClientConfig> => {
     const status = await mcpController.getStatus();

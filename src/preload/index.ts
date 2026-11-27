@@ -4,7 +4,8 @@ import type {
   UserSettings,
   McpStatus,
   McpActivityEntry,
-  McpClientConfig
+  McpClientConfig,
+  McpNoteVersion
 } from '../types/phosphor';
 import type { PredictionModelSnapshot } from '../shared/predictionModel';
 
@@ -219,6 +220,10 @@ const api = {
   mcpSetPort: (port: number) => ipcRenderer.invoke('mcp:set-port', port),
   mcpRegenerateToken: (): Promise<string> => ipcRenderer.invoke('mcp:regenerate-token'),
   mcpGetActivity: (): Promise<McpActivityEntry[]> => ipcRenderer.invoke('mcp:get-activity'),
+  mcpListVersions: (limit?: number): Promise<McpNoteVersion[]> =>
+    ipcRenderer.invoke('mcp:list-versions', limit),
+  mcpRestoreVersion: (id: string): Promise<{ path: string; versionId?: string }> =>
+    ipcRenderer.invoke('mcp:restore-version', id),
   mcpGetClientConfig: (token: string): Promise<McpClientConfig> =>
     ipcRenderer.invoke('mcp:get-client-config', token),
   onMcpStatusChange: (cb: (status: McpStatus) => void) => {

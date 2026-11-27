@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import type { McpActivityEntry, McpClientConfig, McpStatus } from '../../../types/phosphor.d';
+import type {
+  McpActivityEntry,
+  McpClientConfig,
+  McpNoteVersion,
+  McpStatus
+} from '../../../types/phosphor.d';
 import '../styles/McpSettingsPanel.css';
 
 const PRIVACY_DISCLOSURE =
@@ -11,14 +16,14 @@ const PRIVACY_DISCLOSURE =
 
 const WRITE_DISCLOSURE =
   'This lets connected AI apps change your vault, not just read it. They will be able to:\n' +
-  '  - create new notes (and replace a note if they explicitly ask to - a .bak backup of the ' +
-  'old version is kept next to it),\n' +
-  '  - add text to the end of existing notes,\n' +
-  '  - add tasks (by default to today’s daily note).\n\n' +
-  'They cannot delete, rename, or move notes, edit text in the middle of a note, or unlock the ' +
-  'vault. Changes happen immediately without asking you each time; if you have unsaved edits open ' +
-  'in the same note, Phosphor will show its usual conflict prompt. Content written into an ' +
-  'encrypted vault is encrypted like any other note.\n\n' +
+  '  - create new notes (and replace a note if they explicitly ask to),\n' +
+  '  - add text to the end of existing notes or under an existing bullet,\n' +
+  '  - add, complete, update, and delete tasks (new tasks go to today’s daily note by default).\n\n' +
+  'They cannot delete, rename, or move notes, edit other text already in a note (unless you also ' +
+  'allow editing below), or unlock the vault. Changes happen immediately without asking you each ' +
+  'time, but Phosphor keeps the previous version of every note an AI app changes, so you can ' +
+  'revert it from "Recent AI changes" below. AI apps are refused if you have unsaved edits open ' +
+  'in the same note. Content written into an encrypted vault is encrypted like any other note.\n\n' +
   'AI apps that are already connected may need to be restarted to see the new tools.\n\n' +
   'Allow AI apps to create and edit notes?';
 
@@ -68,9 +73,11 @@ export const McpSettingsPanel: React.FC = () => {
   const [copied, setCopied] = useState<string | null>(null);
   const [allowDraft, setAllowDraft] = useState('');
   const [denyDraft, setDenyDraft] = useState('');
+  const [versions, setVersions] = useState<McpNoteVersion[]>([]);
 
   const refreshActivity = useCallback(() => {
     window.phosphor.mcpGetActivity().then(setActivity).catch(console.error);
+    window.phosphor.mcpListVersions(20).then(setVersions).catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -174,6 +181,28 @@ export const McpSettingsPanel: React.FC = () => {
       console.error('Failed to update MCP write scope:', err);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleRevert = async (version: McpNoteVersion): Promise<void> => {
+    if (
+      !window.confirm(
+        `Revert "${version.path}" to how it was before this change (${version.tool}, ` +
+          `${new Date(version.ts).toLocaleString()})?\n\nIts current content will be saved first, so ` +
+          'you can undo the revert the same way.'
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await window.phosphor.mcpRestoreVersion(version.id);
+    } catch (err) {
+      console.error('Failed to revert note:', err);
+      window.alert('Could not revert the note. Is the vault open and unlocked?');
+    } finally {
+      setBusy(false);
+      refreshActivity();
     }
   };
 
@@ -399,6 +428,44 @@ export const McpSettingsPanel: React.FC = () => {
                 </button>
               </div>
             </>
+          )}
+        </div>
+      )}
+
+      {(status.writeEnabled || versions.length > 0) && (
+        <div className="setting-item">
+          <div className="mcp-activity-header">
+            <label>Recent AI changes</label>
+            <button type="button" className="mcp-btn-secondary" onClick={refreshActivity}>
+              Refresh
+            </button>
+          </div>
+          <p className="setting-hint">
+            Each entry is a note as it was just before an AI app changed it. Reverting saves the
+            current content first, so a revert can be undone too. Kept for 30 days.
+          </p>
+          {versions.length === 0 ? (
+            <p className="setting-hint">No changes yet.</p>
+          ) : (
+            <ul className="mcp-activity-list">
+              {versions.map((version) => (
+                <li key={version.id} className="ok">
+                  <span className="mcp-activity-time">{new Date(version.ts).toLocaleString()}</span>
+                  <span className="mcp-activity-tool">
+                    {version.tool}
+                    <span className="mcp-activity-target"> {version.path}</span>
+                  </span>
+                  <button
+                    type="button"
+                    className="mcp-btn-secondary"
+                    disabled={busy}
+                    onClick={() => void handleRevert(version)}
+                  >
+                    Revert
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       )}

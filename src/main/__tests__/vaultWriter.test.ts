@@ -18,8 +18,11 @@ import {
   DecryptError,
   InvalidArgumentError,
   BulletNotFoundError,
-  NoteChangedError
+  NoteChangedError,
+  replaceLines,
+  restoreVersion
 } from '../vaultWriter';
+import { listVersions, readVersion } from '../noteHistory';
 import { contentHash } from '../contentHash';
 
 function listAllFiles(root: string): string[] {
@@ -502,6 +505,130 @@ describe('vaultWriter', () => {
         expectedHash: contentHash(doc)
       });
       expect(ok.hash).toBe(contentHash(fs.readFileSync(path.join(vault, 'Out.md'), 'utf-8')));
+    });
+  });
+
+  describe('note history', () => {
+    it('records the replaced bytes when history is requested, and nothing when it is not', async () => {
+      fs.writeFileSync(path.join(vault, 'N.md'), 'one\n');
+      const gen = vaultState.getGeneration();
+
+      const plain = await appendToNote(vault, 'N.md', 'two', { expectedGeneration: gen });
+      expect(plain.versionId).toBeUndefined();
+      expect(await listVersions(vault)).toEqual([]);
+
+      const tracked = await appendToNote(vault, 'N.md', 'three', {
+        expectedGeneration: gen,
+        history: { tool: 'append_to_note' }
+      });
+      expect(tracked.versionId).toBeDefined();
+      const { entry, raw } = await readVersion(vault, tracked.versionId!);
+      expect(entry).toMatchObject({ path: 'N.md', tool: 'append_to_note' });
+      expect(raw.toString('utf-8')).toBe('one\n\ntwo\n');
+    });
+
+    it('replaceLines and insertUnderBullet record history too', async () => {
+      fs.writeFileSync(path.join(vault, 'T.md'), '- [ ] a\n');
+      const gen = vaultState.getGeneration();
+      const r = await replaceLines(
+        vault,
+        'T.md',
+        { line: 1, expectedText: '- [ ] a' },
+        ['- [x] a'],
+        {
+          expectedGeneration: gen,
+          history: { tool: 'complete_task' }
+        }
+      );
+      expect((await readVersion(vault, r.versionId!)).raw.toString()).toBe('- [ ] a\n');
+
+      fs.writeFileSync(path.join(vault, 'O.md'), '---\nmode: outliner\n---\n- P\n');
+      const i = await insertUnderBullet(vault, 'O.md', 'P', 'c', {
+        expectedGeneration: gen,
+        history: { tool: 'insert_under_bullet' }
+      });
+      expect((await readVersion(vault, i.versionId!)).raw.toString()).toBe(
+        '---\nmode: outliner\n---\n- P\n'
+      );
+    });
+
+    it('createNote overwrite with history saves to history instead of a .bak file', async () => {
+      fs.writeFileSync(path.join(vault, 'C.md'), 'before\n');
+      const result = await createNote(vault, 'C.md', 'after', {
+        overwrite: true,
+        expectedGeneration: vaultState.getGeneration(),
+        history: { tool: 'create_note' }
+      });
+      expect(result.backupPath).toBeUndefined();
+      expect((await readVersion(vault, result.versionId!)).raw.toString()).toBe('before\n');
+      expect(fs.readdirSync(vault).filter((n) => n.endsWith('.bak'))).toEqual([]);
+    });
+
+    it('restoreVersion puts the old content back and saves the replaced version (so it can be undone)', async () => {
+      fs.writeFileSync(path.join(vault, 'R.md'), 'v1\n');
+      const gen = vaultState.getGeneration();
+      const appended = await appendToNote(vault, 'R.md', 'v2', {
+        expectedGeneration: gen,
+        history: { tool: 'append_to_note' }
+      });
+
+      const restored = await restoreVersion(vault, appended.versionId!, {
+        expectedGeneration: gen,
+        history: { tool: 'restore_note_version' }
+      });
+      expect(fs.readFileSync(path.join(vault, 'R.md'), 'utf-8')).toBe('v1\n');
+      expect(restored).toMatchObject({
+        path: 'R.md',
+        restoredFrom: appended.versionId,
+        created: false
+      });
+      expect(restored.hash).toBe(contentHash('v1\n'));
+      expect((await readVersion(vault, restored.versionId!)).raw.toString()).toBe('v1\n\nv2\n');
+    });
+
+    it('restoreVersion refuses a stale expectedHash and honors beforeWrite vetoes', async () => {
+      fs.writeFileSync(path.join(vault, 'S.md'), 'a\n');
+      const gen = vaultState.getGeneration();
+      const { versionId } = await appendToNote(vault, 'S.md', 'b', {
+        expectedGeneration: gen,
+        history: { tool: 't' }
+      });
+      await expect(
+        restoreVersion(vault, versionId!, {
+          expectedGeneration: gen,
+          expectedHash: contentHash('x')
+        })
+      ).rejects.toBeInstanceOf(NoteChangedError);
+      await expect(
+        restoreVersion(vault, versionId!, {
+          expectedGeneration: gen,
+          beforeWrite: async () => {
+            throw new Error('vetoed');
+          }
+        })
+      ).rejects.toThrow('vetoed');
+      expect(fs.readFileSync(path.join(vault, 'S.md'), 'utf-8')).toBe('a\n\nb\n');
+    });
+
+    it('restoring a plaintext version into a now-encrypted vault writes it encrypted', async () => {
+      fs.writeFileSync(path.join(vault, 'E.md'), 'plain v1\n');
+      const gen0 = vaultState.getGeneration();
+      const { versionId } = await appendToNote(vault, 'E.md', 'v2', {
+        expectedGeneration: gen0,
+        history: { tool: 't' }
+      });
+
+      // Encryption gets turned on afterwards.
+      fs.mkdirSync(path.join(vault, '.phosphor'), { recursive: true });
+      fs.writeFileSync(path.join(vault, '.phosphor', 'security.json'), '{}');
+      const key = crypto.deriveMasterKey('hunter2', crypto.generateSalt());
+      vaultState.setVaultPath(vault);
+      vaultState.setMasterKey(key);
+
+      await restoreVersion(vault, versionId!, { expectedGeneration: vaultState.getGeneration() });
+      const raw = fs.readFileSync(path.join(vault, 'E.md'));
+      expect(crypto.isEncrypted(raw)).toBe(true);
+      expect(crypto.decryptBuffer(raw, key).toString('utf-8')).toBe('plain v1\n');
     });
   });
 });

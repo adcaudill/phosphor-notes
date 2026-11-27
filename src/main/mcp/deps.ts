@@ -13,12 +13,20 @@ import {
 import * as vaultReader from '../vaultReader';
 import { VaultNotOpenError, type NoteInfo } from '../vaultReader';
 import * as vaultWriter from '../vaultWriter';
+import * as noteHistory from '../noteHistory';
+import { decodeBuffer } from '../vaultReader';
 import { getSettings } from '../store';
 import { localDailyNoteFilename, type NoteMode } from '../../shared/noteFormat';
 import type { Task, UserSettings } from '../../types/phosphor.d';
 import type { WikiGraph } from '../graphBuilder';
 import type { WriteScope } from './scope';
 import { createWriteGate } from './writeGate';
+
+/** Passed by withVaultWriteGuard to every write: the vault generation captured before the call, and which tool is writing (recorded in note history). */
+export interface WriteCtx {
+  generation: number;
+  tool: string;
+}
 
 /**
  * Dependency-injection seam between MCP tool handlers and the rest of the
@@ -51,12 +59,12 @@ export interface McpDeps {
     relPath: string,
     body: string,
     opts: { mode?: NoteMode; overwrite?: boolean; expectedHash?: string },
-    ctx: { generation: number }
+    ctx: WriteCtx
   ): Promise<vaultWriter.CreateNoteResult>;
   appendToNote(
     relPath: string,
     addition: string,
-    ctx: { generation: number },
+    ctx: WriteCtx,
     createIfMissing?: { frontmatter: string },
     opts?: { expectedHash?: string }
   ): Promise<vaultWriter.AppendResult>;
@@ -64,15 +72,25 @@ export interface McpDeps {
     relPath: string,
     matchText: string,
     addition: string,
-    ctx: { generation: number },
+    ctx: WriteCtx,
     opts?: { occurrence?: number; expectedHash?: string }
   ): Promise<vaultWriter.InsertUnderBulletResult>;
   replaceLines(
     relPath: string,
     target: { line: number; expectedText: string },
     newLines: string[],
-    ctx: { generation: number }
+    ctx: WriteCtx
   ): Promise<vaultWriter.ReplaceLinesResult>;
+
+  /** Saved versions of notes MCP writes replaced, newest first. */
+  listVersions(opts: { path?: string; limit?: number }): Promise<noteHistory.HistoryEntry[]>;
+  /** One saved version, decoded to text. */
+  readVersion(id: string): Promise<{ entry: noteHistory.HistoryEntry; text: string }>;
+  restoreVersion(
+    id: string,
+    ctx: WriteCtx,
+    opts?: { expectedHash?: string }
+  ): Promise<vaultWriter.RestoreVersionResult>;
 }
 
 function requireVaultPath(): string {
@@ -91,7 +109,7 @@ function requireVaultPath(): string {
  * vaultWriter's design notes). Failures here are logged, never thrown -
  * the write itself already succeeded by the time this runs.
  */
-async function afterNoteWritten(
+export async function notifyNoteWritten(
   vaultPath: string,
   rel: string,
   info: { created: boolean; parentsCreated: string[] },
@@ -180,9 +198,10 @@ export function buildDefaultDeps(opts: BuildDepsOptions): McpDeps {
         overwrite: createOpts.overwrite,
         expectedHash: createOpts.expectedHash,
         canCreateParent: gate.canCreateParent,
-        expectedGeneration: ctx.generation
+        expectedGeneration: ctx.generation,
+        history: { tool: ctx.tool }
       });
-      await afterNoteWritten(vp, relPath, result, opts.getMainWindow());
+      await notifyNoteWritten(vp, relPath, result, opts.getMainWindow());
       return result;
     },
 
@@ -193,9 +212,10 @@ export function buildDefaultDeps(opts: BuildDepsOptions): McpDeps {
         expectedGeneration: ctx.generation,
         createIfMissing,
         expectedHash: appendOpts?.expectedHash,
-        canCreateParent: gate.canCreateParent
+        canCreateParent: gate.canCreateParent,
+        history: { tool: ctx.tool }
       });
-      await afterNoteWritten(vp, relPath, result, opts.getMainWindow());
+      await notifyNoteWritten(vp, relPath, result, opts.getMainWindow());
       return result;
     },
 
@@ -205,10 +225,11 @@ export function buildDefaultDeps(opts: BuildDepsOptions): McpDeps {
       const result = await vaultWriter.insertUnderBullet(vp, relPath, matchText, addition, {
         expectedGeneration: ctx.generation,
         occurrence: insertOpts?.occurrence,
-        expectedHash: insertOpts?.expectedHash
+        expectedHash: insertOpts?.expectedHash,
+        history: { tool: ctx.tool }
       });
       // Never creates the note or any parent stubs.
-      await afterNoteWritten(
+      await notifyNoteWritten(
         vp,
         relPath,
         { created: false, parentsCreated: [] },
@@ -221,13 +242,39 @@ export function buildDefaultDeps(opts: BuildDepsOptions): McpDeps {
       const vp = requireVaultPath();
       await gate.check(relPath);
       const result = await vaultWriter.replaceLines(vp, relPath, target, newLines, {
-        expectedGeneration: ctx.generation
+        expectedGeneration: ctx.generation,
+        history: { tool: ctx.tool }
       });
       // Never creates the note or any parent stubs.
-      await afterNoteWritten(
+      await notifyNoteWritten(
         vp,
         relPath,
         { created: false, parentsCreated: [] },
+        opts.getMainWindow()
+      );
+      return result;
+    },
+
+    listVersions: async (listOpts) => noteHistory.listVersions(requireVaultPath(), listOpts),
+
+    readVersion: async (id) => {
+      const vp = requireVaultPath();
+      const { entry, raw } = await noteHistory.readVersion(vp, id);
+      return { entry, text: decodeBuffer(raw, entry.path).toString('utf-8') };
+    },
+
+    restoreVersion: async (id, ctx, restoreOpts) => {
+      const vp = requireVaultPath();
+      const result = await vaultWriter.restoreVersion(vp, id, {
+        expectedGeneration: ctx.generation,
+        expectedHash: restoreOpts?.expectedHash,
+        history: { tool: ctx.tool },
+        beforeWrite: (relPath) => gate.check(relPath)
+      });
+      await notifyNoteWritten(
+        vp,
+        result.path,
+        { created: result.created, parentsCreated: [] },
         opts.getMainWindow()
       );
       return result;

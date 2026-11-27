@@ -1,5 +1,5 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { McpDeps } from './deps';
+import type { McpDeps, WriteCtx } from './deps';
 import { auditLog } from './audit';
 import { assertNoRedactionMasks, redactText, redactValue } from './redact';
 
@@ -76,6 +76,8 @@ function errorCodeFor(err: unknown): string {
         return 'PATH_NOT_IN_WRITE_SCOPE';
       case 'NoteHasUnsavedEditsError':
         return 'NOTE_HAS_UNSAVED_EDITS';
+      case 'VersionNotFoundError':
+        return 'VERSION_NOT_FOUND';
       default:
         return 'INTERNAL_ERROR';
     }
@@ -142,19 +144,20 @@ export function withVaultGuard<Args extends unknown[], T extends Record<string, 
 export function withVaultWriteGuard<TArgs, T extends Record<string, unknown>>(
   toolName: string,
   deps: Pick<McpDeps, 'isReadable' | 'getGeneration' | 'isWriteEnabled' | 'isEditEnabled'>,
-  handler: (args: TArgs, ctx: { generation: number }) => Promise<T>,
+  handler: (args: TArgs, ctx: WriteCtx) => Promise<T>,
   targetOf?: (args: TArgs) => string | undefined,
   opts: { tier?: 'write' | 'edit' } = {}
 ): (args: TArgs) => Promise<CallToolResult> {
   return async (args: TArgs) => {
-    const record = (ok: boolean, errorCode?: string): void =>
+    const record = (ok: boolean, errorCode?: string, versionId?: string): void =>
       auditLog.record({
         ts: new Date().toISOString(),
         tool: toolName,
         ok,
         errorCode,
         target: targetOf?.(args),
-        write: true
+        write: true,
+        versionId
       });
 
     if (!deps.isWriteEnabled()) {
@@ -183,8 +186,9 @@ export function withVaultWriteGuard<TArgs, T extends Record<string, unknown>>(
       // Every string argument of every write tool: none may carry a redaction
       // placeholder copied from a read (see assertNoRedactionMasks).
       assertNoRedactionMasks(...collectStrings(args));
-      const result = await handler(args, { generation });
-      record(true);
+      const result = await handler(args, { generation, tool: toolName });
+      const versionId = (result as { versionId?: unknown }).versionId;
+      record(true, undefined, typeof versionId === 'string' ? versionId : undefined);
       return toCallToolResult(result);
     } catch (err) {
       const code = errorCodeFor(err);

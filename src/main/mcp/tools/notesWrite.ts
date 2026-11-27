@@ -10,8 +10,9 @@ export function registerNoteWriteTools(server: McpServer, deps: McpDeps): void {
       title: 'Create a note',
       description:
         'Create a new note at a vault-relative path. Refuses to overwrite an existing note unless ' +
-        '`overwrite` is explicitly true (in which case the previous content is backed up to a ' +
-        '.bak file first). If `content` already includes its own frontmatter, omit `mode`. ' +
+        '`overwrite` is explicitly true (in which case the previous content is saved as a version ' +
+        '- see list_note_versions - and its id returned as `versionId`). If `content` already ' +
+        'includes its own frontmatter, omit `mode`. ' +
         'Otherwise: daily-note-named files ("YYYY-MM-DD.md") default to the user\'s own daily ' +
         'journal mode setting; anything else defaults to freeform. In outliner mode, each line of ' +
         '`content` becomes its own top-level bullet. Parent-folder stub notes are auto-created for ' +
@@ -39,7 +40,8 @@ export function registerNoteWriteTools(server: McpServer, deps: McpDeps): void {
         mode: z.enum(['freeform', 'outliner']),
         parentsCreated: z.array(z.string()),
         backupPath: z.string().optional(),
-        hash: z.string()
+        hash: z.string(),
+        versionId: z.string().optional()
       },
       annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: true }
     },
@@ -75,7 +77,8 @@ export function registerNoteWriteTools(server: McpServer, deps: McpDeps): void {
           mode: result.mode,
           parentsCreated: result.parentsCreated,
           backupPath: result.backupPath,
-          hash: result.hash
+          hash: result.hash,
+          versionId: result.versionId
         };
       },
       (args) => args.path
@@ -111,7 +114,8 @@ export function registerNoteWriteTools(server: McpServer, deps: McpDeps): void {
         path: z.string(),
         mode: z.enum(['freeform', 'outliner']),
         appended: z.string(),
-        hash: z.string()
+        hash: z.string(),
+        versionId: z.string().optional()
       },
       annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
     },
@@ -131,7 +135,8 @@ export function registerNoteWriteTools(server: McpServer, deps: McpDeps): void {
           path: result.path,
           mode: result.mode,
           appended: result.appended,
-          hash: result.hash
+          hash: result.hash,
+          versionId: result.versionId
         };
       },
       (args) => args.path
@@ -182,7 +187,8 @@ export function registerNoteWriteTools(server: McpServer, deps: McpDeps): void {
         matchedLine: z.number(),
         matchedText: z.string(),
         appended: z.string(),
-        hash: z.string()
+        hash: z.string(),
+        versionId: z.string().optional()
       },
       annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
     },
@@ -215,7 +221,8 @@ export function registerNoteWriteTools(server: McpServer, deps: McpDeps): void {
           matchedLine: result.matchedLine,
           matchedText: result.matchedText,
           appended: result.appended,
-          hash: result.hash
+          hash: result.hash,
+          versionId: result.versionId
         };
       },
       (args) => args.path

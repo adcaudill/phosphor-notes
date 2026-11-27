@@ -209,3 +209,13 @@
   border-color: var(--accent-color, #007acc);
   box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.1);
 }
+
+.mcp-activity-list li {
+  align-items: center;
+}
+
+.mcp-activity-list li button {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  font-size: 11px;
+}

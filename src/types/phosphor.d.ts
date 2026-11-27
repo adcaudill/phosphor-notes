@@ -38,6 +38,20 @@ export interface McpActivityEntry {
   target?: string;
   /** True for a create/append/add-task style call, so the UI can badge it distinctly from a read. */
   write?: boolean;
+  /** Note-history id of the version this write replaced, if any. */
+  versionId?: string;
+}
+
+/** A saved version of a note, recorded just before an AI (MCP) write replaced it. */
+export interface McpNoteVersion {
+  id: string;
+  /** When the version was replaced (ISO timestamp). */
+  ts: string;
+  path: string;
+  /** What replaced it, e.g. "edit_note". */
+  tool: string;
+  summary?: string;
+  size: number;
 }
 
 export interface McpClientConfig {
@@ -152,6 +166,8 @@ export interface PhosphorAPI {
   /** Generates a new token and returns the plaintext ONCE - only its hash is persisted. */
   mcpRegenerateToken: () => Promise<string>;
   mcpGetActivity: () => Promise<McpActivityEntry[]>;
+  mcpListVersions: (limit?: number) => Promise<McpNoteVersion[]>;
+  mcpRestoreVersion: (id: string) => Promise<{ path: string; versionId?: string }>;
   mcpGetClientConfig: (token: string) => Promise<McpClientConfig>;
   onMcpStatusChange: (cb: (status: McpStatus) => void) => () => void;
 
