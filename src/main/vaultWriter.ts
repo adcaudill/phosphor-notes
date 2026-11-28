@@ -966,10 +966,16 @@ async function listNotesUnder(vaultPath: string, dirAbs: string): Promise<string
 
 export interface RenameNoteOptions {
   expectedGeneration: number;
-  /** Notes that may contain links to the note(s) being moved - e.g. their backlinks from the link graph. */
-  linkCandidates: string[];
+  /**
+   * Notes that may contain links to the note(s) being moved - e.g. their
+   * backlinks from the link graph. A function receives every path being moved
+   * (the note plus, with includeChildren, its child notes).
+   */
+  linkCandidates: string[] | ((movedPaths: string[]) => string[]);
   /** Move the note's child notes (the same-named folder) along with it, and update links to them. */
   includeChildren?: boolean;
+  /** Move only the note, leaving its child notes where they are (the app's long-standing behavior). */
+  leaveChildren?: boolean;
   /** Refuse (NoteChangedError) unless the note being moved still has this content hash. */
   expectedHash?: string;
   dryRun?: boolean;
@@ -1034,7 +1040,12 @@ export async function renameNote(
   const toDirAbs = toAbs.replace(/\.md$/i, '');
   const children = await listNotesUnder(vaultPath, fromDirAbs);
   const includeChildren = opts.includeChildren === true;
-  if (children.length > 0 && !includeChildren) throw new HasChildNotesError(from, children);
+  if (includeChildren && opts.leaveChildren) {
+    throw new InvalidArgumentError('pass includeChildren or leaveChildren, not both');
+  }
+  if (children.length > 0 && !includeChildren && !opts.leaveChildren) {
+    throw new HasChildNotesError(from, children);
+  }
   const movesFolder = includeChildren && (await pathExists(fromDirAbs));
   if (movesFolder) {
     if (toDirRel === fromDirRel || to.startsWith(fromDirRel + '/')) {
@@ -1071,7 +1082,12 @@ export async function renameNote(
   // Plan the link rewrites: the candidates, plus the moved notes themselves
   // (they can link to each other). Reading/decrypting everything now means a
   // locked vault or unreadable note stops the operation before anything moves.
-  const candidates = [...new Set([...opts.linkCandidates, from, ...movedChildren.map(([c]) => c)])];
+  const movedPaths = [from, ...movedChildren.map(([c]) => c)];
+  const extraCandidates =
+    typeof opts.linkCandidates === 'function'
+      ? opts.linkCandidates(movedPaths)
+      : opts.linkCandidates;
+  const candidates = [...new Set([...extraCandidates, ...movedPaths])];
   const planned: Array<{ oldPath: string; finalPath: string; links: number }> = [];
   for (const rel of candidates) {
     let abs: string;

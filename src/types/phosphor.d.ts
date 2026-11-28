@@ -101,6 +101,8 @@ export interface PhosphorAPI {
   onMenuEvent: (eventName: string, cb: (...args: unknown[]) => void) => () => void;
   onFileChanged: (cb: (filename: string) => void) => () => void;
   onFileDeleted: (cb: (filename: string) => void) => () => void;
+  /** A note was renamed or moved (by the app or an AI app); its content is unchanged. */
+  onFileRenamed: (cb: (from: string, to: string) => void) => () => void;
   onFileAdded: (cb: (filename: string) => void) => () => void;
   onCheckUnsavedChanges: (cb: (hasUnsaved: boolean) => boolean) => () => void;
   /** Answers main's pre-MCP-write check: is `relPath` open in the editor with unsaved edits? */

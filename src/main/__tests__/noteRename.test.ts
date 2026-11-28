@@ -130,6 +130,24 @@ describe('renameNote / deleteNote', () => {
       });
     });
 
+    it('leaveChildren moves only the note, and linkCandidates can be computed from the moved paths', async () => {
+      write('P.md', 'p\n');
+      write('P/C.md', 'c\n');
+      write('L.md', '[[P]] [[P/C]]\n');
+      const asked: string[][] = [];
+      await renameNote(vault, 'P.md', 'Q.md', {
+        expectedGeneration: gen(),
+        leaveChildren: true,
+        linkCandidates: (moved) => {
+          asked.push(moved);
+          return ['L.md'];
+        }
+      });
+      expect(asked).toEqual([['P.md']]);
+      expect(exists('P/C.md')).toBe(true);
+      expect(read('L.md')).toBe('[[Q]] [[P/C]]\n');
+    });
+
     it('refuses moving a note with its children into its own child folder', async () => {
       write('P.md', 'p\n');
       write('P/C.md', 'c\n');

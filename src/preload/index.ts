@@ -114,6 +114,11 @@ const api = {
     ipcRenderer.on('vault:file-deleted', handler);
     return () => ipcRenderer.removeListener('vault:file-deleted', handler);
   },
+  onFileRenamed: (cb: (from: string, to: string) => void) => {
+    const handler = (_event: IpcRendererEvent, from: string, to: string): void => cb(from, to);
+    ipcRenderer.on('vault:file-renamed', handler);
+    return () => ipcRenderer.removeListener('vault:file-renamed', handler);
+  },
 
   // Event subscription for vault file additions
   onFileAdded: (cb: (filename: string) => void) => {
