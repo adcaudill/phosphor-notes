@@ -34,6 +34,7 @@ import {
 import { formatAppend, detectNoteMode } from '../../shared/noteFormat';
 import type { TaskMetadataValue } from './components/TaskMetadataPopover';
 import { startTaskRecordsSync } from './tasks/taskRecordsStore';
+import { TaskCapture } from './components/TaskCapture';
 
 /**
  * Extract title from markdown frontmatter, or fallback to filename
@@ -85,6 +86,7 @@ function AppContent(): React.JSX.Element {
   const [status, setStatus] = useState<{ type: string; message: string } | null>(null);
   const statusTimerRef = useRef<number | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aboutModalOpen, setAboutModalOpen] = useState(false); // Toggle for about modal
   const [conflict, setConflict] = useState<string | null>(null); // Filename that has a conflict
@@ -432,6 +434,15 @@ function AppContent(): React.JSX.Element {
     };
     window.addEventListener('keydown', handleKeyDown);
 
+    // New Task (Mod-Shift-T): at the cursor when the editor has focus, else quick capture
+    const unsubscribeNewTask = window.phosphor.onMenuEvent?.('menu:new-task', () => {
+      const inEditor = Boolean(
+        (document.activeElement as HTMLElement | null)?.closest('.cm-editor')
+      );
+      if (inEditor && editorRef.current?.openTaskCapture()) return;
+      setQuickCaptureOpen(true);
+    });
+
     // Menu event listeners
     const unsubscribeNewNote = window.phosphor.onMenuEvent?.('menu:new-note', async () => {
       const timestamp = new Date().toISOString().split('T')[0];
@@ -653,6 +664,7 @@ function AppContent(): React.JSX.Element {
       if (unsubscribePrediction) unsubscribePrediction();
       if (unsubscribeVaultOpened) unsubscribeVaultOpened();
       if (unsubscribeNewNote) unsubscribeNewNote();
+      if (unsubscribeNewTask) unsubscribeNewTask();
       if (unsubscribeSave) unsubscribeSave();
       if (unsubscribeSearch) unsubscribeSearch();
       if (unsubscribeToggleSidebar) unsubscribeToggleSidebar();
@@ -1378,6 +1390,18 @@ function AppContent(): React.JSX.Element {
           />
 
           <Konami isOpen={konamisCodeOpen} onClose={() => setKonamiCodeOpen(false)} />
+
+          {quickCaptureOpen && (
+            <TaskCapture
+              heading="New task"
+              onSubmit={async (input) => {
+                const created = await window.phosphor.taskRecords.create(input);
+                setQuickCaptureOpen(false);
+                setStatus({ type: 'success', message: `Task created: ${created.title}` });
+              }}
+              onCancel={() => setQuickCaptureOpen(false)}
+            />
+          )}
         </>
       ) : (
         <div className="welcome-screen">

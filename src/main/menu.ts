@@ -39,6 +39,15 @@ export function createMenu(mainWindow: BrowserWindow | null): void {
         }
       },
       {
+        // In the editor: a task at the cursor (or converts the checkbox line
+        // the cursor is on). Elsewhere: the quick-capture dialog.
+        label: 'New Task…',
+        accelerator: 'Cmd+Shift+T',
+        click: () => {
+          mainWindow?.webContents.send('menu:new-task');
+        }
+      },
+      {
         label: 'Save',
         accelerator: 'Cmd+S',
         click: () => {

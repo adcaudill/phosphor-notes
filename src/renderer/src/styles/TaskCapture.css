@@ -1,0 +1,191 @@
+/* Task capture field (TaskCapture.tsx): inline under the cursor for /task, or
+   a centered dialog for quick capture. */
+.task-capture {
+  z-index: 10000;
+  width: 520px;
+  max-width: calc(100vw - 16px);
+  background-color: var(--color-background-secondary, var(--color-background));
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--color-text-primary);
+  font-size: 13px;
+}
+
+.task-capture-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 18vh;
+}
+
+.task-capture-heading {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-secondary);
+}
+
+/* The input sits on top of a mirror of its own text, in which recognized
+   pieces are highlighted; the input's text is transparent so the mirror
+   shows through, and its caret stays visible. Both use identical font,
+   padding and border so the text lines up exactly. */
+.task-capture-field {
+  position: relative;
+}
+
+.task-capture-mirror,
+.task-capture-input {
+  font-family: var(--font-editor, inherit);
+  font-size: 15px;
+  line-height: 22px;
+  letter-spacing: normal;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  white-space: pre;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.task-capture-mirror {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  color: var(--color-text-primary);
+  pointer-events: none;
+}
+
+.task-capture-input {
+  position: relative;
+  display: block;
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: transparent;
+  caret-color: var(--color-text-primary);
+  outline: none;
+}
+
+.task-capture-input::placeholder {
+  color: var(--color-text-secondary);
+  opacity: 0.7;
+}
+
+.task-capture-input:focus {
+  border-color: var(--color-primary);
+}
+
+/* Drawn under the transparent input: give it the input's background instead. */
+.task-capture-field .task-capture-input {
+  background: transparent;
+}
+
+.task-capture-field::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+
+.task-capture-mark {
+  color: inherit;
+  border-radius: 4px;
+  background: rgba(var(--color-primary-rgb), 0.18);
+  box-shadow: 0 0 0 1px rgba(var(--color-primary-rgb), 0.25);
+}
+
+.task-capture-mark-priority {
+  background: rgba(var(--color-error-rgb), 0.16);
+  box-shadow: 0 0 0 1px rgba(var(--color-error-rgb), 0.25);
+}
+
+.task-capture-mark-tag,
+.task-capture-mark-project {
+  background: rgba(var(--color-success-rgb, 76, 175, 80), 0.16);
+  box-shadow: 0 0 0 1px rgba(var(--color-success-rgb, 76, 175, 80), 0.25);
+}
+
+.task-capture-mark-waiting {
+  background: rgba(var(--color-warning-rgb), 0.18);
+  box-shadow: 0 0 0 1px rgba(var(--color-warning-rgb), 0.25);
+}
+
+.task-capture-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+}
+
+.task-capture-preview-title {
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.task-capture-preview-title.empty {
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.task-capture-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  background: rgba(var(--color-primary-rgb), 0.1);
+  color: var(--color-primary);
+  white-space: nowrap;
+}
+
+.task-capture-chip .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.task-capture-chip-priority {
+  background: rgba(var(--color-error-rgb), 0.14);
+  color: var(--color-error);
+}
+
+.task-capture-chip-waiting {
+  background: rgba(var(--color-warning-rgb), 0.16);
+  color: var(--color-warning);
+}
+
+.task-capture-note {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--color-text-secondary);
+}
+
+.task-capture-hints {
+  display: flex;
+  gap: 14px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.task-capture-hints kbd {
+  font-family: inherit;
+  font-size: 11px;
+  padding: 0 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  margin-right: 3px;
+}
+
+.task-capture-error {
+  color: var(--color-error);
+}
