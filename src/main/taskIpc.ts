@@ -12,6 +12,8 @@ import * as vaultState from './vaultState';
 import { VaultNotOpenError } from './vaultReader';
 import { createTask, deleteTask, updateTask, type WriteOptions } from './taskStore';
 import { syncTaskLinkTitles } from './taskLinkSync';
+import { previewMigration, runMigration } from './taskMigration';
+import type { ConversionPreview, ConversionResult } from '../shared/taskViews';
 import {
   getTaskDetail,
   getTaskList,
@@ -121,6 +123,17 @@ export function setupTaskIPC(): void {
         exclude
       });
     }
+  );
+
+  // Converting inline checkbox tasks with metadata into task files (whole
+  // vault, or the given notes). The renderer saves the open note first.
+  ipcMain.handle(
+    'task-records:conversion-preview',
+    async (_, notes?: string[]): Promise<ConversionPreview> =>
+      previewMigration(openVault(), { notes })
+  );
+  ipcMain.handle('task-records:convert', async (_, notes?: string[]): Promise<ConversionResult> =>
+    runMigration(openVault(), { notes, expectedGeneration: vaultState.getGeneration() })
   );
 
   ipcMain.handle('task-records:delete', async (_, id: string): Promise<void> => {

@@ -1,9 +1,9 @@
 /**
- * Presentational helpers shared between the in-editor metadata pills
- * (taskMetadataWidgets.ts, rendered as raw CM6 widget DOM) and the Tasks
- * view (TasksView.tsx, rendered as React JSX) - so both surfaces describe
- * a task's priority/due date/recurrence identically instead of drifting.
- * Pure display logic only; parsing/serialization stays in shared/tasks.ts.
+ * Presentational helpers shared by everything that shows a task's priority,
+ * due date or repeat - the task link widget (taskLinkWidget.ts, raw CM6 DOM),
+ * the Tasks tab and detail view, and the checklist items view
+ * (TasksView.tsx) - so they all describe tasks the same way. Pure display
+ * logic only.
  */
 import { isPastDate, isTodayDate, type Priority } from '../../../shared/tasks';
 import { daysBetween } from '../../../shared/taskRepeat';

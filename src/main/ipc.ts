@@ -22,6 +22,7 @@ import {
 import { getGraphStats } from './graphBuilder';
 import { setupWatcher, stopWatcher, markInternalSave } from './watcher';
 import { forgetTaskFile, refreshTaskFile } from './taskIndex';
+import { runMigration } from './taskMigration';
 import { TASKS_DIR, isTaskFilePath } from '../shared/taskRecord';
 import { deriveMasterKey, encryptBuffer, decryptBuffer, isEncrypted, generateSalt } from './crypto';
 import { TASK_LINE_RE, type Task } from '../shared/tasks';
@@ -1243,26 +1244,51 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
                 type: string;
                 filesImported: number;
                 assetsImported: number;
+                files?: string[];
               };
-              if (mainWindow && !mainWindow.isDestroyed()) {
-                mainWindow.webContents.send('phosphor:status', {
-                  type: 'import-success',
-                  message: `Imported ${success.filesImported} files and ${success.assetsImported} assets`
-                });
-              }
-
-              // Re-index the vault to pick up the new files
-              try {
-                stopIndexing();
-                if (activeVaultPath && mainWindow && !mainWindow.isDestroyed()) {
-                  startIndexing(activeVaultPath, mainWindow);
+              void (async () => {
+                // Imported tasks with dates/repeats become task files right away.
+                let converted = 0;
+                const vaultPath = activeVaultPath;
+                if (vaultPath) {
+                  const notes = (success.files ?? [])
+                    .map((f) => path.relative(vaultPath, f).split(path.sep).join('/'))
+                    .filter((f) => f.endsWith('.md') && !f.startsWith('..'));
+                  if (notes.length > 0) {
+                    try {
+                      const result = await runMigration(vaultPath, {
+                        notes,
+                        expectedGeneration: vaultState.getGeneration()
+                      });
+                      converted = result.tasksCreated;
+                    } catch (err) {
+                      safeError('Failed to convert imported tasks:', err);
+                    }
+                  }
                 }
-              } catch (err) {
-                safeError('Failed to re-index after import:', err);
-              }
 
-              worker?.terminate();
-              resolve({ success: true, filesImported: success.filesImported });
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                  mainWindow.webContents.send('phosphor:status', {
+                    type: 'import-success',
+                    message: `Imported ${success.filesImported} files and ${success.assetsImported} assets${
+                      converted ? `, with ${converted} tasks` : ''
+                    }`
+                  });
+                }
+
+                // Re-index the vault to pick up the new files
+                try {
+                  stopIndexing();
+                  if (activeVaultPath && mainWindow && !mainWindow.isDestroyed()) {
+                    startIndexing(activeVaultPath, mainWindow);
+                  }
+                } catch (err) {
+                  safeError('Failed to re-index after import:', err);
+                }
+
+                worker?.terminate();
+                resolve({ success: true, filesImported: success.filesImported });
+              })();
             } else if (message.type === 'error') {
               const error = message as { type: string; message: string };
               safeError('Import error:', error.message);

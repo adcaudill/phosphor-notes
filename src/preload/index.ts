@@ -219,6 +219,9 @@ const api = {
     deleteComment: (id: string, at: string) =>
       ipcRenderer.invoke('task-records:delete-comment', id, at),
     delete: (id: string) => ipcRenderer.invoke('task-records:delete', id),
+    conversionPreview: (notes?: string[]) =>
+      ipcRenderer.invoke('task-records:conversion-preview', notes),
+    convert: (notes?: string[]) => ipcRenderer.invoke('task-records:convert', notes),
     syncLinkTitles: (id: string, exclude: string[] = []) =>
       ipcRenderer.invoke('task-records:sync-link-titles', id, exclude),
     onChanged: (cb: () => void) => {

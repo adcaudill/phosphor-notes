@@ -140,10 +140,22 @@ export async function createTask(
   input: NewTaskInput,
   opts: WriteOptions
 ): Promise<TaskRecord> {
+  return writeNewTask(vaultPath, (id) => createTaskRecord(input, id, opts.now), opts);
+}
+
+/**
+ * Writes a new task file with a fresh id, from a record built for that id
+ * (for callers that set more than NewTaskInput covers, like conversion).
+ */
+export async function writeNewTask(
+  vaultPath: string,
+  build: (id: string) => TaskRecord,
+  opts: WriteOptions
+): Promise<TaskRecord> {
   await fsp.mkdir(path.join(vaultPath, TASKS_DIR), { recursive: true });
   for (let attempt = 0; attempt < 8; attempt++) {
     const id = generateTaskId();
-    const record = createTaskRecord(input, id, opts.now);
+    const record = build(id);
     const rel = taskFilePath(id);
     const abs = await resolveWritableNotePath(vaultPath, rel);
     const buf = await encodeForVault(vaultPath, Buffer.from(serializeTaskFile(record), 'utf-8'), {

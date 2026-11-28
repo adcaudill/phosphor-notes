@@ -32,10 +32,99 @@ interface ImportError {
   file?: string;
 }
 
+const LOGSEQ_MARKERS: Record<string, { box: string; status?: string }> = {
+  TODO: { box: '[ ]' },
+  LATER: { box: '[ ]' },
+  NOW: { box: '[/]' },
+  DOING: { box: '[/]' },
+  'IN-PROGRESS': { box: '[/]' },
+  DONE: { box: '[x]' },
+  WAIT: { box: '[ ]', status: 'waiting' },
+  WAITING: { box: '[ ]', status: 'waiting' },
+  CANCELED: { box: '[x]', status: 'cancelled' },
+  CANCELLED: { box: '[x]', status: 'cancelled' }
+};
+const TASK_MARKER_RE =
+  /^(\s*)-\s+(TODO|LATER|NOW|DOING|IN-PROGRESS|DONE|WAITING|WAIT|CANCELED|CANCELLED)\s+(.*)$/;
+/** <2026-08-02 Sun 09:30 .+1w> - date, optional weekday and time, optional repeater (.+ ++ +). */
+const ORG_STAMP_RE =
+  /(SCHEDULED|DEADLINE):\s*<(\d{4}-\d{2}-\d{2})(?:\s+[A-Za-z]{2,3})?(?:\s+\d{1,2}:\d{2}(?:-\d{1,2}:\d{2})?)?(?:\s+(?:\.\+|\+\+|\+)(\d+)([hdwmy]))?[^>]*>/g;
+
+interface OrgDates {
+  scheduled?: string;
+  deadline?: string;
+  repeat?: string;
+}
+
+function readOrgStamps(text: string, into: OrgDates): string {
+  return text.replace(ORG_STAMP_RE, (_m, kind: string, date: string, n?: string, unit?: string) => {
+    if (kind.toUpperCase() === 'DEADLINE') into.deadline ??= date;
+    else into.scheduled ??= date;
+    if (n && unit) into.repeat ??= `${n}${unit}`;
+    return '';
+  });
+}
+
+/**
+ * Logseq tasks -> checkbox lines with inline metadata. A task's SCHEDULED /
+ * DEADLINE may sit on the task line or on indented lines right below it
+ * (Logseq's usual layout, at any nesting depth); both are folded onto the
+ * task line:
+ *   DEADLINE -> @due(date); SCHEDULED -> @due(date), or @start(date) when
+ *   there's also a deadline; a repeater (.+1w / ++1w / +1w) -> @repeat(1w);
+ *   WAITING / CANCELLED -> @status(waiting|cancelled).
+ * Only a marker at the start of a bullet counts ("- notes - TODO is a word"
+ * is left alone). Stray SCHEDULED/DEADLINE lines with no task above them are
+ * dropped, as before.
+ */
+export function convertLogseqTasks(content: string): string {
+  const src = content.split('\n');
+  const out: string[] = [];
+  let i = 0;
+  while (i < src.length) {
+    const m = TASK_MARKER_RE.exec(src[i]);
+    if (!m) {
+      // A lone date line with no task above it carries nothing worth keeping.
+      if (/^\s*(SCHEDULED|DEADLINE):\s*</.test(src[i]) && !/^\s*-/.test(src[i])) {
+        i++;
+        continue;
+      }
+      out.push(src[i]);
+      i++;
+      continue;
+    }
+    const [, indent, marker, rest] = m;
+    const info = LOGSEQ_MARKERS[marker];
+    const dates: OrgDates = {};
+    let text = readOrgStamps(rest, dates);
+    // Indented SCHEDULED/DEADLINE lines directly below belong to this task.
+    let j = i + 1;
+    while (j < src.length && /^\s+(SCHEDULED|DEADLINE):\s*</.test(src[j])) {
+      const leftover = readOrgStamps(src[j], dates).trim();
+      if (leftover) text += ` ${leftover}`;
+      j++;
+    }
+    const meta: string[] = [];
+    const due = dates.deadline ?? dates.scheduled;
+    if (due) meta.push(`@due(${due})`);
+    if (dates.deadline && dates.scheduled && dates.scheduled !== dates.deadline) {
+      meta.push(`@start(${dates.scheduled})`);
+    }
+    if (dates.repeat) meta.push(`@repeat(${dates.repeat})`);
+    if (info.status) meta.push(`@status(${info.status})`);
+    const body = text.replace(/\s+/g, ' ').trim();
+    out.push(`${indent}- ${info.box} ${[body, ...meta].filter(Boolean).join(' ')}`);
+    i = j;
+  }
+  return out.join('\n');
+}
+
 interface ImportSuccess {
   type: 'success';
   filesImported: number;
   assetsImported: number;
+  /** Absolute paths of the notes written. */
+  files: string[];
 }
 
 /**
@@ -270,75 +359,10 @@ function transformContent(
   // Pattern: :LOGBOOK:\n... content ...\n:END:
   content = content.replace(/:LOGBOOK:\n([\s\S]*?):END:/g, '');
 
-  // 2. Extract SCHEDULED date with recurrence pattern and store inline
-  // Handle multiline case where SCHEDULED is on an indented line below the task
-  // Pattern: "- TODO Task\n  SCHEDULED: <2026-08-02 Sun .+1y>"
-  const multilineScheduledRegex =
-    /^(-\s+(?:TODO|DOING|DONE|LATER|NOW|CANCELED)\s+[^\n]+)\n\s+SCHEDULED:\s*<(\d{4}-\d{2}-\d{2})(?:\s+\w+)?(?:\s+(\.\+[1-9]\d*[ymwdhMS]))?>(.*)$/gm;
-  content = content.replace(multilineScheduledRegex, (_match, taskLine, date, recurrence, rest) => {
-    // Combine task line with metadata on same line
-    let result = taskLine + ` @due(${date})`;
-    if (recurrence) {
-      // Convert Logseq recurrence format to Phosphor format
-      // .+1y -> 1y, .+1m -> 1m, etc.
-      const recurPattern = recurrence.match(/[1-9]\d*[ymwdhMS]/);
-      if (recurPattern) {
-        result += ` @repeat(${recurPattern[0]})`;
-      }
-    }
-    result += rest;
-    return result;
-  });
-
-  // Also handle single-line SCHEDULED (in case it appears inline)
-  const scheduledRegex =
-    /SCHEDULED:\s*<(\d{4}-\d{2}-\d{2})(?:\s+\w+)?(?:\s+(\.\+[1-9]\d*[ymwdhMS]))?>/g;
-  content = content.replace(scheduledRegex, (_match, date, recurrence) => {
-    // Store as task metadata comment for the task parser
-    // Format: @due(YYYY-MM-DD) @repeat(interval)
-    let result = ` @due(${date})`;
-    if (recurrence) {
-      // Convert Logseq recurrence format to Phosphor format
-      // .+1y -> 1y, .+1m -> 1m, etc.
-      const recurPattern = recurrence.match(/[1-9]\d*[ymwdhMS]/);
-      if (recurPattern) {
-        result += ` @repeat(${recurPattern[0]})`;
-      }
-    }
-    return result;
-  });
-
-  // 3. Extract DEADLINE date and store inline (same format as SCHEDULED)
-  // Handle multiline case where DEADLINE is on an indented line below the task
-  const multilineDeadlineRegex =
-    /^(-\s+(?:TODO|DOING|DONE|LATER|NOW|CANCELED)\s+[^\n]+)\n\s+DEADLINE:\s*<(\d{4}-\d{2}-\d{2})(?:\s+\w+)?>(.*)$/gm;
-  content = content.replace(multilineDeadlineRegex, (_match, taskLine, date, rest) => {
-    // Combine task line with metadata on same line
-    let result = taskLine + ` @due(${date})`;
-    result += rest;
-    return result;
-  });
-
-  // Also handle single-line DEADLINE
-  const deadlineRegex = /DEADLINE:\s*<(\d{4}-\d{2}-\d{2})(?:\s+\w+)?>/g;
-  content = content.replace(deadlineRegex, (_match, date) => {
-    // Store as task metadata comment for the task parser
-    // Format: @due(YYYY-MM-DD)
-    return ` @due(${date})`;
-  });
-
-  // 4. Remove orphaned SCHEDULED/DEADLINE lines without proper date format
-  content = content.replace(/(?:SCHEDULED|DEADLINE):\s*<[^>]*>\n?/g, '');
-
-  // 5. Transform Tasks
-  // TODO/LATER -> [ ]
-  content = content.replace(/-\s+(TODO|LATER)\s+/g, '- [ ] ');
-  // DOING/NOW -> [/]
-  content = content.replace(/-\s+(DOING|NOW)\s+/g, '- [/] ');
-  // DONE -> [x]
-  content = content.replace(/-\s+DONE\s+/g, '- [x] ');
-  // CANCELED -> [x]
-  content = content.replace(/-\s+CANCELED\s+/g, '- [x] ');
+  // 2-5. Tasks: TODO/DOING/DONE/... markers become checkboxes, and their
+  // SCHEDULED/DEADLINE dates and repeaters become inline metadata that the
+  // app's task conversion turns into task files right after the import.
+  content = convertLogseqTasks(content);
 
   // 6. Transform Tags to Wikilinks
   // Logseq: #TagName -> Phosphor: [[TagName]]
@@ -400,6 +424,7 @@ async function importLogseqGraph(sourceDir: string, targetDir: string): Promise<
   const fileMappings: FileMap[] = [];
   const aliasMappings: Record<string, string> = {}; // Maps alias paths to canonical titles
   let filesProcessed = 0;
+  const writtenFiles: string[] = [];
   let assetsProcessed = 0;
 
   try {
@@ -493,6 +518,7 @@ async function importLogseqGraph(sourceDir: string, targetDir: string): Promise<
 
         // Write file
         await fsp.writeFile(map.targetPath, finalContent, 'utf-8');
+        writtenFiles.push(map.targetPath);
       } catch (err) {
         const errorMsg = `Failed to process ${map.originalName}: ${String(err)}`;
         console.error('[Importer Error]', errorMsg);
@@ -629,6 +655,7 @@ async function importLogseqGraph(sourceDir: string, targetDir: string): Promise<
     parentPort?.postMessage({
       type: 'success',
       filesImported: filesProcessed,
+      files: writtenFiles,
       assetsImported: assetsProcessed
     } as ImportSuccess);
   } catch (err) {

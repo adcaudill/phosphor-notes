@@ -36,6 +36,8 @@ import type { TaskMetadataValue } from './components/TaskMetadataPopover';
 import { startTaskRecordsSync } from './tasks/taskRecordsStore';
 import { TaskCapture } from './components/TaskCapture';
 import { TaskManager } from './components/TaskManager';
+import { TaskConversionDialog } from './components/TaskConversionDialog';
+import type { ConversionResult } from '../../shared/taskViews';
 
 /**
  * Extract title from markdown frontmatter, or fallback to filename
@@ -88,6 +90,8 @@ function AppContent(): React.JSX.Element {
   const statusTimerRef = useRef<number | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
+  // Converting inline checkbox tasks to task files: the notes (undefined = whole vault), or null when closed
+  const [conversion, setConversion] = useState<{ notes?: string[] } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aboutModalOpen, setAboutModalOpen] = useState(false); // Toggle for about modal
   const [conflict, setConflict] = useState<string | null>(null); // Filename that has a conflict
@@ -1129,6 +1133,45 @@ function AppContent(): React.JSX.Element {
     }
   };
 
+  /** Saves the open note now if it has unsaved edits (before something else rewrites it on disk). */
+  const flushPendingSave = async (): Promise<void> => {
+    if (debounceTimer.current) {
+      window.clearTimeout(debounceTimer.current);
+      debounceTimer.current = null;
+    }
+    const { currentFile: file, content: text, isDirty: dirty } = latestRef.current;
+    if (file && dirty) {
+      await window.phosphor.saveNote(file, text);
+      setIsDirty(false);
+    }
+  };
+
+  /** Converts inline checkbox tasks (in `notes`, or the whole vault) and reloads the open note if it changed. */
+  const runConversion = async (notes?: string[]): Promise<ConversionResult> => {
+    await flushPendingSave();
+    const result = await window.phosphor.taskRecords.convert(notes);
+    const file = latestRef.current.currentFile;
+    if (file && result.notesChanged.includes(file)) {
+      const fresh = await window.phosphor.readNote(file);
+      skipSaveRef.current = true;
+      setContent(fresh);
+      setTimeout(() => {
+        skipSaveRef.current = false;
+      }, 100);
+    }
+    return result;
+  };
+
+  // /convert-tasks in the editor: convert this note's inline tasks
+  useEffect(() => {
+    const onConvertNote = (): void => {
+      const file = latestRef.current.currentFile;
+      if (file) setConversion({ notes: [file] });
+    };
+    document.addEventListener('phosphor-convert-note-tasks', onConvertNote);
+    return () => document.removeEventListener('phosphor-convert-note-tasks', onConvertNote);
+  }, []);
+
   /** Opens a note in the editor and scrolls to a line (e.g. a task's "mentioned in" links). */
   const openNoteAtLine = (note: string, line: number): void => {
     setViewMode('editor');
@@ -1282,6 +1325,12 @@ function AppContent(): React.JSX.Element {
                       <TaskManager
                         onNavigate={openNoteAtLine}
                         checklistCount={tasks.filter((t) => t.status !== 'done').length}
+                        convertibleCount={
+                          tasks.filter(
+                            (t) => t.dueDate || t.recurrence || t.priority || t.completedAt
+                          ).length
+                        }
+                        onConvert={() => setConversion({})}
                         checklistView={
                           <TasksView
                             tasks={tasks}
@@ -1421,6 +1470,14 @@ function AppContent(): React.JSX.Element {
           />
 
           <Konami isOpen={konamisCodeOpen} onClose={() => setKonamiCodeOpen(false)} />
+
+          {conversion && (
+            <TaskConversionDialog
+              notes={conversion.notes}
+              onConvert={runConversion}
+              onClose={() => setConversion(null)}
+            />
+          )}
 
           {quickCaptureOpen && (
             <TaskCapture

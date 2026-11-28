@@ -36,3 +36,27 @@ export interface TaskDetail {
   task: TaskRecord;
   links: TaskLinkLocation[];
 }
+
+/** One note in a conversion preview (inline checkbox tasks -> task files). */
+export interface ConversionPreviewNote {
+  note: string;
+  /** Tasks that would be created. */
+  tasks: number;
+  /** Completed history lines that would be folded into a repeating task. */
+  folded: number;
+  /** A few of the titles. */
+  samples: string[];
+}
+
+export interface ConversionPreview {
+  notes: ConversionPreviewNote[];
+  tasks: number;
+}
+
+export interface ConversionResult {
+  tasksCreated: number;
+  notesChanged: string[];
+  skipped: Array<{ note: string; error: string }>;
+  /** Groups the note history entries this run made. */
+  opId: string;
+}

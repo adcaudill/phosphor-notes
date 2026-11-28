@@ -3,7 +3,12 @@
 import type { PredictionModelSnapshot } from '../shared/predictionModel';
 import type { TaskRecord } from '../shared/taskRecord';
 import type { NewTaskInput, TaskPatch } from '../shared/taskOps';
-import type { TaskDetail, TaskListSnapshot } from '../shared/taskViews';
+import type {
+  ConversionPreview,
+  ConversionResult,
+  TaskDetail,
+  TaskListSnapshot
+} from '../shared/taskViews';
 
 export type {
   TaskRecord,
@@ -105,6 +110,10 @@ export interface TaskRecordsAPI {
   editComment: (id: string, at: string, text: string) => Promise<TaskRecord>;
   deleteComment: (id: string, at: string) => Promise<TaskRecord>;
   delete: (id: string) => Promise<void>;
+  /** What converting inline checkbox tasks with metadata (in `notes`, or the whole vault) would do. */
+  conversionPreview: (notes?: string[]) => Promise<ConversionPreview>;
+  /** Converts them into task files, replacing each line with a link. Save the open note first. */
+  convert: (notes?: string[]) => Promise<ConversionResult>;
   /**
    * After a rename: rewrites the link title text in every note linking to the
    * task, except `exclude` (pass the note open in the editor - it updates its

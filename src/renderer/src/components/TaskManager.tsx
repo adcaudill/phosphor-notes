@@ -44,6 +44,10 @@ export interface TaskManagerProps {
   /** Rendered for the "Checklist items" view: inline checkbox tasks in notes. */
   checklistView: React.ReactNode;
   checklistCount: number;
+  /** Inline checkbox tasks with metadata (dates, repeats, priority) that could become task files. */
+  convertibleCount: number;
+  /** Opens the conversion preview for the whole vault. */
+  onConvert: () => void;
   onNavigate: (note: string, line: number) => void;
 }
 
@@ -194,6 +198,8 @@ function TaskRow({
 export function TaskManager({
   checklistView,
   checklistCount,
+  convertibleCount,
+  onConvert,
   onNavigate
 }: TaskManagerProps): React.JSX.Element {
   const { ready, tasks, problems } = useTaskRecords();
@@ -437,7 +443,21 @@ export function TaskManager({
       </nav>
 
       {view === 'checklist' ? (
-        <div className="task-manager-legacy">{checklistView}</div>
+        <div className="task-manager-legacy">
+          {convertibleCount > 0 && (
+            <div className="task-manager-convert-banner">
+              <span className="material-symbols-outlined">add_task</span>
+              <span>
+                {convertibleCount} checkbox task{convertibleCount === 1 ? ' has' : 's have'} a date,
+                repeat or priority. Convert them to task files to manage them here.
+              </span>
+              <button type="button" onClick={onConvert}>
+                Preview &amp; convert…
+              </button>
+            </div>
+          )}
+          {checklistView}
+        </div>
       ) : (
         <>
           <div
