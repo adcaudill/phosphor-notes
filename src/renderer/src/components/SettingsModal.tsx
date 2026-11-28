@@ -134,17 +134,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   </label>
                 </div>
 
-                <div className="setting-item setting-checkbox">
+                {/* Vim keybindings aren't implemented yet, so the option is shown
+                    but disabled (and unchecked, whatever is saved) until they are. */}
+                <div className="setting-item setting-checkbox setting-disabled">
                   <label htmlFor="vim-mode">
-                    <input
-                      id="vim-mode"
-                      type="checkbox"
-                      checked={settings.vimMode}
-                      onChange={(e) => updateSetting('vimMode', e.target.checked)}
-                    />
+                    <input id="vim-mode" type="checkbox" checked={false} disabled readOnly />
                     Vim Keybindings
                   </label>
-                  <p className="setting-hint">For the power users. Requires editor reload.</p>
+                  <p className="setting-hint">Not available yet.</p>
                 </div>
 
                 <div className="setting-item setting-checkbox">

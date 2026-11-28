@@ -170,6 +170,15 @@
   height: 16px;
 }
 
+.setting-disabled label,
+.setting-disabled label input[type='checkbox'] {
+  cursor: not-allowed;
+}
+
+.setting-disabled label {
+  opacity: 0.5;
+}
+
 .setting-hint {
   font-size: 12px;
   color: var(--text-secondary, #999);
