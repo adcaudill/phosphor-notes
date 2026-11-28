@@ -258,3 +258,24 @@ describe('moveSection', () => {
     ).toThrow(/inside it/);
   });
 });
+
+describe('empty placeholder bullets', () => {
+  const withPlaceholder = '---\nmode: outliner\n---\n- Meeting Notes\n    - \n- Next\n';
+
+  it('are filled by content inserted as a child, whichever end it goes to', () => {
+    for (const position of ['first_child', 'last_child'] as const) {
+      const result = insertAtSection(withPlaceholder, { match: 'Meeting' }, 'Agenda', position);
+      expect(result.doc).toBe('---\nmode: outliner\n---\n- Meeting Notes\n    - Agenda\n- Next\n');
+    }
+  });
+
+  it('are left alone when inserting a sibling, or when they have children', () => {
+    expect(insertAtSection(withPlaceholder, { match: 'Meeting' }, 'Other', 'after').doc).toContain(
+      '    - \n- Other'
+    );
+    const nested = '---\nmode: outliner\n---\n- P\n    - \n        - kept\n';
+    expect(insertAtSection(nested, { line: 4 }, 'New', 'last_child').doc).toBe(
+      '---\nmode: outliner\n---\n- P\n    - \n        - kept\n    - New\n'
+    );
+  });
+});

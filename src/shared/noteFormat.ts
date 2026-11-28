@@ -251,6 +251,17 @@ function parseOutlinerLines(body: string): ParsedOutlinerLine[] {
   });
 }
 
+/** True for an empty bullet ("- " with no text) at `level` that has no children of its own. */
+function isEmptyLeafBullet(parsed: ParsedOutlinerLine[], i: number, level: number): boolean {
+  const line = parsed[i];
+  if (!line || !line.isBullet || line.text !== '' || line.level !== level) return false;
+  for (let j = i + 1; j < parsed.length; j++) {
+    if (parsed[j].raw.trim() === '') continue;
+    return !(parsed[j].isBullet && parsed[j].level > level);
+  }
+  return true;
+}
+
 /**
  * Inserts `addition` as new children (appended after any existing ones) of
  * a specific existing bullet, found by a case-insensitive substring match
@@ -331,8 +342,15 @@ export function insertUnderBullet(
     throw new InvalidArgumentError('content produced no bullets after normalization');
   }
 
+  // Empty placeholder bullets directly under the target (e.g. a template's
+  // "- " under "Meeting Notes") are filled by the new content, not left above it.
+  const children = bodyLines
+    .slice(chosen.index + 1, insertAfterIndex + 1)
+    .filter((_, k) => !isEmptyLeafBullet(parsed, chosen.index + 1 + k, parentLevel + 1));
+
   const newBodyLines = [
-    ...bodyLines.slice(0, insertAfterIndex + 1),
+    ...bodyLines.slice(0, chosen.index + 1),
+    ...children,
     ...addLines,
     ...bodyLines.slice(insertAfterIndex + 1)
   ];
