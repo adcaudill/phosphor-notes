@@ -1061,6 +1061,21 @@ body {
    PDF WIDGET
    ============================================ */
 
+/* Embeds sit inside an editor line and would otherwise inherit its text
+   rules: the outliner's negative hanging indent, the editor's letter-spacing
+   and pre-wrap whitespace, and - the one that broke them - CodeMirror's
+   line-wrapping rules (break anywhere). Those let every word in the card
+   shrink to a single letter, so as a deeper indent left less room the flex
+   layout crushed the filename and button labels into one letter per row. */
+.cm-image-widget-wrapper,
+.cm-pdf-widget-wrapper {
+  text-indent: 0;
+  letter-spacing: normal;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
 .cm-pdf-widget-wrapper {
   display: inline-flex;
   width: 98%;
@@ -1068,8 +1083,7 @@ body {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  /* Compensate for negative text-indent in outliner mode to prevent left cutoff */
-  text-indent: 0;
+  line-height: 1.4;
 }
 
 .cm-pdf-card {
@@ -1085,6 +1099,9 @@ body {
 
 .cm-pdf-card__header {
   display: flex;
+  /* With little room (deep nesting, narrow window) the buttons move to a
+     second row rather than squeezing the title. */
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
@@ -1102,6 +1119,7 @@ body {
   font-weight: var(--font-weight-bold);
   letter-spacing: 0.5px;
   font-size: 13px;
+  flex-shrink: 0;
 }
 
 .cm-pdf-title {
@@ -1111,7 +1129,12 @@ body {
   font-weight: var(--font-weight-semibold);
   cursor: pointer;
   text-align: left;
-  flex: 1;
+  /* Shrinks to an ellipsis (full name in the tooltip) instead of wrapping. */
+  flex: 1 1 8em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   padding: 0;
   transition: color 0.15s ease;
 }
@@ -1124,6 +1147,8 @@ body {
   display: inline-flex;
   gap: var(--spacing-xs);
   align-items: center;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .cm-pdf-btn {
@@ -1134,6 +1159,7 @@ body {
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 13px;
+  white-space: nowrap;
   transition:
     background 0.15s ease,
     border-color 0.15s ease,
