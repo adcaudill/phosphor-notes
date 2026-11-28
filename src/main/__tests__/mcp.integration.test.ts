@@ -20,7 +20,20 @@ import { createWriteGate } from '../mcp/writeGate';
 import * as noteHistory from '../noteHistory';
 import { extractWikilinks } from '../../shared/wikilinks';
 import { UNRESTRICTED_SCOPE, type WriteScope } from '../mcp/scope';
-import type { Task } from '../../types/phosphor.d';
+import { createTask, deleteTask, updateTask } from '../taskStore';
+import {
+  clearTaskIndex,
+  getTaskDetail,
+  getTaskLinks,
+  getTaskList,
+  loadTaskIndex,
+  removeTask,
+  searchTaskIds,
+  setNoteTaskRefs,
+  upsertTask
+} from '../taskIndex';
+import { syncTaskLinkTitles } from '../taskLinkSync';
+import { extractTaskRefs } from '../../shared/taskLinks';
 
 // End-to-end test: a real StreamableHTTPServerTransport on an ephemeral
 // loopback port, driven by the SDK's own Client - the closest thing to
@@ -37,6 +50,7 @@ describe('MCP server (integration)', () => {
   let editEnabled: boolean;
   let organizeEnabled: boolean;
   let deleteEnabled: boolean;
+  let tasksEnabled: boolean;
   let writeScope: WriteScope;
   const dirtyNotes = new Set<string>();
   let journalMode: NoteMode;
@@ -63,30 +77,13 @@ describe('MCP server (integration)', () => {
     };
     graph = buildWikiGraph(fileContents, Object.keys(fileContents));
 
-    const tasks: Task[] = [
-      {
-        file: 'tagged.md',
-        line: 3,
-        status: 'todo',
-        text: 'Overdue task',
-        rawText: '- [ ] Overdue task 📅 2020-01-01',
-        dueDate: '2020-01-01'
-      },
-      {
-        file: 'tagged.md',
-        line: 4,
-        status: 'done',
-        text: 'Done task',
-        rawText: '- [x] Done task'
-      }
-    ];
-
     token = generateToken();
     readable = true;
     writeEnabled = true;
     editEnabled = true;
     organizeEnabled = true;
     deleteEnabled = true;
+    tasksEnabled = true;
     writeScope = UNRESTRICTED_SCOPE;
     journalMode = 'outliner';
     const gate = createWriteGate({
@@ -109,6 +106,43 @@ describe('MCP server (integration)', () => {
       isEditEnabled: () => writeEnabled && editEnabled,
       isOrganizeEnabled: () => writeEnabled && editEnabled && organizeEnabled,
       isDeleteEnabled: () => writeEnabled && editEnabled && deleteEnabled,
+      isTaskWriteEnabled: () => writeEnabled && tasksEnabled,
+      tasks: {
+        list: () => getTaskList(),
+        search: (text) => searchTaskIds(text),
+        get: (id) => getTaskDetail(id),
+        create: async (input, ctx) => {
+          const task = await createTask(vault, input, {
+            expectedGeneration: ctx.generation,
+            tool: ctx.tool
+          });
+          upsertTask(task);
+          return task;
+        },
+        update: async (id, change, ctx, summary) => {
+          const task = await updateTask(vault, id, change, {
+            expectedGeneration: ctx.generation,
+            tool: ctx.tool,
+            summary
+          });
+          upsertTask(task);
+          return task;
+        },
+        delete: async (id, ctx) => {
+          await deleteTask(vault, id, { expectedGeneration: ctx.generation, tool: ctx.tool });
+          removeTask(id);
+        },
+        syncLinkTitles: async (id, title, ctx) => {
+          const notes = [...new Set(getTaskLinks(id).map((l) => l.note))];
+          const skipped = notes.filter((n) => dirtyNotes.has(n));
+          const changed = await syncTaskLinkTitles(vault, id, title, {
+            expectedGeneration: ctx.generation,
+            tool: ctx.tool,
+            exclude: skipped
+          });
+          return { changed, skipped };
+        }
+      },
       getWriteScope: () => writeScope,
       getDefaultJournalMode: async () => journalMode,
       todayDailyNotePath: () => TODAY,
@@ -205,9 +239,11 @@ describe('MCP server (integration)', () => {
       searchNotes: async (query: string) => [
         { filename: 'top.md', title: 'Top', snippet: `...${query}...` }
       ],
-      getTasks: () => tasks,
       getGraph: () => graph
     };
+
+    clearTaskIndex();
+    await loadTaskIndex(vault);
 
     const listener = createRequestListener({
       getTokenHash: () => hashToken(token),
@@ -237,6 +273,7 @@ describe('MCP server (integration)', () => {
     editEnabled = true;
     organizeEnabled = true;
     deleteEnabled = true;
+    tasksEnabled = true;
     writeScope = UNRESTRICTED_SCOPE;
     dirtyNotes.clear();
     journalMode = 'outliner';
@@ -488,21 +525,50 @@ describe('MCP server (integration)', () => {
     await client.close();
   });
 
-  it('lists tasks with status and overdue filters end-to-end', async () => {
+  it('lists and searches task files with views and filters end-to-end', async () => {
+    const ctx = { generation: vaultState.getGeneration(), tool: 'test' };
+    const overdue = await deps.tasks.create(
+      { title: 'Overdue invoice', due: '2020-01-01', priority: 'high', tags: ['bills'] },
+      ctx
+    );
+    await deps.tasks.create(
+      { title: 'Renew passport', notes: 'Photos are in the desk drawer' },
+      ctx
+    );
+    await deps.tasks.create({ title: 'Old plan', status: 'done' }, ctx);
     const client = await makeClient(token);
 
-    const all = await client.callTool({ name: 'list_tasks', arguments: {} });
-    expect((all.structuredContent as { total: number }).total).toBe(2);
+    const open = await client.callTool({ name: 'list_tasks', arguments: {} });
+    expect(
+      (open.structuredContent as { tasks: Array<{ title: string }> }).tasks.map((t) => t.title)
+    ).toEqual(['Overdue invoice', 'Renew passport']);
 
-    const overdue = await client.callTool({
-      name: 'list_tasks',
-      arguments: { status: 'todo', overdue: true }
-    });
-    expect(overdue.structuredContent).toMatchObject({
+    const today = await client.callTool({ name: 'list_tasks', arguments: { view: 'today' } });
+    expect(today.structuredContent).toMatchObject({
       total: 1,
-      tasks: [{ text: 'Overdue task', status: 'todo' }]
+      tasks: [{ id: overdue.id, title: 'Overdue invoice', priority: 'high', tags: ['bills'] }]
     });
 
+    const filtered = await client.callTool({
+      name: 'list_tasks',
+      arguments: { filter: '#bills due:overdue' }
+    });
+    expect((filtered.structuredContent as { total: number }).total).toBe(1);
+
+    const found = await client.callTool({ name: 'search_tasks', arguments: { query: 'drawer' } });
+    expect(found.structuredContent).toMatchObject({
+      total: 1,
+      tasks: [{ title: 'Renew passport' }]
+    });
+
+    const detail = await client.callTool({ name: 'get_task', arguments: { id: overdue.id } });
+    expect(detail.structuredContent).toMatchObject({
+      task: { id: overdue.id, title: 'Overdue invoice', log: [{ type: 'created' }] },
+      links: []
+    });
+
+    const missing = await client.callTool({ name: 'get_task', arguments: { id: 'zzzzzzzz' } });
+    expect((missing.content as Array<{ text: string }>)[0].text).toContain('TASK_NOT_FOUND');
     await client.close();
   });
 
@@ -567,7 +633,8 @@ describe('MCP server (integration)', () => {
       const namesOff = (await clientOff.listTools()).tools.map((t) => t.name);
       expect(namesOff).not.toContain('create_note');
       expect(namesOff).not.toContain('append_to_note');
-      expect(namesOff).not.toContain('add_task');
+      expect(namesOff).not.toContain('create_task');
+      expect(namesOff).toContain('list_tasks'); // reading tasks needs no write access
       expect(namesOff).not.toContain('insert_under_bullet');
       await clientOff.close();
 
@@ -578,10 +645,12 @@ describe('MCP server (integration)', () => {
         expect.arrayContaining([
           'create_note',
           'append_to_note',
-          'add_task',
+          'create_task',
           'complete_task',
+          'skip_occurrence',
+          'add_task_comment',
           'update_task',
-          'reschedule_task',
+          'update_checklist',
           'delete_task',
           'insert_under_bullet'
         ])
@@ -806,215 +875,187 @@ describe('MCP server (integration)', () => {
       await client.close();
     });
 
-    it("add_task with no file creates and appends to today's daily note", async () => {
-      const client = await makeClient(token);
-      const first = await client.callTool({
-        name: 'add_task',
-        arguments: { text: 'Buy milk', due: '2026-10-01' }
-      });
-
-      expect(first.isError).toBeFalsy();
-      expect(first.structuredContent).toMatchObject({ created: true, mode: 'outliner' });
-      const afterFirst = fs.readFileSync(path.join(vault, TODAY), 'utf-8');
-      expect(afterFirst).toContain('- [ ] Buy milk 📅 2026-10-01');
-      expect(afterFirst).toContain('type: daily');
-      expect(afterFirst).toContain('mode: outliner');
-
-      const second = await client.callTool({
-        name: 'add_task',
-        arguments: { text: 'Walk the dog' }
-      });
-      expect(second.structuredContent).toMatchObject({ created: false });
-      const afterSecond = fs.readFileSync(path.join(vault, TODAY), 'utf-8');
-      expect(afterSecond).toContain('- [ ] Buy milk 📅 2026-10-01');
-      expect(afterSecond).toContain('- [ ] Walk the dog');
-
-      await client.close();
-    });
-
-    it('does not auto-create an explicitly-named missing file for add_task', async () => {
+    it('create_task reads plain language, and structured fields override it', async () => {
       const client = await makeClient(token);
       const result = await client.callTool({
-        name: 'add_task',
-        arguments: { text: 'x', file: 'NeverCreated.md' }
+        name: 'create_task',
+        arguments: { input: 'pay rent on the first of each month !high #bills', project: 'Home' }
       });
-      expect(result.isError).toBe(true);
-      expect((result.content as Array<{ text: string }>)[0].text).toContain('NOTE_NOT_FOUND');
-      expect(fs.existsSync(path.join(vault, 'NeverCreated.md'))).toBe(false);
-      await client.close();
-    });
-
-    it('rejects an impossible due date without writing anything', async () => {
-      const before = fs.existsSync(path.join(vault, TODAY))
-        ? fs.readFileSync(path.join(vault, TODAY), 'utf-8')
-        : null;
-
-      const client = await makeClient(token);
-      const result = await client.callTool({
-        name: 'add_task',
-        arguments: { text: 'x', due: '2026-02-30' }
+      const task = (result.structuredContent as { task: Record<string, unknown> }).task;
+      expect(task).toMatchObject({
+        title: 'pay rent',
+        priority: 'high',
+        tags: ['bills'],
+        project: 'Home',
+        repeat: { rule: 'FREQ=MONTHLY;BYMONTHDAY=1', from: 'due', label: 'Monthly on the 1st' }
       });
-      expect(result.isError).toBe(true);
-      expect((result.content as Array<{ text: string }>)[0].text).toContain('INVALID_ARGUMENT');
+      expect(String(task.due)).toMatch(/^\d{4}-\d{2}-01$/);
+      expect(fs.existsSync(path.join(vault, '_tasks', `${task.id}.md`))).toBe(true);
 
-      const after = fs.existsSync(path.join(vault, TODAY))
-        ? fs.readFileSync(path.join(vault, TODAY), 'utf-8')
-        : null;
-      expect(after).toBe(before);
-      await client.close();
-    });
-
-    it('complete_task marks a task done and inserts the next occurrence for a recurring task', async () => {
-      // A far-future due date keeps this deterministic regardless of the
-      // real current date: completeTask always advances from "now" (no
-      // deterministic override in the MCP tool surface), and a recurring
-      // task's catch-up clamp would otherwise skip ahead past a near-past
-      // due date to the day after the real today.
-      fs.writeFileSync(
-        path.join(vault, 'CompleteTest.md'),
-        '- [ ] Daily standup 📅 2099-01-15 🔁 +1d\n- [ ] One-off 📅 2026-01-15\n'
-      );
-      const client = await makeClient(token);
-
-      const recurring = await client.callTool({
-        name: 'complete_task',
+      const structured = await client.callTool({
+        name: 'create_task',
         arguments: {
-          file: 'CompleteTest.md',
-          line: 1,
-          rawText: '- [ ] Daily standup 📅 2099-01-15 🔁 +1d'
+          title: 'Water plants',
+          repeat: 'every 3 days after done',
+          checklist: ['Fern', 'Cactus']
         }
       });
-      expect(recurring.isError).toBeFalsy();
-      expect(recurring.structuredContent).toMatchObject({ nextLineNumber: 2 });
-      const afterRecurring = fs.readFileSync(path.join(vault, 'CompleteTest.md'), 'utf-8');
-      expect(afterRecurring).toContain('- [x] Daily standup 📅 2099-01-15 🔁 +1d ✓');
-      expect(afterRecurring).toContain('- [ ] Daily standup 📅 2099-01-16 🔁 +1d');
-
-      const oneOff = await client.callTool({
-        name: 'complete_task',
-        arguments: { file: 'CompleteTest.md', line: 3, rawText: '- [ ] One-off 📅 2026-01-15' }
+      expect((structured.structuredContent as { task: unknown }).task).toMatchObject({
+        title: 'Water plants',
+        repeat: { from: 'completion', label: 'Every 3 days after done' },
+        checklist: [
+          { text: 'Fern', done: false },
+          { text: 'Cactus', done: false }
+        ]
       });
-      expect(oneOff.isError).toBeFalsy();
-      const oneOffContent = oneOff.structuredContent as {
-        nextLine?: string;
-        nextLineNumber?: number;
+
+      const bad = await client.callTool({
+        name: 'create_task',
+        arguments: { title: 'x', repeat: 'sometimes' }
+      });
+      expect((bad.content as Array<{ text: string }>)[0].text).toContain('INVALID_ARGUMENT');
+      await client.close();
+    });
+
+    it('create_task can link the task into a note, under a bullet', async () => {
+      fs.writeFileSync(
+        path.join(vault, 'Plan.md'),
+        '---\nmode: outliner\n---\n- Errands\n- Work\n'
+      );
+      const client = await makeClient(token);
+      const result = await client.callTool({
+        name: 'create_task',
+        arguments: { title: 'Buy stamps', linkInto: { note: 'Plan.md', underBullet: 'Errands' } }
+      });
+      const { task, linkedInto } = result.structuredContent as {
+        task: { id: string };
+        linkedInto: string;
       };
-      expect(oneOffContent.nextLine).toBeUndefined();
-      expect(oneOffContent.nextLineNumber).toBeUndefined();
-      const afterOneOff = fs.readFileSync(path.join(vault, 'CompleteTest.md'), 'utf-8');
-      expect(afterOneOff).toContain('- [x] One-off 📅 2026-01-15 ✓');
-
-      await client.close();
-    });
-
-    it('complete_task refuses with LINE_MISMATCH when the line has changed since it was read', async () => {
-      fs.writeFileSync(path.join(vault, 'MismatchTest.md'), '- [ ] Real text\n');
-      const client = await makeClient(token);
-      const result = await client.callTool({
-        name: 'complete_task',
-        arguments: { file: 'MismatchTest.md', line: 1, rawText: '- [ ] Stale text' }
-      });
-      expect(result.isError).toBe(true);
-      expect((result.content as Array<{ text: string }>)[0].text).toContain('LINE_MISMATCH');
-      expect(fs.readFileSync(path.join(vault, 'MismatchTest.md'), 'utf-8')).toBe(
-        '- [ ] Real text\n'
+      expect(linkedInto).toBe('Plan.md');
+      expect(fs.readFileSync(path.join(vault, 'Plan.md'), 'utf-8')).toBe(
+        `---\nmode: outliner\n---\n- Errands\n    - [[_task:${task.id}|Buy stamps]]\n- Work\n`
       );
       await client.close();
     });
 
-    it('update_task edits text, due date, recurrence, priority, and status without embedded syntax', async () => {
-      fs.writeFileSync(path.join(vault, 'UpdateTest.md'), '- [ ] Draft the proposal\n');
+    it('complete_task moves a repeating task on, and marks a one-off task done', async () => {
+      const ctx = { generation: vaultState.getGeneration(), tool: 'test' };
+      const weekly = await deps.tasks.create(
+        {
+          title: 'Standup',
+          due: '2020-01-06',
+          repeat: { rule: 'FREQ=WEEKLY;BYDAY=MO', from: 'due' }
+        },
+        ctx
+      );
+      const once = await deps.tasks.create({ title: 'File taxes' }, ctx);
+      const client = await makeClient(token);
+
+      const next = await client.callTool({ name: 'complete_task', arguments: { id: weekly.id } });
+      const moved = (next.structuredContent as { task: { status: string; due: string } }).task;
+      expect(moved.status).toBe('todo');
+      expect(moved.due > '2020-01-06').toBe(true);
+
+      const done = await client.callTool({ name: 'complete_task', arguments: { id: once.id } });
+      expect((done.structuredContent as { task: unknown }).task).toMatchObject({ status: 'done' });
+
+      const skipped = await client.callTool({
+        name: 'skip_occurrence',
+        arguments: { id: once.id }
+      });
+      expect((skipped.content as Array<{ text: string }>)[0].text).toContain('INVALID_ARGUMENT');
+      await client.close();
+    });
+
+    it('update_task changes fields and keeps link titles in step (skipping unsaved notes)', async () => {
+      const ctx = { generation: vaultState.getGeneration(), tool: 'test' };
+      const task = await deps.tasks.create({ title: 'Call Alice', due: '2030-05-01' }, ctx);
+      const link = `- [[_task:${task.id}|Call Alice]]\n`;
+      fs.writeFileSync(path.join(vault, 'LinkA.md'), link);
+      fs.writeFileSync(path.join(vault, 'LinkB.md'), link);
+      setNoteTaskRefs('LinkA.md', extractTaskRefs(link));
+      setNoteTaskRefs('LinkB.md', extractTaskRefs(link));
+      dirtyNotes.add('LinkB.md');
       const client = await makeClient(token);
 
       const result = await client.callTool({
         name: 'update_task',
         arguments: {
-          file: 'UpdateTest.md',
-          line: 1,
-          rawText: '- [ ] Draft the proposal',
-          newText: 'Send the proposal',
-          due: '2026-03-01',
-          recurrence: '+1w',
-          priority: 'high'
+          id: task.id,
+          title: 'Call Alice back',
+          due: null,
+          priority: 'low',
+          repeat: 'weekly on fri'
         }
       });
-      expect(result.isError).toBeFalsy();
       expect(result.structuredContent).toMatchObject({
-        taskLine: '- [ ] Send the proposal 🔺 📅 2026-03-01 🔁 +1w'
+        task: { title: 'Call Alice back', priority: 'low', repeat: { label: 'Weekly on Fri' } },
+        linksUpdated: ['LinkA.md'],
+        linksSkipped: ['LinkB.md']
       });
-      expect(fs.readFileSync(path.join(vault, 'UpdateTest.md'), 'utf-8')).toBe(
-        '- [ ] Send the proposal 🔺 📅 2026-03-01 🔁 +1w\n'
+      expect(fs.readFileSync(path.join(vault, 'LinkA.md'), 'utf-8')).toContain(
+        '|Call Alice back]]'
       );
+      expect(fs.readFileSync(path.join(vault, 'LinkB.md'), 'utf-8')).toContain('|Call Alice]]');
+      dirtyNotes.delete('LinkB.md');
 
-      const cleared = await client.callTool({
-        name: 'update_task',
-        arguments: {
-          file: 'UpdateTest.md',
-          line: 1,
-          rawText: '- [ ] Send the proposal 🔺 📅 2026-03-01 🔁 +1w',
-          due: '',
-          recurrence: '',
-          priority: 'none',
-          status: 'done'
-        }
+      const list = await client.callTool({
+        name: 'update_checklist',
+        arguments: { id: task.id, items: [{ text: 'Find number', done: true }, { text: 'Call' }] }
       });
-      expect(cleared.isError).toBeFalsy();
-      const finalText = fs.readFileSync(path.join(vault, 'UpdateTest.md'), 'utf-8');
-      expect(finalText).toMatch(
-        /^- \[x\] Send the proposal ✓ \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\n$/
-      );
+      expect((list.structuredContent as { task: unknown }).task).toMatchObject({
+        checklist: [
+          { text: 'Find number', done: true },
+          { text: 'Call', done: false }
+        ]
+      });
 
+      const commented = await client.callTool({
+        name: 'add_task_comment',
+        arguments: { id: task.id, text: 'Left a voicemail' }
+      });
+      const log = (
+        commented.structuredContent as { task: { log: Array<{ type: string; text?: string }> } }
+      ).task.log;
+      expect(log.at(-1)).toMatchObject({ type: 'comment', text: 'Left a voicemail' });
       await client.close();
     });
 
-    it('reschedule_task sets and clears the due date only', async () => {
-      fs.writeFileSync(
-        path.join(vault, 'RescheduleTest.md'),
-        '- [/] In progress 🔼 📅 2026-01-01\n'
-      );
+    it('delete_task removes the task file, keeping it in history', async () => {
+      const ctx = { generation: vaultState.getGeneration(), tool: 'test' };
+      const task = await deps.tasks.create({ title: 'Temporary' }, ctx);
       const client = await makeClient(token);
-
-      const rescheduled = await client.callTool({
-        name: 'reschedule_task',
-        arguments: {
-          file: 'RescheduleTest.md',
-          line: 1,
-          rawText: '- [/] In progress 🔼 📅 2026-01-01',
-          due: '2026-05-05'
-        }
-      });
-      expect(rescheduled.structuredContent).toMatchObject({
-        taskLine: '- [/] In progress 🔼 📅 2026-05-05'
-      });
-
-      const cleared = await client.callTool({
-        name: 'reschedule_task',
-        arguments: {
-          file: 'RescheduleTest.md',
-          line: 1,
-          rawText: '- [/] In progress 🔼 📅 2026-05-05',
-          due: ''
-        }
-      });
-      expect(cleared.structuredContent).toMatchObject({ taskLine: '- [/] In progress 🔼' });
+      const result = await client.callTool({ name: 'delete_task', arguments: { id: task.id } });
+      expect(result.structuredContent).toMatchObject({ deleted: task.id });
+      expect(fs.existsSync(path.join(vault, '_tasks', `${task.id}.md`))).toBe(false);
+      const versions = await noteHistory.listVersions(vault, { path: `_tasks/${task.id}.md` });
+      expect(versions[0]).toMatchObject({ kind: 'delete' });
       await client.close();
     });
 
-    it('delete_task removes the line and nothing else', async () => {
-      fs.writeFileSync(
-        path.join(vault, 'DeleteTest.md'),
-        '- [ ] keep me\n- [ ] delete me\n- [ ] also keep\n'
-      );
-      const client = await makeClient(token);
-      const result = await client.callTool({
-        name: 'delete_task',
-        arguments: { file: 'DeleteTest.md', line: 2, rawText: '- [ ] delete me' }
-      });
-      expect(result.isError).toBeFalsy();
-      expect(fs.readFileSync(path.join(vault, 'DeleteTest.md'), 'utf-8')).toBe(
-        '- [ ] keep me\n- [ ] also keep\n'
-      );
-      await client.close();
+    it('respects the tiers and the tasks switch', async () => {
+      const ctx = { generation: vaultState.getGeneration(), tool: 'test' };
+      const task = await deps.tasks.create({ title: 'Gated' }, ctx);
+
+      editEnabled = false;
+      const noEdit = await makeClient(token);
+      const noEditNames = (await noEdit.listTools()).tools.map((t) => t.name);
+      expect(noEditNames).toEqual(expect.arrayContaining(['create_task', 'complete_task']));
+      expect(noEditNames).not.toContain('update_task');
+      expect(noEditNames).not.toContain('delete_task');
+      await noEdit.close();
+      editEnabled = true;
+
+      tasksEnabled = false;
+      const noTasks = await makeClient(token);
+      const names = (await noTasks.listTools()).tools.map((t) => t.name);
+      expect(names).not.toContain('create_task');
+      expect(names).toContain('create_note');
+      expect(names).toContain('get_task');
+      const status = await noTasks.callTool({ name: 'get_vault_status', arguments: {} });
+      expect((status.structuredContent as { access: { tasks: boolean } }).access.tasks).toBe(false);
+      await noTasks.close();
+      expect(deps.tasks.get(task.id)?.task.status).toBe('todo');
     });
 
     it('leaves the vault completely untouched when locked', async () => {
@@ -1025,7 +1066,7 @@ describe('MCP server (integration)', () => {
       for (const call of [
         { name: 'create_note', arguments: { path: 'Locked.md', content: 'x' } },
         { name: 'append_to_note', arguments: { path: 'top.md', content: 'x' } },
-        { name: 'add_task', arguments: { text: 'x' } }
+        { name: 'create_task', arguments: { title: 'x' } }
       ]) {
         const result = await client.callTool(call);
         expect(result.isError).toBe(true);
@@ -1097,7 +1138,7 @@ describe('MCP server (integration)', () => {
           name: 'create_note',
           arguments: { path: 'Secret.md', content: shown, overwrite: true }
         },
-        { name: 'add_task', arguments: { text: `call about ${shown}` } }
+        { name: 'create_task', arguments: { title: `call about ${shown}` } }
       ]) {
         const result = await client.callTool(call);
         expect(result.isError).toBe(true);
@@ -1117,6 +1158,7 @@ describe('MCP server (integration)', () => {
         edit: false,
         organize: false,
         delete: false,
+        tasks: true,
         writeAllowFolders: ['Inbox'],
         writeDenyFolders: ['Inbox/Private']
       });
@@ -1131,8 +1173,20 @@ describe('MCP server (integration)', () => {
         { name: 'create_note', arguments: { path: 'Elsewhere.md', content: 'x' } },
         { name: 'create_note', arguments: { path: 'Inbox/Private/x.md', content: 'x' } },
         { name: 'append_to_note', arguments: { path: 'top.md', content: 'x' } },
-        // No file: defaults to today's daily note at the vault root - also out of scope.
-        { name: 'add_task', arguments: { text: 'x' } }
+        // Tasks themselves aren't in a folder, but linking one into a note is a note write.
+        { name: 'create_task', arguments: { title: 'x', linkInto: { note: 'top.md' } } }
+      ]) {
+        const result = await client.callTool(call);
+        expect(result.isError).toBe(true);
+        expect((result.content as Array<{ text: string }>)[0].text).toContain(
+          'PATH_NOT_IN_WRITE_SCOPE'
+        );
+      }
+      // Task files are never written as notes, whatever the scope.
+      writeScope = UNRESTRICTED_SCOPE;
+      for (const call of [
+        { name: 'create_note', arguments: { path: '_tasks/k3f9a2xq.md', content: 'x' } },
+        { name: 'append_to_note', arguments: { path: '_tasks/k3f9a2xq.md', content: 'x' } }
       ]) {
         const result = await client.callTool(call);
         expect(result.isError).toBe(true);
@@ -1591,25 +1645,6 @@ describe('MCP server (integration)', () => {
         arguments: { path: 'DryExisting.md', content: 'more', dryRun: true }
       });
       expect(appended.structuredContent).toMatchObject({ dryRun: true });
-
-      // Defaults to today's daily note, which must not be auto-created on a dry run.
-      const task = await client.callTool({
-        name: 'add_task',
-        arguments: { text: 'Dry task', dryRun: true }
-      });
-      expect(task.structuredContent).toMatchObject({ dryRun: true, path: TODAY });
-
-      const completed = await client.callTool({
-        name: 'complete_task',
-        arguments: { file: 'DryExisting.md', line: 1, rawText: '- [ ] Call Sam', dryRun: true }
-      });
-      expect(completed.structuredContent).toMatchObject({ dryRun: true });
-
-      const deleted = await client.callTool({
-        name: 'delete_task',
-        arguments: { file: 'DryExisting.md', line: 1, rawText: '- [ ] Call Sam', dryRun: true }
-      });
-      expect(deleted.structuredContent).toMatchObject({ dryRun: true });
 
       expect(snapshot()).toEqual(before);
       expect(await noteHistory.listVersions(vault, { limit: 1000 })).toEqual(versionsBefore);

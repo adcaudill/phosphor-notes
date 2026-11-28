@@ -47,6 +47,8 @@ export interface McpStatus {
   editEnabled: boolean;
   /** On top of edit access: renaming and moving notes. */
   organizeEnabled: boolean;
+  /** Whether AI apps may change task files (with write access). */
+  tasksEnabled: boolean;
   /** On top of edit access: deleting notes. */
   deleteEnabled: boolean;
   /** Folders AI writes are limited to (empty = whole vault). */
@@ -226,6 +228,7 @@ export interface PhosphorAPI {
   /** Refused (status unchanged) if the server itself is disabled - enable it first. */
   mcpSetWriteEnabled: (enabled: boolean) => Promise<McpStatus>;
   mcpSetEditEnabled: (enabled: boolean) => Promise<McpStatus>;
+  mcpSetTasksEnabled: (enabled: boolean) => Promise<McpStatus>;
   mcpSetOrganizeEnabled: (enabled: boolean) => Promise<McpStatus>;
   mcpSetDeleteEnabled: (enabled: boolean) => Promise<McpStatus>;
   mcpSetWriteScope: (allow: string[], deny: string[]) => Promise<McpStatus>;

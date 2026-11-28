@@ -270,6 +270,7 @@ const api = {
   mcpSetEnabled: (enabled: boolean) => ipcRenderer.invoke('mcp:set-enabled', enabled),
   mcpSetWriteEnabled: (enabled: boolean) => ipcRenderer.invoke('mcp:set-write-enabled', enabled),
   mcpSetEditEnabled: (enabled: boolean) => ipcRenderer.invoke('mcp:set-edit-enabled', enabled),
+  mcpSetTasksEnabled: (enabled: boolean) => ipcRenderer.invoke('mcp:set-tasks-enabled', enabled),
   mcpSetOrganizeEnabled: (enabled: boolean) =>
     ipcRenderer.invoke('mcp:set-organize-enabled', enabled),
   mcpSetDeleteEnabled: (enabled: boolean) => ipcRenderer.invoke('mcp:set-delete-enabled', enabled),

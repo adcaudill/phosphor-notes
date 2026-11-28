@@ -92,6 +92,12 @@ export function errorCodeFor(err: unknown): string {
         return 'HAS_BACKLINKS';
       case 'OrganizeDisabledError':
         return 'ORGANIZE_DISABLED';
+      case 'TaskNotFoundError':
+        return 'TASK_NOT_FOUND';
+      case 'TasksDisabledError':
+        return 'TASKS_DISABLED';
+      case 'TaskFileError':
+        return 'INVALID_ARGUMENT';
       default:
         return 'INTERNAL_ERROR';
     }

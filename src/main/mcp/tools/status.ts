@@ -15,9 +15,10 @@ export function registerStatusTool(server: McpServer, deps: McpDeps): void {
         'This is the only tool that works when the vault is locked or no vault is open - call it ' +
         'first, and if `readable` is false, ask the user to open or unlock the vault in the Phosphor ' +
         'Notes app before calling any other tool. There is no tool to unlock the vault remotely. ' +
-        '`access` says what the user lets you change: `write` (create notes, add content, edit ' +
-        'tasks), `edit` (also edit or remove existing text in place), `organize` (rename/move ' +
-        'notes) and `delete` (delete notes), and the folders writes are ' +
+        '`access` says what the user lets you change: `write` (create notes, add content), ' +
+        '`edit` (also edit or remove existing text in place), `organize` (rename/move ' +
+        'notes), `delete` (delete notes), `tasks` (create, complete and change tasks - within ' +
+        'the tiers above), and the folders writes are ' +
         'limited to (`writeAllowFolders`, empty = whole vault) or excluded from (`writeDenyFolders`).',
       outputSchema: {
         open: z.boolean(),
@@ -32,6 +33,7 @@ export function registerStatusTool(server: McpServer, deps: McpDeps): void {
           edit: z.boolean(),
           organize: z.boolean(),
           delete: z.boolean(),
+          tasks: z.boolean(),
           writeAllowFolders: z.array(z.string()),
           writeDenyFolders: z.array(z.string())
         })
@@ -57,6 +59,7 @@ export function registerStatusTool(server: McpServer, deps: McpDeps): void {
           edit: deps.isEditEnabled(),
           organize: deps.isOrganizeEnabled(),
           delete: deps.isDeleteEnabled(),
+          tasks: deps.isTaskWriteEnabled(),
           writeAllowFolders: deps.getWriteScope().allow,
           writeDenyFolders: deps.getWriteScope().deny
         }
