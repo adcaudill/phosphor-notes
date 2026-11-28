@@ -4,8 +4,8 @@ import { findOccurrences, wikilinkSpans, overlapsAny } from '../textMatch';
 describe('findOccurrences', () => {
   it('finds literal, non-overlapping occurrences, case-sensitively by default', () => {
     expect(findOccurrences('aaa', 'aa')).toEqual([0]);
-    expect(findOccurrences('Abigail met melanie', 'Abigail')).toEqual([0]);
-    expect(findOccurrences('Abigail met melanie', 'melanie', { caseSensitive: false })).toEqual([
+    expect(findOccurrences('Abigail met abigail', 'Abigail')).toEqual([0]);
+    expect(findOccurrences('Abigail met abigail', 'abigail', { caseSensitive: false })).toEqual([
       0, 12
     ]);
     expect(findOccurrences('x', '')).toEqual([]);
@@ -31,7 +31,7 @@ describe('wikilink spans', () => {
   it('finds links and detects overlap', () => {
     const text = 'Hi [[People/Abigail Stone]] and Abigail';
     const spans = wikilinkSpans(text);
-    expect(spans).toEqual([[3, 28]]);
+    expect(spans).toEqual([[3, 27]]);
     expect(overlapsAny(text.indexOf('Abigail'), 7, spans)).toBe(true);
     expect(overlapsAny(text.lastIndexOf('Abigail'), 7, spans)).toBe(false);
   });
