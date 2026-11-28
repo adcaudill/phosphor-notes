@@ -22,7 +22,8 @@ Options: `--build` (run `electron-vite build` first - needed after changing app
 code), `--scale <n>` (device scale, default 2 = Retina), `--width`/`--height`
 (viewport, default 1000x700), `--theme dark|light`, `--font-size <px>` and
 `--line-height <n>` (the editor settings; default 16 and 1.5, the app's
-defaults), `--window` (also capture
+defaults), `--set <setting>=<value>` (any other setting, e.g.
+`--set showLineNumbers=true`; repeatable), `--window` (also capture
 the whole window), `--cursor <line>` (click at the end of that rendered line
 first, so it shows raw markdown as it does while you edit it), `--eval "<js>"`
 (print the result of an expression in the renderer), `--out <dir>` (default

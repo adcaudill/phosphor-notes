@@ -7,7 +7,7 @@
  *
  *   npm run ui:probe -- [fixtures...] [--build] [--scale 2] [--width 1000] [--height 700]
  *                       [--theme dark|light] [--font-size 16] [--line-height 1.5]
- *                       [--window] [--cursor <line>] [--eval "<js>"]
+ *                       [--set <setting>=<value>] [--window] [--cursor <line>] [--eval "<js>"]
  *                       [--out .ui-probe]
  *
  * Fixtures are names in scripts/ui-probe/fixtures (without .md) or paths to
@@ -33,6 +33,8 @@ interface Args {
   theme: string;
   fontSize?: number;
   lineHeight?: number;
+  /** Other settings, from --set key=value. */
+  settings: Record<string, unknown>;
   evalExpr?: string;
   cursor?: number;
   out: string;
@@ -47,6 +49,7 @@ function parseArgs(argv: string[]): Args {
     width: 1000,
     height: 700,
     theme: 'dark',
+    settings: {},
     out: path.join(repo, '.ui-probe')
   };
   for (let i = 0; i < argv.length; i++) {
@@ -64,7 +67,18 @@ function parseArgs(argv: string[]): Args {
     else if (a === '--theme') args.theme = value();
     else if (a === '--font-size') args.fontSize = Number(value());
     else if (a === '--line-height') args.lineHeight = Number(value());
-    else if (a === '--eval') args.evalExpr = value();
+    else if (a === '--set') {
+      // Any other setting: --set showLineNumbers=true (value parsed as JSON, else a string)
+      const [key, ...rest] = value().split('=');
+      const raw = rest.join('=');
+      let parsed: unknown = raw;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        // keep it as a string
+      }
+      args.settings[key] = parsed;
+    } else if (a === '--eval') args.evalExpr = value();
     else if (a === '--cursor') args.cursor = Number(value());
     else if (a === '--out') args.out = path.resolve(value());
     else if (a.startsWith('--')) throw new Error(`Unknown option ${a}`);
@@ -104,6 +118,7 @@ async function main(): Promise<void> {
       height: args.height,
       scale: args.scale,
       settings: {
+        ...args.settings,
         theme: args.theme,
         ...(args.fontSize ? { editorFontSize: args.fontSize } : {}),
         ...(args.lineHeight ? { lineHeight: args.lineHeight } : {})
