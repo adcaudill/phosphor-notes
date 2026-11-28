@@ -28,6 +28,11 @@ import { taskAddMetadataGutter } from '../editor/extensions/taskAddMetadataGutte
 import { taskLinkExtension } from '../editor/extensions/taskLinkWidget';
 import { TaskMetadataPopover, type TaskMetadataValue } from './TaskMetadataPopover';
 import { parseTaskLine, serializeTaskLine, TASK_LINE_RE } from '../../../shared/tasks';
+import { formatTaskLink } from '../../../shared/taskLinks';
+import type { NewTaskInput } from '../../../shared/taskOps';
+import type { TaskStatus as TaskRecordStatus } from '../../../shared/taskRecord';
+import { TaskCapture } from './TaskCapture';
+import { legacyTaskAsCaptureText } from '../tasks/legacyCapture';
 import { admonitionWidget } from '../editor/extensions/admonitionWidget';
 import { typewriterScroll } from '../editor/extensions/typewriter';
 import { dimmingPlugin, suppressDimmingEffect } from '../editor/extensions/dimming';
@@ -98,6 +103,19 @@ export interface EditorHandle {
   toggleTaskAtLine: (lineNumber: number) => boolean;
   /** Rewrites the given task line's metadata via the live buffer - returns false if that line isn't a task line. */
   updateTaskMetadataAtLine: (lineNumber: number, value: TaskMetadataValue) => boolean;
+  /**
+   * Opens the task capture field at the cursor - converting the line if it's
+   * a `- [ ]` checkbox line. Returns false if there's no editor.
+   */
+  openTaskCapture: () => boolean;
+}
+
+/** The open task capture field: where it was opened, and for a conversion, the line it replaces. */
+interface TaskCaptureState {
+  pos: number;
+  rect: DOMRect | null;
+  initialText: string;
+  convert?: { from: number; to: number; indent: string; status: TaskRecordStatus };
 }
 
 export const Editor = forwardRef<EditorHandle, EditorProps>(
@@ -163,6 +181,11 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
           } catch (err) {
             console.error('Failed to replace selection in editor:', err);
           }
+        },
+        openTaskCapture: () => {
+          if (!viewRef.current) return false;
+          openTaskCaptureRef.current?.(viewRef.current);
+          return true;
         }
       }),
       []
@@ -178,6 +201,70 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
     const [searchAPI, setSearchAPI] = useState<ReturnType<typeof createSearchAPI> | null>(null);
     const [imageViewerOpen, setImageViewerOpen] = useState(false);
     const [imageViewerUrl, setImageViewerUrl] = useState('');
+    // Task capture (/task, Mod-Shift-T): create a task file and insert its link
+    const [taskCapture, setTaskCapture] = useState<TaskCaptureState | null>(null);
+    const openTaskCaptureRef = useRef<((view: EditorView) => void) | null>(null);
+    openTaskCaptureRef.current = (view: EditorView): void => {
+      const pos = view.state.selection.main.head;
+      const line = view.state.doc.lineAt(pos);
+      const coords = view.coordsAtPos(pos);
+      const rect = coords
+        ? new DOMRect(coords.left, coords.top, 0, coords.bottom - coords.top)
+        : null;
+      const checkbox = TASK_LINE_RE.exec(line.text);
+      const legacy = checkbox ? parseTaskLine(line.text) : null;
+      if (checkbox && legacy) {
+        setTaskCapture({
+          pos,
+          rect,
+          initialText: legacyTaskAsCaptureText(legacy),
+          convert: { from: line.from, to: line.to, indent: checkbox[1], status: legacy.status }
+        });
+      } else {
+        setTaskCapture({ pos, rect, initialText: '' });
+      }
+    };
+
+    const closeTaskCapture = useCallback((): void => {
+      setTaskCapture(null);
+      viewRef.current?.focus();
+    }, []);
+
+    const handleTaskCaptureSubmit = useCallback(
+      async (input: NewTaskInput): Promise<void> => {
+        const view = viewRef.current;
+        const capture = taskCapture;
+        if (!view || !capture) return;
+        const api = window.phosphor.taskRecords;
+        // A converted checkbox keeps its state (an explicit "waiting on" wins).
+        const status =
+          capture.convert && capture.convert.status !== 'todo' && input.status !== 'waiting'
+            ? capture.convert.status
+            : input.status;
+        const created = await api.create({ ...input, ...(status ? { status } : {}) });
+        const link = formatTaskLink(created.id, created.title);
+
+        let from: number;
+        let to: number;
+        let insert: string;
+        if (capture.convert) {
+          ({ from, to } = capture.convert);
+          insert = `${capture.convert.indent}- ${link}`;
+        } else {
+          from = to = Math.min(capture.pos, view.state.doc.length);
+          const before = from > 0 ? view.state.doc.sliceString(from - 1, from) : '';
+          insert = before && !/\s/.test(before) ? ` ${link}` : link;
+        }
+        view.dispatch({
+          changes: { from, to, insert },
+          selection: { anchor: from + insert.length }
+        });
+        setTaskCapture(null);
+        view.focus();
+      },
+      [taskCapture]
+    );
+
     const [taskPopover, setTaskPopover] = useState<{
       lineNumber: number;
       anchorRect: DOMRect;
@@ -571,8 +658,13 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
         contentEl.spellcheck = true;
       }
 
+      // `/task` (slashCommands.ts) asks for the task capture field at the cursor
+      const onTaskCapture = (): void => openTaskCaptureRef.current?.(view);
+      view.dom.addEventListener('phosphor-task-capture', onTaskCapture);
+
       // Cleanup on unmount
       return () => {
+        view.dom.removeEventListener('phosphor-task-capture', onTaskCapture);
         view.destroy();
         grammarLint.destroy();
       };
@@ -678,6 +770,15 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
           imageUrl={imageViewerUrl}
           onClose={() => setImageViewerOpen(false)}
         />
+        {taskCapture && (
+          <TaskCapture
+            anchorRect={taskCapture.rect}
+            initialText={taskCapture.initialText}
+            heading={taskCapture.convert ? 'Convert to task' : undefined}
+            onSubmit={handleTaskCaptureSubmit}
+            onCancel={closeTaskCapture}
+          />
+        )}
         {taskPopover && (
           <TaskMetadataPopover
             key={taskPopover.lineNumber}

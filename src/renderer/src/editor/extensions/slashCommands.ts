@@ -42,6 +42,17 @@ interface SlashCommand {
 }
 
 const slashCommands: SlashCommand[] = [
+  {
+    name: 'task',
+    label: 'Task',
+    description: 'Create a task (type it in plain language)',
+    apply: (view, from, to) => {
+      // Remove the "/task" text, then ask the editor (Editor.tsx) for the
+      // task capture field at that spot.
+      view.dispatch({ changes: { from, to, insert: '' }, selection: EditorSelection.single(from) });
+      view.dom.dispatchEvent(new CustomEvent('phosphor-task-capture'));
+    }
+  },
   // Date shortcuts
   {
     name: 'today',
