@@ -33,6 +33,7 @@ import {
 } from '../../shared/tasks';
 import { formatAppend, detectNoteMode } from '../../shared/noteFormat';
 import type { TaskMetadataValue } from './components/TaskMetadataPopover';
+import { startTaskRecordsSync } from './tasks/taskRecordsStore';
 
 /**
  * Extract title from markdown frontmatter, or fallback to filename
@@ -167,6 +168,9 @@ function AppContent(): React.JSX.Element {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  // Keep the renderer's copy of the task-file index current (task links, Tasks tab)
+  useEffect(() => startTaskRecordsSync(), []);
 
   // Apply color palette and theme to the document
   useEffect(() => {

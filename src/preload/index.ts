@@ -218,6 +218,8 @@ const api = {
     deleteComment: (id: string, at: string) =>
       ipcRenderer.invoke('task-records:delete-comment', id, at),
     delete: (id: string) => ipcRenderer.invoke('task-records:delete', id),
+    syncLinkTitles: (id: string, exclude: string[] = []) =>
+      ipcRenderer.invoke('task-records:sync-link-titles', id, exclude),
     onChanged: (cb: () => void) => {
       const handler = (): void => cb();
       ipcRenderer.on('task-records:changed', handler);

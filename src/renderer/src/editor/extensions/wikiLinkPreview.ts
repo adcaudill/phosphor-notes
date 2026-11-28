@@ -53,7 +53,8 @@ export const wikiLinkHoverTooltip = hoverTooltip((view, pos) => {
     }
   }
 
-  if (!inLink || !linkTarget) {
+  // Task links render as task widgets; there's no page to preview.
+  if (!inLink || !linkTarget || linkTarget.startsWith('_task:')) {
     return null;
   }
 

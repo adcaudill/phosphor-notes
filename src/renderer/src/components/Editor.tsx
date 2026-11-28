@@ -25,6 +25,7 @@ import {
 } from '../editor/extensions/taskCheckbox';
 import { taskMetadataWidgetsPlugin } from '../editor/extensions/taskMetadataWidgets';
 import { taskAddMetadataGutter } from '../editor/extensions/taskAddMetadataGutter';
+import { taskLinkExtension } from '../editor/extensions/taskLinkWidget';
 import { TaskMetadataPopover, type TaskMetadataValue } from './TaskMetadataPopover';
 import { parseTaskLine, serializeTaskLine, TASK_LINE_RE } from '../../../shared/tasks';
 import { admonitionWidget } from '../editor/extensions/admonitionWidget';
@@ -318,6 +319,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
           history(), // Undo/Redo stack
           syntaxHighlighting(darkModeHighlightStyle), // Use custom dark mode colors
           taskCheckboxPlugin, // Task checkboxes
+          taskLinkExtension, // Task file links ([[_task:id|title]]) as live task widgets
           taskMetadataWidgetsPlugin, // Due date / recurrence / priority pills
           taskAddMetadataGutter, // "+" gutter marker for a bare task on the cursor's line
           admonitionWidget, // Admonition/Callout rendering

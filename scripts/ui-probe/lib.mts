@@ -65,7 +65,7 @@ export interface LineReport {
 }
 
 export interface WidgetReport {
-  kind: 'checkbox' | 'pill' | 'widget';
+  kind: 'checkbox' | 'pill' | 'task-link' | 'widget';
   cls: string;
   /** Text inside the widget (pill label, or the icon's ligature name). */
   label: string;
@@ -223,7 +223,12 @@ const REPORT_SCRIPT = `(() => {
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       const parent = node.parentElement;
-      if (!parent || parent.closest('[contenteditable=false]')) continue;
+      if (!parent) continue;
+      // Widget text is skipped, except a task link's title: it's real text in
+      // the editor font, so it gives a widget-only line its rows and baseline.
+      // It never counts as text for overlap checks (inWidget below).
+      const inWidget = Boolean(parent.closest('[contenteditable=false]'));
+      if (inWidget && !parent.closest('.cm-task-link-title')) continue;
       const m = metricsFor(parent);
       const text = node.textContent || '';
       for (let k = 0; k < text.length; k++) {
@@ -246,6 +251,7 @@ const REPORT_SCRIPT = `(() => {
           row.capHeight = m.capHeight;
           row.xHeight = m.xHeight;
         }
+        if (inWidget) continue;
         const last = row.segs[row.segs.length - 1];
         if (last && rect.left - last.right < m.ch * 0.6 && rect.left >= last.left) {
           last.right = Math.max(last.right, rect.right);
@@ -258,10 +264,24 @@ const REPORT_SCRIPT = `(() => {
     }
     const rowList = [...rows.values()].sort((a, b) => a.mid - b.mid);
 
-    const widgets = [...el.querySelectorAll('[contenteditable=false]')].map((w) => {
+    // What to measure: each widget, and for a task link (taskLinkWidget.ts)
+    // also its checkbox and pills as separate parts. Parts of one widget share
+    // a root index so they aren't reported as overlapping each other.
+    const parts = [];
+    [...el.querySelectorAll('[contenteditable=false]')].forEach((root, rootIndex) => {
+      if (root.classList.contains('cm-task-link')) {
+        parts.push({ w: root, kind: 'task-link', rootIndex });
+        const check = root.querySelector('.cm-task-link-check');
+        if (check) parts.push({ w: check, kind: 'checkbox', rootIndex, label: root.querySelector('.cm-task-link-title')?.textContent });
+        root.querySelectorAll('.cm-task-pill').forEach((pill) => parts.push({ w: pill, kind: 'pill', rootIndex }));
+      } else {
+        const cls = root.className || root.tagName.toLowerCase();
+        parts.push({ w: root, kind: /cm-task-checkbox/.test(cls) ? 'checkbox' : /cm-task-pill/.test(cls) ? 'pill' : 'widget', rootIndex });
+      }
+    });
+    const widgets = parts.map(({ w, kind, rootIndex, label }) => {
       const b = w.getBoundingClientRect();
       const cls = w.className || w.tagName.toLowerCase();
-      const kind = /cm-task-checkbox/.test(cls) ? 'checkbox' : /cm-task-pill/.test(cls) ? 'pill' : 'widget';
       // The row this widget sits on: the one whose middle is closest to the widget's middle.
       const mid = b.top + b.height / 2;
       const lh = parseFloat(style.lineHeight) || box.height;
@@ -275,7 +295,7 @@ const REPORT_SCRIPT = `(() => {
       return {
         kind,
         cls,
-        label: ((w.querySelector('.cm-task-pill-label') || w).textContent || '').trim().slice(0, 40),
+        label: (label ?? ((w.querySelector('.cm-task-pill-label') || w.querySelector('.cm-task-link-title') || w).textContent || '')).trim().slice(0, 40),
         left: round(b.left - contentLeft),
         right: round(b.right - contentLeft),
         top: round(b.top),
@@ -287,7 +307,10 @@ const REPORT_SCRIPT = `(() => {
         rowCapMiddle: row ? round(row.baseline - row.capHeight / 2) : null,
         rowXMiddle: row ? round(row.baseline - row.xHeight / 2) : null,
         // Box of the glyph's own element (pills: the pill box; checkbox: the icon).
-        _raw: { x: b.left, y: b.top, w: b.width, h: b.height }
+        _raw: { x: b.left, y: b.top, w: b.width, h: b.height },
+        // An inline widget that wraps has one box per row; overlap checks use these.
+        _frags: [...w.getClientRects()].map((r) => ({ left: r.left, right: r.right, top: r.top, bottom: r.bottom })),
+        _root: rootIndex
       };
     });
 
@@ -297,14 +320,15 @@ const REPORT_SCRIPT = `(() => {
     const hit = (a, b) =>
       Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 &&
       Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
+    const fragsHit = (a, b) => a._frags.some((fa) => b.some((fb) => hit(fa, fb)));
     widgets.forEach((w, wi) => {
       const abs = { left: w._raw.x, right: w._raw.x + w._raw.w, top: w._raw.y, bottom: w._raw.y + w._raw.h };
       for (const r of rowList) for (const s of r.segs) {
-        if (hit(abs, s)) overlaps.push(w.kind + ' "' + w.label + '" overlaps text at x=' + round(s.left - contentLeft) + '..' + round(s.right - contentLeft));
+        if (fragsHit(w, [s])) overlaps.push(w.kind + ' "' + w.label + '" overlaps text at x=' + round(s.left - contentLeft) + '..' + round(s.right - contentLeft));
       }
       widgets.slice(wi + 1).forEach((o) => {
-        const ob = { left: o._raw.x, right: o._raw.x + o._raw.w, top: o._raw.y, bottom: o._raw.y + o._raw.h };
-        if (hit(abs, ob)) overlaps.push(w.kind + ' "' + w.label + '" overlaps ' + o.kind + ' "' + o.label + '"');
+        if (o._root === w._root) return; // parts of the same widget
+        if (fragsHit(w, o._frags)) overlaps.push(w.kind + ' "' + w.label + '" overlaps ' + o.kind + ' "' + o.label + '"');
       });
       if (abs.top < box.top - 1 || abs.bottom > box.bottom + 1) {
         overlaps.push(w.kind + ' "' + w.label + '" sticks out of its line box (' + round(abs.top - box.top) + ', ' + round(abs.bottom - box.bottom) + ')');
@@ -446,6 +470,10 @@ export async function launchProbe(opts: ProbeOptions): Promise<Probe> {
   const assets =
     opts.assetsDir ?? path.join(opts.repo, 'scripts', 'ui-probe', 'fixtures', '_assets');
   if (fs.existsSync(assets)) fs.cpSync(assets, path.join(vault, '_assets'), { recursive: true });
+  // Task files that fixture notes link to ([[_task:<id>|...]]).
+  const taskFiles = path.join(opts.repo, 'scripts', 'ui-probe', 'fixtures', '_tasks');
+  if (fs.existsSync(taskFiles))
+    fs.cpSync(taskFiles, path.join(vault, '_tasks'), { recursive: true });
   fs.writeFileSync(
     path.join(profile, '.phosphor', 'config.json'),
     JSON.stringify({ lastVault: vault })
@@ -632,7 +660,12 @@ export async function launchProbe(opts: ProbeOptions): Promise<Probe> {
                 : null;
           });
         }
-        for (const { w } of all) delete (w as Partial<RawWidget>)._raw;
+        for (const { w } of all) {
+          const raw = w as Partial<RawWidget> & { _frags?: unknown; _root?: unknown };
+          delete raw._raw;
+          delete raw._frags;
+          delete raw._root;
+        }
         return { ...report, scale };
       },
 

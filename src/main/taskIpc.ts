@@ -11,6 +11,7 @@ import { ipcMain, BrowserWindow } from 'electron';
 import * as vaultState from './vaultState';
 import { VaultNotOpenError } from './vaultReader';
 import { createTask, deleteTask, updateTask, type WriteOptions } from './taskStore';
+import { syncTaskLinkTitles } from './taskLinkSync';
 import {
   getTaskDetail,
   getTaskList,
@@ -99,6 +100,21 @@ export function setupTaskIPC(): void {
 
   ipcMain.handle('task-records:delete-comment', (_, id: string, at: string) =>
     change(id, 'Deleted comment', (t) => deleteComment(t, at))
+  );
+
+  // After a rename: rewrite the link title text in linking notes, except
+  // `exclude` (the note open in the editor, which updates its own buffer).
+  ipcMain.handle(
+    'task-records:sync-link-titles',
+    async (_, id: string, exclude: string[] = []): Promise<string[]> => {
+      const detail = getTaskDetail(id);
+      if (!detail) return [];
+      return syncTaskLinkTitles(openVault(), id, detail.task.title, {
+        expectedGeneration: vaultState.getGeneration(),
+        tool: TOOL,
+        exclude
+      });
+    }
   );
 
   ipcMain.handle('task-records:delete', async (_, id: string): Promise<void> => {

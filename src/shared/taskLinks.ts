@@ -30,6 +30,25 @@ export function extractTaskRefs(content: string): TaskRef[] {
   return refs;
 }
 
+/**
+ * Rewrites the title text of every link to task `id` in `doc` (after a
+ * rename). Returns the new text and how many links changed.
+ */
+export function replaceTaskLinkTitles(
+  doc: string,
+  id: string,
+  title: string
+): { doc: string; changed: number } {
+  let changed = 0;
+  const wanted = formatTaskLink(id, title);
+  const next = doc.replace(new RegExp(TASK_LINK_RE.source, 'g'), (whole, linkId: string) => {
+    if (linkId !== id || whole === wanted) return whole;
+    changed++;
+    return wanted;
+  });
+  return { doc: next, changed };
+}
+
 /** The text of a link to a task. Characters that would end the link are dropped from the title. */
 export function formatTaskLink(id: string, title: string): string {
   const safe = title
