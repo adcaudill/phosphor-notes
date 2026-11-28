@@ -207,6 +207,7 @@ const api = {
   taskRecords: {
     list: () => ipcRenderer.invoke('task-records:list'),
     get: (id: string) => ipcRenderer.invoke('task-records:get', id),
+    search: (text: string) => ipcRenderer.invoke('task-records:search', text),
     create: (input: NewTaskInput) => ipcRenderer.invoke('task-records:create', input),
     update: (id: string, patch: TaskPatch) => ipcRenderer.invoke('task-records:update', id, patch),
     complete: (id: string) => ipcRenderer.invoke('task-records:complete', id),

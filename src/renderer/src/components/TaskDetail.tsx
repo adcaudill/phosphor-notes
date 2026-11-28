@@ -509,9 +509,11 @@ export function TaskDetail({
     return () => document.removeEventListener('mousedown', onDown);
   }, [variant, onClose]);
 
+  // The popover takes focus when it opens; the Tasks tab's panel doesn't, so
+  // the list keeps the keyboard while the selection moves.
   useEffect(() => {
-    rootRef.current?.focus();
-  }, [id]);
+    if (variant === 'popover') rootRef.current?.focus();
+  }, [id, variant]);
 
   const today = localDate();
   let body: React.ReactNode;

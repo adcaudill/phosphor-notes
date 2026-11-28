@@ -15,6 +15,7 @@ import { syncTaskLinkTitles } from './taskLinkSync';
 import {
   getTaskDetail,
   getTaskList,
+  searchTaskIds,
   onTaskIndexChange,
   removeTask,
   upsertTask,
@@ -65,6 +66,11 @@ export function setupTaskIPC(): void {
   ipcMain.handle('task-records:list', async (): Promise<TaskListSnapshot> => {
     if (!(await vaultState.isReadable())) return { ready: false, tasks: [], problems: [] };
     return getTaskList();
+  });
+
+  ipcMain.handle('task-records:search', async (_, text: string): Promise<string[]> => {
+    if (!(await vaultState.isReadable())) return [];
+    return searchTaskIds(String(text ?? ''));
   });
 
   ipcMain.handle('task-records:get', async (_, id: string): Promise<TaskDetail | null> => {

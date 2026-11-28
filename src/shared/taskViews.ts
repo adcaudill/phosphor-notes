@@ -21,6 +21,8 @@ export interface TaskSummary extends Omit<TaskRecord, 'notes' | 'log' | 'extra'>
   hasNotes: boolean;
   commentCount: number;
   linkCount: number;
+  /** The notes that link to it (each once). */
+  linkedNotes: string[];
 }
 
 export interface TaskListSnapshot {

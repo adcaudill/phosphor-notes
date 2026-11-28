@@ -95,6 +95,8 @@ export interface McpClientConfig {
 export interface TaskRecordsAPI {
   list: () => Promise<TaskListSnapshot>;
   get: (id: string) => Promise<TaskDetail | null>;
+  /** Task ids matching free text (title, notes, checklist, comments, project, tags), best first. */
+  search: (text: string) => Promise<string[]>;
   create: (input: NewTaskInput) => Promise<TaskRecord>;
   update: (id: string, patch: TaskPatch) => Promise<TaskRecord>;
   complete: (id: string) => Promise<TaskRecord>;
