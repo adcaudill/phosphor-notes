@@ -53,6 +53,15 @@ const slashCommands: SlashCommand[] = [
       view.dom.dispatchEvent(new CustomEvent('phosphor-task-capture'));
     }
   },
+  {
+    name: 'convert-tasks',
+    label: 'Convert tasks',
+    description: "Turn this note's checkbox tasks with dates or repeats into task files",
+    apply: (view, from, to) => {
+      view.dispatch({ changes: { from, to, insert: '' }, selection: EditorSelection.single(from) });
+      document.dispatchEvent(new CustomEvent('phosphor-convert-note-tasks'));
+    }
+  },
   // Date shortcuts
   {
     name: 'today',

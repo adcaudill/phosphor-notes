@@ -225,15 +225,15 @@
   margin-left: 0.4em;
 }
 
-/* The "+" affordance renders as a gutter marker (taskAddMetadataGutter.ts),
-   not inline in the text - see that file for why. Its column only appears
-   on lines that currently have a marker, so this deliberately doesn't
-   reserve a permanent empty column via `initialSpacer`. */
-.cm-task-add-metadata-gutter {
+/* "Convert to task" marker beside an inline checkbox task on the cursor's
+   line (taskConvertGutter.ts). Its column only appears on lines that have a
+   marker, so no permanent empty column is reserved. Stronger when the line
+   carries metadata (a date, repeat or priority) that converting keeps. */
+.cm-task-convert-gutter {
   cursor: pointer;
 }
 
-.cm-task-add-metadata {
+.cm-task-convert {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -245,10 +245,15 @@
   transition: opacity 0.12s ease;
 }
 
-.cm-task-add-metadata:hover {
-  opacity: 0.9;
+.cm-task-convert.has-metadata {
+  opacity: 0.7;
+  color: var(--color-primary);
 }
 
-.cm-task-add-metadata .material-symbols-outlined {
+.cm-task-convert:hover {
+  opacity: 1;
+}
+
+.cm-task-convert .material-symbols-outlined {
   font-size: 1.1em;
 }

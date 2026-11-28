@@ -1,0 +1,115 @@
+/* TaskConversionDialog.tsx: preview and convert inline tasks. */
+.task-conversion-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+}
+
+.task-conversion {
+  width: 600px;
+  max-width: calc(100vw - 32px);
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--color-background);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  padding: 18px 20px;
+  font-size: 13px;
+}
+
+.task-conversion h2 {
+  margin: 0 0 10px;
+  font-size: 17px;
+}
+
+.task-conversion p {
+  margin: 0 0 10px;
+}
+
+.task-conversion-muted {
+  color: var(--color-text-secondary);
+}
+
+.task-conversion-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  max-height: 34vh;
+  overflow-y: auto;
+}
+
+.task-conversion-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.task-conversion-list li:last-child {
+  border-bottom: none;
+}
+
+.task-conversion-note {
+  font-weight: 600;
+}
+
+.task-conversion-count {
+  color: var(--color-text-secondary);
+  text-align: right;
+}
+
+.task-conversion-samples {
+  grid-column: 1 / -1;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-conversion-skipped ul {
+  margin: 0 0 10px;
+  padding-left: 18px;
+  color: var(--color-error);
+}
+
+.task-conversion-error {
+  color: var(--color-error);
+}
+
+.task-conversion-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.task-conversion-actions button {
+  font: inherit;
+  padding: 6px 14px;
+  border-radius: 7px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.task-conversion-actions button.primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+}
+
+.task-conversion-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

@@ -23,10 +23,9 @@ import {
   cycleTaskStatus,
   dispatchTaskToggle
 } from '../editor/extensions/taskCheckbox';
-import { taskMetadataWidgetsPlugin } from '../editor/extensions/taskMetadataWidgets';
-import { taskAddMetadataGutter } from '../editor/extensions/taskAddMetadataGutter';
+import { taskConvertGutter } from '../editor/extensions/taskConvertGutter';
 import { taskLinkExtension } from '../editor/extensions/taskLinkWidget';
-import { TaskMetadataPopover, type TaskMetadataValue } from './TaskMetadataPopover';
+import type { TaskMetadataValue } from './TaskMetadataPopover';
 import { parseTaskLine, serializeTaskLine, TASK_LINE_RE } from '../../../shared/tasks';
 import { formatTaskLink, TASK_LINK_RE } from '../../../shared/taskLinks';
 import { TaskDetail } from './TaskDetail';
@@ -315,51 +314,6 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
       [taskCapture]
     );
 
-    const [taskPopover, setTaskPopover] = useState<{
-      lineNumber: number;
-      anchorRect: DOMRect;
-    } | null>(null);
-
-    const handleTaskMetadataChange = useCallback(
-      (value: TaskMetadataValue) => {
-        const view = viewRef.current;
-        if (!view || !taskPopover) return;
-        const { lineNumber } = taskPopover;
-        if (lineNumber < 1 || lineNumber > view.state.doc.lines) return;
-
-        const line = view.state.doc.line(lineNumber);
-        const match = TASK_LINE_RE.exec(line.text);
-        const parsed = parseTaskLine(line.text);
-        if (!match || !parsed) return;
-
-        const newLine = serializeTaskLine(match[1], parsed.status, parsed.text, {
-          due: value.due,
-          recurrence: value.recurrence,
-          priority: value.priority,
-          completedAt: parsed.completedAt
-        });
-
-        view.dispatch({ changes: { from: line.from, to: line.to, insert: newLine } });
-      },
-      [taskPopover]
-    );
-
-    const taskPopoverInitial = useMemo((): TaskMetadataValue => {
-      if (!taskPopover || !viewRef.current) return {};
-      const { lineNumber } = taskPopover;
-      if (lineNumber < 1 || lineNumber > viewRef.current.state.doc.lines) return {};
-      const parsed = parseTaskLine(viewRef.current.state.doc.line(lineNumber).text);
-      if (!parsed) return {};
-      return {
-        due: parsed.dueDate,
-        recurrence: parsed.recurrence?.supported
-          ? { amount: parsed.recurrence.amount, unit: parsed.recurrence.unit }
-          : undefined,
-        priority: parsed.priority
-      };
-      // Re-derive whenever the popover (re)opens on a line.
-    }, [taskPopover]);
-
     // Extract frontmatter and content, memoized to avoid re-extraction on every render
     const { frontmatter, content } = useMemo(() => extractFrontmatter(initialDoc), [initialDoc]);
 
@@ -460,8 +414,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
           syntaxHighlighting(darkModeHighlightStyle), // Use custom dark mode colors
           taskCheckboxPlugin, // Task checkboxes
           taskLinkExtension, // Task file links ([[_task:id|title]]) as live task widgets
-          taskMetadataWidgetsPlugin, // Due date / recurrence / priority pills
-          taskAddMetadataGutter, // "+" gutter marker for a bare task on the cursor's line
+          taskConvertGutter, // "Convert to task" marker for an inline checkbox task on the cursor's line
           admonitionWidget, // Admonition/Callout rendering
           ...(settings.enableTypewriterScrolling ? [typewriterScroll] : []), // Typewriter scrolling (cursor centered)
           grammarLint.extension, // Grammar and style checking
@@ -626,22 +579,6 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
                 // that line, so it needs to intercept before CodeMirror's
                 // own default cursor-placement handling runs).
 
-                // Task metadata pill: open the popover (the "+" add-metadata
-                // affordance lives in the gutter instead - see
-                // taskAddMetadataGutter.ts - and reaches this component via
-                // the phosphor-task-add-metadata listener below)
-                const metaEl =
-                  target?.closest && (target.closest('.cm-task-pill') as HTMLElement | null);
-                if (metaEl) {
-                  const lineNumber = Number(metaEl.getAttribute('data-task-line'));
-                  if (lineNumber) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    setTaskPopover({ lineNumber, anchorRect: metaEl.getBoundingClientRect() });
-                    return true;
-                  }
-                }
-
                 // Handle image clicks
                 const imgEl =
                   target?.closest &&
@@ -776,22 +713,6 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
         document.removeEventListener('phosphor-image-viewer-open', handleImageViewerRequest);
     }, []);
 
-    // Listen for "+" gutter marker clicks (taskAddMetadataGutter.ts) - a
-    // gutter's own domEventHandlers config has no reach into React state,
-    // so it hands off via this same CustomEvent pattern.
-    useEffect(() => {
-      const handleAddMetadataRequest = (e: Event): void => {
-        const { lineNumber, anchorRect } = (e as CustomEvent).detail ?? {};
-        if (lineNumber && anchorRect) {
-          setTaskPopover({ lineNumber, anchorRect });
-        }
-      };
-
-      document.addEventListener('phosphor-task-add-metadata', handleAddMetadataRequest);
-      return () =>
-        document.removeEventListener('phosphor-task-add-metadata', handleAddMetadataRequest);
-    }, []);
-
     // Notify parent about search panel visibility
     useEffect(() => {
       if (onSearchOpen) {
@@ -853,15 +774,6 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
             heading={taskCapture.convert ? 'Convert to task' : undefined}
             onSubmit={handleTaskCaptureSubmit}
             onCancel={closeTaskCapture}
-          />
-        )}
-        {taskPopover && (
-          <TaskMetadataPopover
-            key={taskPopover.lineNumber}
-            anchorRect={taskPopover.anchorRect}
-            initial={taskPopoverInitial}
-            onChange={handleTaskMetadataChange}
-            onClose={() => setTaskPopover(null)}
           />
         )}
       </div>
