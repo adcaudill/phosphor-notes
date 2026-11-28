@@ -5,7 +5,7 @@ layout: page
 
 **Overview**
 
-- **What:** Phosphor Notes can run a local [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server, letting AI apps you run yourself - Claude Desktop, Claude Code, and other MCP-capable clients - read your vault, and optionally create, add to, and edit notes. Off by default; reading, writing, and editing existing text each require an explicit opt-in.
+- **What:** Phosphor Notes can run a local [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server, letting AI apps you run yourself - Claude Desktop, Claude Code, and other MCP-capable clients - read your vault, and optionally create, add to, edit, rename, move, and delete notes. Off by default; each of those levels requires its own explicit opt-in.
 - **Where:** Enable it in **Preferences \> AI Access**. It runs inside the same process as the app itself; there is no separate helper binary.
 
 **Privacy: read this before enabling**
@@ -25,6 +25,7 @@ Once enabled, any AI app you authorize can read your vault's contents, and that 
 | `get_vault_status` | Vault name, open/locked/readable state, and what AI apps may change - the only tool that works before unlocking |
 | `list_notes` | List notes, optionally scoped to a folder |
 | `read_note` | Full text and parsed frontmatter of one note (or just a range of its lines), plus a `hash` used for the version check described below |
+| `get_daily_note` | The daily journal note for today, yesterday, tomorrow, or a given date - using the date on your computer, so AI apps don't have to guess your timezone |
 | `get_note_outline` | A note's headings (freeform) or bullets (outliner), with line numbers - for finding your way around a long note |
 | `search_notes` | Full-text search. Requires every query word to match (unlike the app's own Cmd+K search, which is deliberately forgiving) - a compound query like an email address won't return unrelated notes that only share one word with it. |
 | `list_tasks` | Filter checkbox tasks by status, file, or due date |
@@ -68,7 +69,16 @@ A further toggle, nested under write access and off by default, lets AI apps cha
 
 A "section" is a heading plus everything up to the next heading of the same or higher level (freeform notes), or a bullet plus everything nested under it (outliner notes). Tools that replace or remove existing text refuse (`REDACTED_CONTENT`) if that text contains a value that was masked when the AI app read it, since the app could never put the real value back.
 
-Even with edit access, AI apps cannot delete, rename, or move whole notes.
+**Renaming, moving, and deleting notes (two more opt-ins)**
+
+Two further toggles, each nested under edit access and each with its own disclosure, let AI apps work with whole notes. Like edit access, turning edit (or anything below it) off also turns these off.
+
+| Toggle | Tool | What it does |
+|---|---|---|
+| Rename and move notes | `move_note` | Renames a note or moves it to another folder, and updates every link to it across the vault (aliases and `#headings` included) - the same code the app uses for its own Rename and Move. It never overwrites an existing note. A note with child notes (`People.md` and `People/...`) is only moved together with them when the AI app explicitly asks for that. |
+| Delete notes | `delete_note` | Moves a note to your system Trash, after saving a copy to Phosphor's history. It refuses if other notes link to the note, unless the AI app explicitly asks to delete it anyway. |
+
+Your folder limits apply to everything these touch: for a rename, that includes the note, its destination, any child notes, and every note whose links would change. Unsaved edits in any of them stop the operation, and nothing is changed.
 
 **Limiting writes to certain folders**
 
@@ -78,7 +88,7 @@ With write access on, Settings also lets you list folders AI apps may change ("O
 
 Before any write changes an existing note, Phosphor saves the note exactly as it was (still encrypted, in an encrypted vault) to the vault's `.phosphor/history/` folder. Versions are kept for 30 days, up to 500 in total, and write tools return the saved version's id as `versionId`.
 
-- **In the app:** Preferences > AI Access > **Recent AI changes** lists each note an AI app changed, with a **Revert** button.
+- **In the app:** Preferences > AI Access > **Recent AI changes** lists each note an AI app changed, renamed, or deleted, with a **Revert** button. Reverting a rename moves the note back and puts the links it updated back too; reverting a deletion recreates the note.
 - **From the AI app:** `list_note_versions` and `read_note_version` show the saved versions; `restore_note_version` (edit access only) puts one back.
 
 A revert saves the content it replaces first, so a revert can itself be undone the same way. Restoring decrypts and re-encrypts for the vault's current state, so a version saved before you turned on encryption is never restored as plaintext.

@@ -16,7 +16,7 @@ Call `get_vault_status` before anything else in a conversation that touches the 
 - `open` - whether a vault is loaded in the app at all.
 - `encrypted` / `locked` - the vault may be password-protected. If `locked` is true, **every other tool will fail** with a `VAULT_LOCKED` error. There is no tool to unlock it - by design, the password never becomes reachable from an MCP client. If you hit this, tell the user to unlock the vault in the Phosphor Notes app and try again; don't ask them to paste a password into the chat.
 - `indexReady` - full-text search, task listing, tags, and the link graph all depend on a background index that rebuilds after the vault is opened or unlocked. If it's `false`, or if a tool call returns `INDEX_NOT_READY`, wait a few seconds and retry rather than concluding the vault is empty. `read_note` and `list_notes` don't depend on this index and work immediately.
-- `access` - what the user lets you change. `write`: create notes, add to them, and add/edit/complete/delete tasks. `edit`: additionally change or remove text already in a note (a separate opt-in on top of `write`). `writeAllowFolders` / `writeDenyFolders`: writes are limited to the allowed folders (empty = whole vault) and never touch the denied ones. Check this before proposing a change, so you don't plan something you'll be refused - e.g. if `writeAllowFolders` is `["Inbox"]`, today's daily note (at the vault root) is off-limits too.
+- `access` - what the user lets you change. `write`: create notes, add to them, and add/edit/complete/delete tasks. `edit`: additionally change or remove text already in a note (a separate opt-in on top of `write`). `organize` and `delete` (each a further opt-in on top of `edit`): rename/move notes, and delete notes. `writeAllowFolders` / `writeDenyFolders`: writes are limited to the allowed folders (empty = whole vault) and never touch the denied ones. Check this before proposing a change, so you don't plan something you'll be refused - e.g. if `writeAllowFolders` is `["Inbox"]`, today's daily note (at the vault root) is off-limits too.
 
 ## How the vault is organized
 
@@ -35,8 +35,8 @@ tags: [project, urgent]
 
 **Daily journals are just notes named `YYYY-MM-DD.md` at the vault root** - e.g. `2026-09-23.md`. There's no separate "journal" API. This is the single most important thing this skill exists to tell you:
 
-- If the user asks "summarize my day," "what did I do today," "add this to today's journal," or anything referencing "today"/"yesterday"/a specific date, the note you want is `read_note` (or `append_to_note`/`add_task`, if writing) with `path` set to that date formatted as `YYYY-MM-DD.md`. There's no `get_daily_note` tool - you compute the filename yourself. `add_task` alone will do this computation *and* auto-create the note for you if you omit `file` - see the write-tools section below.
-- Use the current date as it's known in the conversation. If you're not confident what "today" means for the user (timezone ambiguity), it's reasonable to also call `list_notes` and look at which `YYYY-MM-DD.md`-named file has the most recent `modified` timestamp, and treat that as "today's" or "the latest" entry rather than guessing a date that turns out to be tomorrow or yesterday for them.
+- If the user asks "summarize my day," "what did I do today," "add this to today's journal," or anything referencing "today"/"yesterday"/a specific date, the note you want is `read_note` (or `append_to_note`/`add_task`, if writing) with `path` set to that date formatted as `YYYY-MM-DD.md`. `get_daily_note` finds it for you: pass `"today"`, `"yesterday"`, `"tomorrow"`, or a date, and it works out the date on the user's own machine and tells you whether a note exists. `add_task` alone will do this computation *and* auto-create the note for you if you omit `file` - see the write-tools section below.
+- Prefer `get_daily_note` for anything relative ("today", "yesterday", "tomorrow"): it uses the date on the user's own machine, so you don't have to guess their timezone - the date you know from the conversation can be a day off for them.
 - If `read_note` comes back with `NOTE_NOT_FOUND` for a date, that means the user hasn't written anything that day (or hasn't opened the app that day) - it's a normal, expected answer ("no entry for that day"), not an error to explain away.
 - Journals may be freeform prose or an outliner/bulleted structure (a user preference) - both are just Markdown text in `content`, read them the same way. See "Outliner vs. freeform notes" below for what that distinction means when *writing*.
 
@@ -94,6 +94,7 @@ You may occasionally see a `dueDate` that came from an older, non-canonical synt
 | `get_vault_status` | Always first. Vault open/locked/ready state. |
 | `list_notes` | Browsing a folder, or finding a note when you already roughly know where it lives. Returns `path`, `title`, `modified` for each - useful for "what's the most recent note in X." |
 | `read_note` | Getting the actual content of one note once you have its path - including a computed daily-journal path. Also returns `hash` (see "Writing safely") and `totalLines`; for a long note, pass `startLine`/`endLine` to read just part of it. |
+| `get_daily_note` | The daily journal note for `today` (default), `yesterday`, `tomorrow`, or a `YYYY-MM-DD` date - with `exists: false` (not an error) when nothing has been written that day. |
 | `get_note_outline` | A note's structure without its full text: its headings (freeform) or bullets (outliner), each with `line`, `endLine`, `level`, and `text`. Use it to find your way around a long note, and to get `line` numbers for the section tools. |
 | `search_notes` | Full-text search when you don't know the path. Returns up to 20 hits with a short, heuristic one-line snippet (first line containing the query text) - the snippet is not a summary, so `read_note` the promising hits before answering from them. |
 | `list_tasks` | Anything about to-dos: overdue items, what's open, tasks in a specific file. Supports `status`, `file`, `dueBefore`/`dueAfter`, `overdue`. Also the required first step before completing/updating/rescheduling/deleting a task - hang on to the `rawText` it returns for the one you want to act on. |
@@ -125,7 +126,19 @@ You may occasionally see a `dueDate` that came from an older, non-canonical synt
 | `replace_section` | Replacing everything under a heading (subsections included) or under a bullet (everything nested), keeping the heading/bullet itself. For rewriting a whole section; for a small change inside one, `edit_note` is safer. |
 | `delete_section` | Removing a heading with its whole section, or a bullet with everything under it. |
 | `move_section` | Reorganizing within a note: moves a section relative to a `target` section (`before`, `after`, `first_child`, `last_child`), re-indenting bullets or shifting heading levels to fit. Nothing is removed. |
-| `restore_note_version` | Undo: puts a saved version (an `id` from `list_note_versions`) back as the note's content. The content it replaces is saved as a new version first, so a restore can itself be undone. Pass the note's current `hash` as `expectedHash`. |
+| `restore_note_version` | Undo: puts a saved version (an `id` from `list_note_versions`) back as the note's content. The content it replaces is saved as a new version first, so a restore can itself be undone. Pass the note's current `hash` as `expectedHash`. | If the version is a **rename**, restoring it moves the note back and puts its links back (this needs `access.organize`). If it is a **deletion**, restoring it recreates the note.
+
+**Organize tool - present only if the user has additionally enabled renaming and moving notes** (`access.organize`):
+
+| Tool | Use it for |
+|---|---|
+| `move_note` | Renaming a note and/or moving it to another folder: `to` is the full new path (e.g. `Archive/2026/Plan.md`). Every `[[link]]` to it across the vault is updated, keeping aliases and `#headings`. It never overwrites (`NOTE_ALREADY_EXISTS` if `to` is taken). A note with child notes (`People.md` + `People/...`) is refused with `HAS_CHILD_NOTES` unless you pass `includeChildren: true`, which moves the whole subtree and updates links to the children too. Refused if the note, its destination, or any note whose links would change is outside the allowed folders or open with unsaved edits. `dryRun` lists the notes whose links would change - worth showing the user for anything widely linked. Undo with `restore_note_version` and the returned `versionId`. |
+
+**Delete tool - present only if the user has additionally enabled deleting notes** (`access.delete`):
+
+| Tool | Use it for |
+|---|---|
+| `delete_note` | Deleting a note. It goes to the system Trash and its content is saved as a version (`versionId`), so it can be restored. Refused with `HAS_BACKLINKS` (listing them) if other notes link to it, since those links would break - tell the user, and pass `force: true` only once they've confirmed. Child notes count as linking to it and are never deleted with it. Only delete what the user explicitly asked you to delete. |
 
 **Writing safely - applies to every write tool:**
 
@@ -155,7 +168,9 @@ You may occasionally see a `dueDate` that came from an older, non-canonical synt
 - **"Tag this note" / "set the status to done"** (edit access) - `update_frontmatter`.
 - **"Undo that" / "put it back"** - `list_note_versions` for the note, then `restore_note_version` with the version from just before your change (edit access). Without edit access, point the user to Preferences > AI Access > Recent AI changes.
 - **Requests to change existing text without edit access** (`access.edit` false, so `edit_note` and friends aren't in your tool list) - say so plainly, and suggest the user either make the change in the app or turn on "Also allow editing existing text" in Preferences > AI Access. Adding new content and editing tasks still work.
-- **Requests to delete, rename, or move a whole note** - not possible through this connection at any access level; say so and suggest the user do it in the app (which also updates links to a renamed or moved note).
+- **"Rename X to Y" / "move X into Z"** (organize access) - `move_note` with the full new path. If you get `HAS_CHILD_NOTES`, ask whether the child notes should move too (`includeChildren`). Tell the user how many notes had their links updated.
+- **"Delete X"** (delete access) - confirm it's the right note first if there's any doubt, then `delete_note`. If it's refused with `HAS_BACKLINKS`, tell the user which notes link to it and only retry with `force: true` if they still want it gone. Mention that it can be restored.
+- **Requests to rename, move, or delete a note without that access** (`move_note` / `delete_note` aren't in your tool list) - say so, and suggest the user either do it in the app (which also updates links) or turn on the matching switch in Preferences > AI Access.
 - **If write tools aren't available at all** - the user hasn't turned on write access (a separate, off-by-default setting from read access). Say so and suggest they enable it in Phosphor Notes' Settings if they want you to be able to create or add to notes.
 
 ## Other things worth knowing
