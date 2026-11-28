@@ -29,6 +29,7 @@ class McpController {
     editEnabled: false,
     organizeEnabled: false,
     deleteEnabled: false,
+    tasksEnabled: true,
     writeAllowFolders: [],
     writeDenyFolders: []
   };
@@ -76,6 +77,7 @@ class McpController {
       editEnabled: this.isEditEnabled(),
       organizeEnabled: this.isOrganizeEnabled(),
       deleteEnabled: this.isDeleteEnabled(),
+      tasksEnabled: this.config.tasksEnabled,
       writeAllowFolders: [...this.config.writeAllowFolders],
       writeDenyFolders: [...this.config.writeDenyFolders]
     };
@@ -88,6 +90,8 @@ class McpController {
   private isOrganizeEnabled = (): boolean => this.isEditEnabled() && this.config.organizeEnabled;
 
   private isDeleteEnabled = (): boolean => this.isEditEnabled() && this.config.deleteEnabled;
+
+  private isTaskWriteEnabled = (): boolean => this.isWriteEnabled() && this.config.tasksEnabled;
 
   private getWriteScope = (): WriteScope => ({
     allow: this.config.writeAllowFolders,
@@ -161,6 +165,14 @@ class McpController {
     return this.getStatus();
   }
 
+  /** Whether AI apps may change task files (on top of the write/edit/delete tiers). */
+  async setTasksEnabled(enabled: boolean): Promise<McpStatus> {
+    this.config.tasksEnabled = enabled;
+    await this.persist();
+    this.notify();
+    return this.getStatus();
+  }
+
   private clearEditAndAbove(): void {
     this.config.editEnabled = false;
     this.config.organizeEnabled = false;
@@ -227,6 +239,7 @@ class McpController {
             isEditEnabled: this.isEditEnabled,
             isOrganizeEnabled: this.isOrganizeEnabled,
             isDeleteEnabled: this.isDeleteEnabled,
+            isTaskWriteEnabled: this.isTaskWriteEnabled,
             getWriteScope: this.getWriteScope,
             getMainWindow: this.getMainWindow
           })

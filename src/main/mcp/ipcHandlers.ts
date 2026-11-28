@@ -32,6 +32,10 @@ export function setupMcpIPC(mainWindow: BrowserWindow): void {
     mcpController.setEditEnabled(enabled === true)
   );
 
+  ipcMain.handle('mcp:set-tasks-enabled', (_, enabled: boolean) =>
+    mcpController.setTasksEnabled(enabled === true)
+  );
+
   ipcMain.handle('mcp:set-organize-enabled', (_, enabled: boolean) =>
     mcpController.setOrganizeEnabled(enabled === true)
   );

@@ -3,12 +3,11 @@ import type { McpDeps } from './deps';
 import { registerStatusTool } from './tools/status';
 import { registerNoteTools } from './tools/notes';
 import { registerSearchTool } from './tools/search';
-import { registerTaskTools } from './tools/tasks';
+import { registerTaskFileReadTools, registerTaskFileWriteTools } from './tools/taskFiles';
 import { registerGraphTools } from './tools/graph';
 import { registerTagTools } from './tools/tags';
 import { registerFindTools } from './tools/find';
 import { registerNoteWriteTools } from './tools/notesWrite';
-import { registerTaskWriteTools } from './tools/tasksWrite';
 import { registerHistoryReadTools, registerHistoryRestoreTool } from './tools/history';
 import { registerNoteEditTools } from './tools/notesEdit';
 import { registerSectionInsertTool, registerSectionEditTools } from './tools/sections';
@@ -30,7 +29,7 @@ export function createPhosphorMcpServer(deps: McpDeps): McpServer {
   registerStatusTool(server, deps);
   registerNoteTools(server, deps);
   registerSearchTool(server, deps);
-  registerTaskTools(server, deps);
+  registerTaskFileReadTools(server, deps);
   registerGraphTools(server, deps);
   registerTagTools(server, deps);
   registerFindTools(server, deps);
@@ -38,7 +37,7 @@ export function createPhosphorMcpServer(deps: McpDeps): McpServer {
 
   if (deps.isWriteEnabled()) {
     registerNoteWriteTools(server, deps);
-    registerTaskWriteTools(server, deps);
+    if (deps.isTaskWriteEnabled()) registerTaskFileWriteTools(server, deps);
     registerHistoryReadTools(server, deps);
     registerSectionInsertTool(server, deps);
 

@@ -22,6 +22,12 @@ export interface McpConfig {
   organizeEnabled: boolean;
   /** On top of editEnabled: delete_note. */
   deleteEnabled: boolean;
+  /**
+   * Whether AI apps may change task files (create, complete, update, ...),
+   * given write access. Tasks belong to no folder, so the folder scope below
+   * can't cover them; this is their own switch. On by default.
+   */
+  tasksEnabled: boolean;
   /** Folders MCP writes are limited to; empty means the whole vault. */
   writeAllowFolders: string[];
   /** Folders MCP writes may never touch; wins over writeAllowFolders. */
@@ -37,6 +43,7 @@ const DEFAULTS: McpConfig = {
   editEnabled: false,
   organizeEnabled: false,
   deleteEnabled: false,
+  tasksEnabled: true,
   writeAllowFolders: [],
   writeDenyFolders: []
 };
@@ -60,6 +67,7 @@ export async function loadConfig(userDataDir: string): Promise<McpConfig> {
       // Organize and delete build on edit access, and are never honored without it.
       organizeEnabled: editEnabled && parsed.organizeEnabled === true,
       deleteEnabled: editEnabled && parsed.deleteEnabled === true,
+      tasksEnabled: parsed.tasksEnabled !== false,
       writeAllowFolders: normalizeFolderList(parsed.writeAllowFolders),
       writeDenyFolders: normalizeFolderList(parsed.writeDenyFolders)
     };

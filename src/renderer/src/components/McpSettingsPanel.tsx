@@ -398,6 +398,35 @@ export const McpSettingsPanel: React.FC = () => {
       )}
 
       {status.writeEnabled && (
+        <div className="setting-item setting-checkbox mcp-subsetting">
+          <label htmlFor="mcp-tasks-enabled">
+            <input
+              id="mcp-tasks-enabled"
+              type="checkbox"
+              checked={status.tasksEnabled}
+              disabled={busy}
+              onChange={async (e) => {
+                setBusy(true);
+                try {
+                  setStatus(await window.phosphor.mcpSetTasksEnabled(e.target.checked));
+                } catch (err) {
+                  console.error('Failed to toggle MCP task access:', err);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            />
+            Allow changes to tasks
+          </label>
+          <p className="setting-hint">
+            Creating, completing and updating tasks (and, with the options above, editing and
+            deleting them). Tasks aren&apos;t in a folder, so the folder limits below don&apos;t
+            apply to them.
+          </p>
+        </div>
+      )}
+
+      {status.writeEnabled && (
         <div className="setting-item mcp-subsetting">
           <label htmlFor="mcp-allow-folders">Only allow changes in these folders</label>
           <textarea

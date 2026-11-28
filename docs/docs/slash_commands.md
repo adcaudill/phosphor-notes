@@ -21,6 +21,9 @@ The editor includes a quick "slash" menu that helps you insert dates, headings, 
 
 **Available commands**
 
+- `/task` — Create a task: type it in plain language (e.g. `pay rent on the first of each month !high`) and press Enter. A link to the new task is inserted. On a `- [ ]` checkbox line, it converts that line into a task instead. See [Task Management](task_management.md).
+- `/convert-tasks` — Convert this note's checkbox tasks that have dates, repeats or priorities into tasks.
+
 - `/today` — Insert today's date as a wikilink (e.g. `[[2026-01-19]]`).
 - `/tomorrow` — Insert tomorrow's date as a wikilink.
 - `/yesterday` — Insert yesterday's date as a wikilink.

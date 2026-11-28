@@ -30,7 +30,9 @@ Once enabled, any AI app you authorize can read your vault's contents, and that 
 | `search_notes` | Ranked full-text search for finding notes about a topic. Every query word must match (unlike the app's own Cmd+K search), but matching is fuzzy and by prefix, and results are capped at 20 notes. |
 | `find_text` | Every exact occurrence of a piece of text, with the note, line number, and line - read straight from disk. For "where does this appear?" and "are there any left?" questions that ranked search can't answer. |
 | `read_notes` | Several notes in one call |
-| `list_tasks` | Filter checkbox tasks by status, file, or due date |
+| `list_tasks` | Tasks, by the Tasks tab's views (Today, Upcoming, Inbox, Waiting, Logbook, ...) and/or a filter such as `due:overdue #bills +Home` |
+| `search_tasks` | Full-text search across task titles, notes, checklists and comments |
+| `get_task` | One task in full, with its activity log and the notes that link to it |
 | `get_note_links` | A note's outgoing wikilinks and backlinks (including backlinks to a page that doesn't exist yet) |
 | `list_unresolved_links` | Every link to a page that doesn't exist, and which notes contain it |
 | `get_graph_stats` | Vault-wide link graph statistics |
@@ -48,11 +50,21 @@ A second toggle, off by default even when read access is on, controls write acce
 | `append_to_note` | Adds content to the *end* of an existing note. |
 | `insert_under_bullet` | Adds content under a *specific existing bullet* elsewhere in an outliner note (found by matching its text), rather than only at the very end - useful for filing new content under an already-existing heading-like bullet instead of creating a duplicate. |
 | `insert_at_section` | Adds content relative to an existing heading or bullet, in either note format: as its first or last child, or just before or after it. |
-| `add_task` | Adds one checkbox task, by default to today's daily journal (auto-created if needed). |
-| `complete_task` | Checks off a task; for a recurring task, also adds the next occurrence below it. |
-| `update_task` / `reschedule_task` | Changes a task's text, status, due date, recurrence, or priority. |
-| `delete_task` | Removes one task line. |
 | `list_note_versions` / `read_note_version` | Lists and reads the saved versions described under "Undo and history". |
+
+**Task tools.** With write access, AI apps can also work with tasks - unless you turn off "Allow changes to tasks". Tasks aren't in any folder, so the folder limits below don't apply to them (linking a task into a note does count as writing that note). Every change is saved to the task's history.
+
+| Tool | What it does | Needs |
+|---|---|---|
+| `create_task` | Creates a task, from plain language ("pay rent on the first of each month !high") or structured fields; can also link it into a note | write |
+| `complete_task` | Completes a task; a repeating task moves to its next date | write |
+| `skip_occurrence` | Skips a repeating task's current occurrence | write |
+| `add_task_comment` | Adds a comment to a task's activity | write |
+| `update_task` | Changes a task's fields (title, status, dates, repeat, priority, project, tags, notes); renaming updates links to it | edit |
+| `update_checklist` | Replaces a task's checklist | edit |
+| `delete_task` | Deletes a task (restorable from history) | delete |
+
+Task files can't be changed with the note tools.
 
 Without edit access (below), these are the only ways to change an existing note: there is no tool that edits other existing text in place, and no tool at all that deletes, renames, or moves a note.
 
@@ -85,7 +97,7 @@ Your folder limits apply to everything these touch: for a rename, that includes 
 
 **Limiting writes to certain folders**
 
-With write access on, Settings also lets you list folders AI apps may change ("Only allow changes in these folders" - empty means the whole vault) and folders they may never change ("Never allow changes in these folders", which always wins). A folder includes its subfolders and its own index note (`People.md` for `People`), and matching ignores case. Writes outside the allowed folders are refused with `PATH_NOT_IN_WRITE_SCOPE`, and parent index notes Phosphor would normally create for a nested path are skipped if they fall outside. Daily notes live at the top of the vault, so limiting writes to folders also stops AI apps adding tasks to today's note. `get_vault_status` reports the current access level and folder limits, so a connected app knows what it may do.
+With write access on, Settings also lets you list folders AI apps may change ("Only allow changes in these folders" - empty means the whole vault) and folders they may never change ("Never allow changes in these folders", which always wins). A folder includes its subfolders and its own index note (`People.md` for `People`), and matching ignores case. Writes outside the allowed folders are refused with `PATH_NOT_IN_WRITE_SCOPE`, and parent index notes Phosphor would normally create for a nested path are skipped if they fall outside. Daily notes live at the top of the vault, so limiting writes to folders also stops AI apps adding to today's note. `get_vault_status` reports the current access level and folder limits, so a connected app knows what it may do.
 
 **Undo and history**
 
@@ -106,7 +118,7 @@ A revert saves the content it replaces first, so a revert can itself be undone t
 
 **Outliner vs. freeform**
 
-A note's format is entirely determined by its own frontmatter (`mode: outliner` vs. anything else/absent). `create_note` picks a sensible default (your journal-mode setting for daily-note-named files, freeform otherwise) unless you specify one; `append_to_note`, `insert_under_bullet`, and `add_task` always detect the target's existing mode and format new content to match - plain paragraphs for freeform notes, properly nested `- ` bullets (4 spaces per level) for outliner notes. Relative indentation is preserved, not flattened: an indented line in what's written becomes a nested child, an unindented one a new top-level (or, for `insert_under_bullet`, top-of-that-subtree) bullet. Checkbox tasks (`- [ ] ...`) work the same way in both modes. `insert_under_bullet` only applies to outliner notes - it matches an existing bullet by a case-insensitive substring of its own text and requires that match to be unique, erroring with a list of candidates if it isn't.
+A note's format is entirely determined by its own frontmatter (`mode: outliner` vs. anything else/absent). `create_note` picks a sensible default (your journal-mode setting for daily-note-named files, freeform otherwise) unless you specify one; `append_to_note` and `insert_under_bullet` always detect the target's existing mode and format new content to match - plain paragraphs for freeform notes, properly nested `- ` bullets (4 spaces per level) for outliner notes. Relative indentation is preserved, not flattened: an indented line in what's written becomes a nested child, an unindented one a new top-level (or, for `insert_under_bullet`, top-of-that-subtree) bullet. Checkbox tasks (`- [ ] ...`) work the same way in both modes. `insert_under_bullet` only applies to outliner notes - it matches an existing bullet by a case-insensitive substring of its own text and requires that match to be unique, erroring with a list of candidates if it isn't.
 
 **Known limitations**
 

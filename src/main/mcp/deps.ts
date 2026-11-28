@@ -3,7 +3,6 @@ import { promises as fsp } from 'fs';
 import * as vaultState from '../vaultState';
 import {
   getLastGraph,
-  getLastTasks,
   searchAsync,
   updateGraphForFile,
   updateGraphForChangedFile,
@@ -18,13 +17,54 @@ import * as noteHistory from '../noteHistory';
 import { decodeBuffer } from '../vaultReader';
 import { getSettings } from '../store';
 import { localDailyNoteFilename, type NoteMode } from '../../shared/noteFormat';
-import type { Task, UserSettings } from '../../types/phosphor.d';
+import type { UserSettings } from '../../types/phosphor.d';
 import type { WikiGraph } from '../graphBuilder';
 import type { WriteScope } from './scope';
 import { createWriteGate } from './writeGate';
 import { queryNoteDirty } from './rendererQuery';
 import { IndexNotReadyError } from './toolkit';
 import { findLinkCandidates, afterNoteRenamed, afterNoteDeleted } from '../noteOps';
+import { createTask, deleteTask, updateTask } from '../taskStore';
+import {
+  getTaskDetail,
+  getTaskLinks,
+  getTaskList,
+  removeTask,
+  searchTaskIds,
+  upsertTask
+} from '../taskIndex';
+import { syncTaskLinkTitles } from '../taskLinkSync';
+import type { NewTaskInput } from '../../shared/taskOps';
+import type { TaskRecord } from '../../shared/taskRecord';
+import type { TaskDetail, TaskListSnapshot } from '../../shared/taskViews';
+
+/**
+ * Task files (`_tasks/`) for the MCP task tools. Writes go through the task
+ * store (history for every change) and update the task index straight away.
+ */
+export interface McpTaskDeps {
+  list(): TaskListSnapshot;
+  /** Task ids matching free text, best first. */
+  search(text: string): string[];
+  get(id: string): TaskDetail | null;
+  create(input: NewTaskInput, ctx: WriteCtx): Promise<TaskRecord>;
+  update(
+    id: string,
+    change: (task: TaskRecord) => TaskRecord,
+    ctx: WriteCtx,
+    summary: string
+  ): Promise<TaskRecord>;
+  delete(id: string, ctx: WriteCtx): Promise<void>;
+  /**
+   * After a rename: rewrite the link title text in linking notes. Notes open
+   * with unsaved edits in the app are skipped (returned in `skipped`).
+   */
+  syncLinkTitles(
+    id: string,
+    title: string,
+    ctx: WriteCtx
+  ): Promise<{ changed: string[]; skipped: string[] }>;
+}
 
 /** Passed by withVaultWriteGuard to every write: the vault generation captured before the call, and which tool is writing (recorded in note history). */
 export interface WriteCtx {
@@ -48,7 +88,6 @@ export interface McpDeps {
   listNotes(folder?: string): Promise<NoteInfo[]>;
   readNote(relPath: string): Promise<string>;
   searchNotes(query: string): Promise<unknown[]>;
-  getTasks(): Task[] | null;
   getGraph(): WikiGraph | null;
 
   isWriteEnabled(): boolean;
@@ -58,6 +97,10 @@ export interface McpDeps {
   isOrganizeEnabled(): boolean;
   /** Delete tier (delete_note) - only ever true when isEditEnabled() is too. */
   isDeleteEnabled(): boolean;
+  /** Whether AI apps may change task files at all (the user's "Allow changes to tasks"). */
+  isTaskWriteEnabled(): boolean;
+  /** Task files. */
+  tasks: McpTaskDeps;
   /** The user's folder restrictions for writes. Every write method below enforces it itself. */
   getWriteScope(): WriteScope;
   getDefaultJournalMode(): Promise<NoteMode>;
@@ -200,6 +243,7 @@ export interface BuildDepsOptions {
   isEditEnabled: () => boolean;
   isOrganizeEnabled: () => boolean;
   isDeleteEnabled: () => boolean;
+  isTaskWriteEnabled: () => boolean;
   getWriteScope: () => WriteScope;
   getMainWindow: () => BrowserWindow | null;
 }
@@ -224,13 +268,56 @@ export function buildDefaultDeps(opts: BuildDepsOptions): McpDeps {
     // omni-search's forgiving OR-of-tokens default - which is left
     // untouched since this is the only caller of McpDeps.searchNotes.
     searchNotes: (query: string) => searchAsync(query, { timeoutMs: 5000, combineWith: 'AND' }),
-    getTasks: () => getLastTasks(),
     getGraph: () => getLastGraph(),
 
     isWriteEnabled: opts.isWriteEnabled,
     isEditEnabled: opts.isEditEnabled,
     isOrganizeEnabled: opts.isOrganizeEnabled,
     isDeleteEnabled: opts.isDeleteEnabled,
+    isTaskWriteEnabled: opts.isTaskWriteEnabled,
+    tasks: {
+      list: () => getTaskList(),
+      search: (text) => searchTaskIds(text),
+      get: (id) => getTaskDetail(id),
+      create: async (input, ctx) => {
+        const task = await createTask(requireVaultPath(), input, {
+          expectedGeneration: ctx.generation,
+          tool: ctx.tool,
+          summary: 'Created task'
+        });
+        upsertTask(task);
+        return task;
+      },
+      update: async (id, change, ctx, summary) => {
+        const task = await updateTask(requireVaultPath(), id, change, {
+          expectedGeneration: ctx.generation,
+          tool: ctx.tool,
+          summary
+        });
+        upsertTask(task);
+        return task;
+      },
+      delete: async (id, ctx) => {
+        await deleteTask(requireVaultPath(), id, {
+          expectedGeneration: ctx.generation,
+          tool: ctx.tool
+        });
+        removeTask(id);
+      },
+      syncLinkTitles: async (id, title, ctx) => {
+        const notes = [...new Set(getTaskLinks(id).map((l) => l.note))];
+        const skipped: string[] = [];
+        for (const note of notes) {
+          if (await queryNoteDirty(opts.getMainWindow(), note)) skipped.push(note);
+        }
+        const changed = await syncTaskLinkTitles(requireVaultPath(), id, title, {
+          expectedGeneration: ctx.generation,
+          tool: ctx.tool,
+          exclude: skipped
+        });
+        return { changed, skipped };
+      }
+    },
     getWriteScope: opts.getWriteScope,
     getDefaultJournalMode: async () => {
       const settings: UserSettings = await getSettings();

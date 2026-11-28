@@ -1,4 +1,10 @@
-import { assertInWriteScope, isInWriteScope, type WriteScope } from './scope';
+import {
+  assertInWriteScope,
+  isInWriteScope,
+  PathNotInWriteScopeError,
+  type WriteScope
+} from './scope';
+import { isTaskFilePath } from '../../shared/taskRecord';
 
 export class NoteHasUnsavedEditsError extends Error {
   constructor(public readonly relPath: string) {
@@ -37,6 +43,14 @@ export interface WriteGate {
 export function createWriteGate(opts: WriteGateOptions): WriteGate {
   return {
     async check(relPath: string, checkOpts?: { dryRun?: boolean }): Promise<void> {
+      // Task files are changed through the task tools (their own permission,
+      // structured fields, the activity log) - never as notes.
+      if (isTaskFilePath(relPath)) {
+        throw new PathNotInWriteScopeError(
+          relPath,
+          'task files are changed with the task tools (create_task, update_task, ...), not as notes'
+        );
+      }
       assertInWriteScope(relPath, opts.getWriteScope());
       if (checkOpts?.dryRun) return;
       if (opts.isNoteDirty && (await opts.isNoteDirty(relPath))) {
