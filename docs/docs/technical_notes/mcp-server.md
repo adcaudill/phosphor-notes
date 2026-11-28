@@ -27,9 +27,12 @@ Once enabled, any AI app you authorize can read your vault's contents, and that 
 | `read_note` | Full text and parsed frontmatter of one note (or just a range of its lines), plus a `hash` used for the version check described below |
 | `get_daily_note` | The daily journal note for today, yesterday, tomorrow, or a given date - using the date on your computer, so AI apps don't have to guess your timezone |
 | `get_note_outline` | A note's headings (freeform) or bullets (outliner), with line numbers - for finding your way around a long note |
-| `search_notes` | Full-text search. Requires every query word to match (unlike the app's own Cmd+K search, which is deliberately forgiving) - a compound query like an email address won't return unrelated notes that only share one word with it. |
+| `search_notes` | Ranked full-text search for finding notes about a topic. Every query word must match (unlike the app's own Cmd+K search), but matching is fuzzy and by prefix, and results are capped at 20 notes. |
+| `find_text` | Every exact occurrence of a piece of text, with the note, line number, and line - read straight from disk. For "where does this appear?" and "are there any left?" questions that ranked search can't answer. |
+| `read_notes` | Several notes in one call |
 | `list_tasks` | Filter checkbox tasks by status, file, or due date |
-| `get_note_links` | A note's outgoing wikilinks and backlinks |
+| `get_note_links` | A note's outgoing wikilinks and backlinks (including backlinks to a page that doesn't exist yet) |
+| `list_unresolved_links` | Every link to a page that doesn't exist, and which notes contain it |
 | `get_graph_stats` | Vault-wide link graph statistics |
 | `list_tags` / `find_notes_by_tag` | Frontmatter tags across the vault |
 
