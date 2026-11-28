@@ -12,6 +12,7 @@
  * told when anything changes; the renderer and MCP query on demand.
  */
 import { EventEmitter } from 'events';
+import MiniSearch from 'minisearch';
 import * as vaultState from './vaultState';
 import { loadAllTasks, loadTaskFile } from './taskStore';
 import type {
@@ -37,7 +38,42 @@ let ready = false;
 let loadToken = 0;
 let notifyTimer: NodeJS.Timeout | null = null;
 
+// Full-text search over title, notes, checklist, comments, project and tags.
+// Rebuilt lazily, on the first search after any change.
+let searchIndex: MiniSearch | null = null;
+
+function buildSearchIndex(): MiniSearch {
+  const ms = new MiniSearch({
+    fields: ['title', 'notes', 'checklist', 'comments', 'project', 'tags'],
+    searchOptions: { prefix: true, fuzzy: 0.2, boost: { title: 3, project: 2, tags: 2 } }
+  });
+  ms.addAll(
+    [...tasks.values()].map((t) => ({
+      id: t.id,
+      title: t.title,
+      notes: t.notes,
+      checklist: t.checklist.map((c) => c.text).join('\n'),
+      comments: t.log
+        .filter((e) => e.type === 'comment')
+        .map((e) => String(e.text ?? ''))
+        .join('\n'),
+      project: t.project ?? '',
+      tags: t.tags.join(' ')
+    }))
+  );
+  return ms;
+}
+
+/** Task ids matching free text (every word, prefix and slightly fuzzy), best first. */
+export function searchTaskIds(text: string): string[] {
+  const query = text.trim();
+  if (!query) return [];
+  searchIndex ??= buildSearchIndex();
+  return searchIndex.search(query, { combineWith: 'AND' }).map((r) => String(r.id));
+}
+
 function notify(): void {
+  searchIndex = null;
   if (notifyTimer) return;
   notifyTimer = setTimeout(() => {
     notifyTimer = null;
@@ -172,31 +208,41 @@ export function getTaskLinks(id: string): TaskLinkLocation[] {
   return out.sort((a, b) => a.note.localeCompare(b.note) || a.line - b.line);
 }
 
-function linkCounts(): Map<string, number> {
-  const counts = new Map<string, number>();
-  for (const refs of refsByNote.values()) {
-    for (const r of refs) counts.set(r.id, (counts.get(r.id) ?? 0) + 1);
+/** Per task: how many links point at it, and from which notes. */
+function linkInfo(): Map<string, { count: number; notes: Set<string> }> {
+  const info = new Map<string, { count: number; notes: Set<string> }>();
+  for (const [note, refs] of refsByNote) {
+    for (const r of refs) {
+      const entry = info.get(r.id) ?? { count: 0, notes: new Set<string>() };
+      entry.count += 1;
+      entry.notes.add(note);
+      info.set(r.id, entry);
+    }
   }
-  return counts;
+  return info;
 }
 
-export function summarizeTask(task: TaskRecord, linkCount: number): TaskSummary {
+export function summarizeTask(
+  task: TaskRecord,
+  links: { count: number; notes: Iterable<string> } = { count: 0, notes: [] }
+): TaskSummary {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { notes, log, extra, ...fields } = task;
   return {
     ...fields,
     hasNotes: notes.trim().length > 0,
     commentCount: log.filter((e) => e.type === 'comment').length,
-    linkCount
+    linkCount: links.count,
+    linkedNotes: [...links.notes].sort()
   };
 }
 
 /** All tasks (summaries) and problem files. */
 export function getTaskList(): TaskListSnapshot {
-  const counts = linkCounts();
+  const links = linkInfo();
   return {
     ready,
-    tasks: [...tasks.values()].map((t) => summarizeTask(t, counts.get(t.id) ?? 0)),
+    tasks: [...tasks.values()].map((t) => summarizeTask(t, links.get(t.id))),
     problems: [...problems.values()].sort((a, b) => a.path.localeCompare(b.path))
   };
 }

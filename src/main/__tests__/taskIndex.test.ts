@@ -3,7 +3,8 @@ import fs from 'fs';
 import * as path from 'path';
 import os from 'os';
 import * as vaultState from '../vaultState';
-import { createTask } from '../taskStore';
+import { createTask, updateTask } from '../taskStore';
+import { addComment } from '../../shared/taskOps';
 import {
   clearTaskIndex,
   forgetTaskFile,
@@ -15,6 +16,8 @@ import {
   refreshTaskFile,
   removeNoteTaskRefs,
   replaceAllNoteTaskRefs,
+  searchTaskIds,
+  upsertTask,
   setNoteTaskRefs,
   startTaskIndex
 } from '../taskIndex';
@@ -122,6 +125,34 @@ describe('taskIndex', () => {
     } finally {
       stop();
     }
+  });
+
+  it('searches titles, notes, checklist steps and comments', async () => {
+    const rent = await createTask(
+      vault,
+      {
+        title: 'Pay rent',
+        notes: 'Account details are in the lease folder',
+        checklist: [{ text: 'Transfer from savings', done: false }]
+      },
+      opts()
+    );
+    const quote = await createTask(vault, { title: 'Get a quote', tags: ['renovation'] }, opts());
+    await loadTaskIndex(vault);
+    const withComment = await updateTask(
+      vault,
+      quote.id,
+      (t) => addComment(t, 'Supplier will call back Tuesday'),
+      opts()
+    );
+    upsertTask(withComment);
+
+    expect(searchTaskIds('lease')).toEqual([rent.id]);
+    expect(searchTaskIds('savings')).toEqual([rent.id]);
+    expect(searchTaskIds('supplier tuesday')).toEqual([quote.id]);
+    expect(searchTaskIds('renov')).toEqual([quote.id]); // prefix
+    expect(searchTaskIds('pay')).toEqual([rent.id]);
+    expect(searchTaskIds('')).toEqual([]);
   });
 
   it('discards a load overtaken by a vault change', async () => {

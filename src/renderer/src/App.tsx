@@ -35,6 +35,7 @@ import { formatAppend, detectNoteMode } from '../../shared/noteFormat';
 import type { TaskMetadataValue } from './components/TaskMetadataPopover';
 import { startTaskRecordsSync } from './tasks/taskRecordsStore';
 import { TaskCapture } from './components/TaskCapture';
+import { TaskManager } from './components/TaskManager';
 
 /**
  * Extract title from markdown frontmatter, or fallback to filename
@@ -1278,28 +1279,34 @@ function AppContent(): React.JSX.Element {
                 ) : (
                   <>
                     {viewMode === 'tasks' ? (
-                      <TasksView
-                        tasks={tasks}
-                        tasksLoaded={tasksLoaded}
-                        onToggleStatus={handleTaskToggleStatus}
-                        onUpdateMetadata={handleTaskUpdateMetadata}
-                        onQuickAdd={(text) => handleQuickAddTask(text)}
-                        onNavigateToDate={(dateStr) => {
-                          setViewMode('editor');
-                          handleFileSelect(`${dateStr}.md`);
-                        }}
-                        onTaskClick={(filename, lineNumber) => {
-                          // Switch to editor view and open the file, then scroll to
-                          // the task's exact line once it's loaded - editorRef only
-                          // becomes available once the Editor (re)mounts for this
-                          // file, hence the brief delay.
-                          setViewMode('editor');
-                          handleFileSelect(filename).then(() => {
-                            setTimeout(() => {
-                              editorRef.current?.scrollToLine(lineNumber);
-                            }, 100);
-                          });
-                        }}
+                      <TaskManager
+                        onNavigate={openNoteAtLine}
+                        checklistCount={tasks.filter((t) => t.status !== 'done').length}
+                        checklistView={
+                          <TasksView
+                            tasks={tasks}
+                            tasksLoaded={tasksLoaded}
+                            onToggleStatus={handleTaskToggleStatus}
+                            onUpdateMetadata={handleTaskUpdateMetadata}
+                            onQuickAdd={(text) => handleQuickAddTask(text)}
+                            onNavigateToDate={(dateStr) => {
+                              setViewMode('editor');
+                              handleFileSelect(`${dateStr}.md`);
+                            }}
+                            onTaskClick={(filename, lineNumber) => {
+                              // Switch to editor view and open the file, then scroll to
+                              // the task's exact line once it's loaded - editorRef only
+                              // becomes available once the Editor (re)mounts for this
+                              // file, hence the brief delay.
+                              setViewMode('editor');
+                              handleFileSelect(filename).then(() => {
+                                setTimeout(() => {
+                                  editorRef.current?.scrollToLine(lineNumber);
+                                }, 100);
+                              });
+                            }}
+                          />
+                        }
                       />
                     ) : (
                       <GraphView
