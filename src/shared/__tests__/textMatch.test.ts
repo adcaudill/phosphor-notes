@@ -4,16 +4,16 @@ import { findOccurrences, wikilinkSpans, overlapsAny } from '../textMatch';
 describe('findOccurrences', () => {
   it('finds literal, non-overlapping occurrences, case-sensitively by default', () => {
     expect(findOccurrences('aaa', 'aa')).toEqual([0]);
-    expect(findOccurrences('Melanie met melanie', 'Melanie')).toEqual([0]);
-    expect(findOccurrences('Melanie met melanie', 'melanie', { caseSensitive: false })).toEqual([
+    expect(findOccurrences('Abigail met abigail', 'Abigail')).toEqual([0]);
+    expect(findOccurrences('Abigail met abigail', 'abigail', { caseSensitive: false })).toEqual([
       0, 12
     ]);
     expect(findOccurrences('x', '')).toEqual([]);
   });
 
   it('wholeWord skips matches embedded in longer words but allows punctuation around them', () => {
-    const text = "Melanie, Melanies, Melanie's, [[People/Melanie Dworak]], xMelanie";
-    expect(findOccurrences(text, 'Melanie', { wholeWord: true })).toEqual([0, 19, 39]);
+    const text = "Abigail, Abigails, Abigail's, [[People/Abigail Stone]], xAbigail";
+    expect(findOccurrences(text, 'Abigail', { wholeWord: true })).toEqual([0, 19, 39]);
   });
 
   it('treats a query that starts or ends with punctuation as matching at that edge', () => {
@@ -29,10 +29,10 @@ describe('findOccurrences', () => {
 
 describe('wikilink spans', () => {
   it('finds links and detects overlap', () => {
-    const text = 'Hi [[People/Melanie Dworak]] and Melanie';
+    const text = 'Hi [[People/Abigail Stone]] and Abigail';
     const spans = wikilinkSpans(text);
-    expect(spans).toEqual([[3, 28]]);
-    expect(overlapsAny(text.indexOf('Melanie'), 7, spans)).toBe(true);
-    expect(overlapsAny(text.lastIndexOf('Melanie'), 7, spans)).toBe(false);
+    expect(spans).toEqual([[3, 27]]);
+    expect(overlapsAny(text.indexOf('Abigail'), 7, spans)).toBe(true);
+    expect(overlapsAny(text.lastIndexOf('Abigail'), 7, spans)).toBe(false);
   });
 });

@@ -310,7 +310,7 @@ describe('vaultWriter', () => {
 
   describe('insertUnderBullet', () => {
     const outlinerDoc =
-      '---\nmode: outliner\n---\n' + '- [[IOmergent]]\n' + '    - Meetings\n' + '- Personal\n';
+      '---\nmode: outliner\n---\n' + '- [[Acme]]\n' + '    - Meetings\n' + '- Personal\n';
 
     it('inserts as a new child of the matched bullet, on disk', async () => {
       fs.writeFileSync(path.join(vault, 'Journal.md'), outlinerDoc);
@@ -323,7 +323,7 @@ describe('vaultWriter', () => {
       expect(result).toMatchObject({ mode: 'outliner', matchedText: 'Meetings' });
       expect(fs.readFileSync(path.join(vault, 'Journal.md'), 'utf-8')).toBe(
         '---\nmode: outliner\n---\n' +
-          '- [[IOmergent]]\n' +
+          '- [[Acme]]\n' +
           '    - Meetings\n' +
           '        - Standup\n' +
           '- Personal\n'
