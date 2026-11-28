@@ -7,6 +7,7 @@ import {
   resolveReadableFolderPath,
   PathNotAllowedError
 } from './vaultPaths';
+import { isTaskFilePath } from '../shared/taskRecord';
 
 export { PathNotAllowedError };
 
@@ -110,6 +111,8 @@ async function walk(root: string, dir: string, out: NoteInfo[]): Promise<void> {
     if (entry.name.startsWith('.')) continue; // hidden files/dirs, incl. .phosphor
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
+      // Task files (_tasks/) aren't notes; they have their own tools.
+      if (isTaskFilePath(path.relative(root, fullPath).split(path.sep).join('/'))) continue;
       await walk(root, fullPath, out);
       continue;
     }

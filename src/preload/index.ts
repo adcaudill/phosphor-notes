@@ -8,6 +8,7 @@ import type {
   McpNoteVersion
 } from '../types/phosphor';
 import type { PredictionModelSnapshot } from '../shared/predictionModel';
+import type { NewTaskInput, TaskPatch } from '../shared/taskOps';
 
 const parsePredictionModel = (
   data: PredictionModelSnapshot | string | null
@@ -201,6 +202,30 @@ const api = {
   getCachedTasks: () => ipcRenderer.invoke('tasks:load-cache'),
   updateTaskLine: (filename: string, line: number, expectedText: string, newLines: string[]) =>
     ipcRenderer.invoke('tasks:update-line', filename, line, expectedText, newLines),
+
+  // Task files (_tasks/): structured tasks, separate from inline checkbox tasks above
+  taskRecords: {
+    list: () => ipcRenderer.invoke('task-records:list'),
+    get: (id: string) => ipcRenderer.invoke('task-records:get', id),
+    create: (input: NewTaskInput) => ipcRenderer.invoke('task-records:create', input),
+    update: (id: string, patch: TaskPatch) => ipcRenderer.invoke('task-records:update', id, patch),
+    complete: (id: string) => ipcRenderer.invoke('task-records:complete', id),
+    skip: (id: string) => ipcRenderer.invoke('task-records:skip', id),
+    addComment: (id: string, text: string) =>
+      ipcRenderer.invoke('task-records:add-comment', id, text),
+    editComment: (id: string, at: string, text: string) =>
+      ipcRenderer.invoke('task-records:edit-comment', id, at, text),
+    deleteComment: (id: string, at: string) =>
+      ipcRenderer.invoke('task-records:delete-comment', id, at),
+    delete: (id: string) => ipcRenderer.invoke('task-records:delete', id),
+    onChanged: (cb: () => void) => {
+      const handler = (): void => cb();
+      ipcRenderer.on('task-records:changed', handler);
+      return () => {
+        ipcRenderer.removeListener('task-records:changed', handler);
+      };
+    }
+  },
 
   // Settings API
   getSettings: () => ipcRenderer.invoke('settings:get'),

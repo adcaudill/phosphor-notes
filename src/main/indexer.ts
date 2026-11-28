@@ -6,6 +6,9 @@ import { promises as fsp } from 'fs';
 import { isDailyNote, extractDateHierarchy } from './graphBuilder';
 import { extractWikilinks, getImplicitPathLinks } from '../shared/wikilinks';
 import { extractTasksFromContent, type Task } from '../shared/tasks';
+import { extractTaskRefs, type TaskRef } from '../shared/taskLinks';
+import { TASKS_DIR, isTaskFilePath } from '../shared/taskRecord';
+import { removeNoteTaskRefs, replaceAllNoteTaskRefs, setNoteTaskRefs } from './taskIndex';
 import * as vaultReader from './vaultReader';
 import {
   buildSnapshotFromCounts,
@@ -348,15 +351,17 @@ function seedPredictionModel(fileContents: FileContent[], mainWindow: BrowserWin
 }
 
 // Helper: recursively find all .md files
-async function getFilesRecursively(dir: string): Promise<string[]> {
+async function getFilesRecursively(dir: string, root: string = dir): Promise<string[]> {
   const files: string[] = [];
   const entries = await fsp.readdir(dir, { withFileTypes: true });
   for (const entry of entries) {
     if (entry.name.startsWith('.')) continue;
     if (entry.name.endsWith('.bak')) continue; // Ignore backup files
+    // Task files aren't notes: they have their own index (taskIndex.ts).
+    if (dir === root && entry.name === TASKS_DIR) continue;
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {
-      files.push(...(await getFilesRecursively(fullPath)));
+      files.push(...(await getFilesRecursively(fullPath, root)));
     } else if (entry.name.endsWith('.md')) {
       files.push(fullPath);
     }
@@ -448,9 +453,11 @@ async function tryStartWorkerFromFile(
       const msgData = msg.data as {
         graph: Record<string, string[]>;
         tasks: Task[];
+        taskRefs?: Record<string, TaskRef[]>;
       };
       const graph = msgData.graph;
       const tasks = msgData.tasks || [];
+      replaceAllNoteTaskRefs(msgData.taskRefs ?? {});
       safeLog('Graph indexing complete. Nodes:', Object.keys(graph).length, 'Tasks:', tasks.length);
       lastGraph = graph as Record<string, string[]>;
       lastTasks = tasks;
@@ -605,6 +612,7 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
         try {
           const sharedModules = [
             { path: 'wikilinks.ts', symbols: ['extractWikilinks', 'getImplicitPathLinks'] },
+            { path: 'taskLinks.ts', symbols: ['extractTaskRefs'] },
             {
               path: 'tasks.ts',
               symbols: ['extractTasksFromContent'],
@@ -692,10 +700,12 @@ export async function startIndexing(vaultPath: string, mainWindow: BrowserWindow
             const msgData = msg.data as {
               graph: Record<string, string[]>;
               tasks: Task[];
+              taskRefs?: Record<string, TaskRef[]>;
             };
 
             const graph = msgData.graph;
             const tasks = msgData.tasks || [];
+            replaceAllNoteTaskRefs(msgData.taskRefs ?? {});
 
             // count edges for logging
             let edgeCount = 0;
@@ -980,6 +990,9 @@ export async function updateSearchIndexForFile(vaultPath: string, filename: stri
  */
 export function removeFromSearchIndex(filename: string): void {
   if (!filename.endsWith('.md')) return;
+  // Called exactly when a note leaves the vault (deleted, or the old path of
+  // a rename/move), which is also when its links to tasks go away.
+  removeNoteTaskRefs(filename);
   if (!indexerWorker) return;
   try {
     indexerWorker.postMessage({ type: 'remove-file', filename });
@@ -1002,6 +1015,7 @@ export async function updateTasksForFile(
       safeDebug(`Skipping task update for non-markdown file: ${filename}`);
       return;
     }
+    if (isTaskFilePath(filename)) return; // task files are indexed by taskIndex, not as notes
     const filePath = join(vaultPath, filename);
     // Use shared reader so encrypted vaults are handled the same way as the worker
     const content = await readMarkdownFile(filePath);
@@ -1010,6 +1024,7 @@ export async function updateTasksForFile(
     // incremental path can never again drop fields (dueDate/recurrence/
     // priority/completedAt) the full scan populates.
     const fileTasks = extractTasksFromContent(content, filename);
+    setNoteTaskRefs(filename, extractTaskRefs(content));
 
     // Update the task index: remove old tasks for this file, add new ones
     if (lastTasks) {

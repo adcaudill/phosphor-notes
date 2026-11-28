@@ -1,6 +1,23 @@
 // src/types/phosphor.d.ts
 
 import type { PredictionModelSnapshot } from '../shared/predictionModel';
+import type { TaskRecord } from '../shared/taskRecord';
+import type { NewTaskInput, TaskPatch } from '../shared/taskOps';
+import type { TaskDetail, TaskListSnapshot } from '../shared/taskViews';
+
+export type {
+  TaskRecord,
+  TaskStatus as TaskRecordStatus,
+  TaskPriority as TaskRecordPriority
+} from '../shared/taskRecord';
+export type { NewTaskInput, TaskPatch } from '../shared/taskOps';
+export type {
+  TaskDetail,
+  TaskListSnapshot,
+  TaskSummary,
+  TaskLinkLocation,
+  TaskFileProblem
+} from '../shared/taskViews';
 
 export type {
   Task,
@@ -74,6 +91,22 @@ export interface McpClientConfig {
   };
 }
 
+/** Task files API (see src/main/taskIpc.ts). Writes reject with the main-process error message. */
+export interface TaskRecordsAPI {
+  list: () => Promise<TaskListSnapshot>;
+  get: (id: string) => Promise<TaskDetail | null>;
+  create: (input: NewTaskInput) => Promise<TaskRecord>;
+  update: (id: string, patch: TaskPatch) => Promise<TaskRecord>;
+  complete: (id: string) => Promise<TaskRecord>;
+  skip: (id: string) => Promise<TaskRecord>;
+  addComment: (id: string, text: string) => Promise<TaskRecord>;
+  editComment: (id: string, at: string, text: string) => Promise<TaskRecord>;
+  deleteComment: (id: string, at: string) => Promise<TaskRecord>;
+  delete: (id: string) => Promise<void>;
+  /** Fired (debounced) when any task, problem file or task link changes. */
+  onChanged: (cb: () => void) => () => void;
+}
+
 export interface PhosphorAPI {
   // Vault Management
   selectVault: () => Promise<string | null>; // Returns the folder name (not full path) or null if cancelled
@@ -138,6 +171,9 @@ export interface PhosphorAPI {
   ) => () => void;
   // Fired when main opens or switches vaults. Provides the vault folder name.
   onVaultOpened: (cb: (vaultName: string) => void) => () => void;
+
+  /** Task files (`_tasks/`): structured tasks. */
+  taskRecords: TaskRecordsAPI;
 
   // Tasks
   getTaskIndex: () => Promise<Task[]>;
