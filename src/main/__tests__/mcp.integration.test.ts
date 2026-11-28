@@ -18,6 +18,7 @@ import type { NoteMode } from '../../shared/noteFormat';
 import type { McpDeps } from '../mcp/deps';
 import { createWriteGate } from '../mcp/writeGate';
 import * as noteHistory from '../noteHistory';
+import { extractWikilinks } from '../../shared/wikilinks';
 import { UNRESTRICTED_SCOPE, type WriteScope } from '../mcp/scope';
 import type { Task } from '../../types/phosphor.d';
 
@@ -151,6 +152,33 @@ describe('MCP server (integration)', () => {
           dryRun: replaceOpts?.dryRun
         });
       },
+      moveNote: (from, to, ctx, moveOpts) =>
+        vaultWriter.renameNote(vault, from, to, {
+          expectedGeneration: ctx.generation,
+          includeChildren: moveOpts?.includeChildren,
+          expectedHash: moveOpts?.expectedHash,
+          dryRun: moveOpts?.dryRun,
+          history: { tool: ctx.tool },
+          // Stand-in for the link graph: every note in the vault is a candidate.
+          linkCandidates: () => allNotes(),
+          beforeWrite: (relPath) => gate.check(relPath, { dryRun: moveOpts?.dryRun }),
+          canCreateParent: gate.canCreateParent
+        }),
+      deleteNote: async (relPath, ctx, deleteOpts) => {
+        await gate.check(relPath, { dryRun: deleteOpts?.dryRun });
+        return vaultWriter.deleteNote(vault, relPath, {
+          expectedGeneration: ctx.generation,
+          expectedHash: deleteOpts?.expectedHash,
+          dryRun: deleteOpts?.dryRun,
+          history: { tool: ctx.tool }
+        });
+      },
+      findBacklinks: (relPath) =>
+        allNotes().filter(
+          (p) =>
+            p !== relPath &&
+            extractWikilinks(fs.readFileSync(path.join(vault, p), 'utf-8')).includes(relPath)
+        ),
       listVersions: (listOpts) => noteHistory.listVersions(vault, listOpts),
       readVersion: async (id) => {
         const { entry, raw } = await noteHistory.readVersion(vault, id);
@@ -212,6 +240,22 @@ describe('MCP server (integration)', () => {
     dirtyNotes.clear();
     journalMode = 'outliner';
   });
+
+  /** Every note in the test vault (hidden folders like .phosphor excluded). */
+  function allNotes(): string[] {
+    const out: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name.startsWith('.')) continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (entry.name.endsWith('.md'))
+          out.push(path.relative(vault, full).split(path.sep).join('/'));
+      }
+    };
+    walk(vault);
+    return out;
+  }
 
   async function makeClient(bearerToken: string): Promise<Client> {
     const client = new Client({ name: 'test-client', version: '1.0.0' });
@@ -1586,6 +1630,216 @@ describe('MCP server (integration)', () => {
         arguments: { path: 'DryExists.md', content: 'y', dryRun: true }
       });
       expect(errorText(scoped)).toContain('PATH_NOT_IN_WRITE_SCOPE');
+      await client.close();
+    });
+  });
+
+  describe('organize and delete tools', () => {
+    function errorText(result: unknown): string {
+      return (result as { content: Array<{ text: string }> }).content[0].text;
+    }
+    const put = (rel: string, text: string): void => {
+      fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });
+      fs.writeFileSync(path.join(vault, rel), text);
+    };
+    const get = (rel: string): string => fs.readFileSync(path.join(vault, rel), 'utf-8');
+    const has = (rel: string): boolean => fs.existsSync(path.join(vault, rel));
+
+    it('registers move_note and delete_note only with their own switches; get_daily_note always', async () => {
+      organizeEnabled = false;
+      deleteEnabled = false;
+      const off = await makeClient(token);
+      const offNames = (await off.listTools()).tools.map((t) => t.name);
+      expect(offNames).toContain('get_daily_note');
+      expect(offNames).not.toContain('move_note');
+      expect(offNames).not.toContain('delete_note');
+      await off.close();
+
+      organizeEnabled = true;
+      deleteEnabled = true;
+      const on = await makeClient(token);
+      const onNames = (await on.listTools()).tools.map((t) => t.name);
+      expect(onNames).toEqual(expect.arrayContaining(['move_note', 'delete_note']));
+      await on.close();
+    });
+
+    it('move_note renames, rewrites links, and restore_note_version moves it back', async () => {
+      put('P3/Plan.md', 'The plan.\n');
+      put('P3/Hub.md', 'See [[P3/Plan#Goals|goals]] and [[P3/Plan]].\n');
+      const client = await makeClient(token);
+
+      const moved = await client.callTool({
+        name: 'move_note',
+        arguments: { from: 'P3/Plan.md', to: 'P3/Archive/Plan.md' }
+      });
+      expect(moved.isError).toBeFalsy();
+      const out = moved.structuredContent as {
+        versionId: string;
+        linksUpdated: Array<{ path: string; links: number }>;
+        parentsCreated: string[];
+      };
+      expect(out.linksUpdated).toEqual([{ path: 'P3/Hub.md', links: 2 }]);
+      // P3.md didn't exist either (the test wrote P3/Plan.md directly), so both index notes are created.
+      expect(out.parentsCreated).toEqual(['P3.md', 'P3/Archive.md']);
+      expect(has('P3/Plan.md')).toBe(false);
+      expect(get('P3/Hub.md')).toBe(
+        'See [[P3/Archive/Plan#Goals|goals]] and [[P3/Archive/Plan]].\n'
+      );
+
+      const undone = await client.callTool({
+        name: 'restore_note_version',
+        arguments: { id: out.versionId }
+      });
+      expect(undone.structuredContent).toMatchObject({ path: 'P3/Plan.md', created: false });
+      expect(get('P3/Plan.md')).toBe('The plan.\n');
+      expect(get('P3/Hub.md')).toBe('See [[P3/Plan#Goals|goals]] and [[P3/Plan]].\n');
+      await client.close();
+    });
+
+    it('move_note refuses an existing destination, and child notes unless includeChildren', async () => {
+      put('P3/Taken.md', 'taken\n');
+      put('P3/Team.md', 'Team index.\n');
+      put('P3/Team/Ann.md', 'Ann. Up: [[P3/Team]].\n');
+      const client = await makeClient(token);
+
+      const taken = await client.callTool({
+        name: 'move_note',
+        arguments: { from: 'P3/Team.md', to: 'P3/Taken.md' }
+      });
+      expect(errorText(taken)).toContain('NOTE_ALREADY_EXISTS');
+
+      const kids = await client.callTool({
+        name: 'move_note',
+        arguments: { from: 'P3/Team.md', to: 'P3/Crew.md' }
+      });
+      expect(errorText(kids)).toContain('HAS_CHILD_NOTES');
+      expect(has('P3/Team.md')).toBe(true);
+
+      const withKids = await client.callTool({
+        name: 'move_note',
+        arguments: { from: 'P3/Team.md', to: 'P3/Crew.md', includeChildren: true }
+      });
+      expect(withKids.structuredContent).toMatchObject({
+        movedChildren: [{ from: 'P3/Team/Ann.md', to: 'P3/Crew/Ann.md' }]
+      });
+      expect(get('P3/Crew/Ann.md')).toBe('Ann. Up: [[P3/Crew]].\n');
+      await client.close();
+    });
+
+    it('move_note is refused if any note whose links would change is out of scope or has unsaved edits', async () => {
+      put('P3/Moving.md', 'm\n');
+      put('P3/Fenced/Ref.md', '[[P3/Moving]]\n');
+      const client = await makeClient(token);
+
+      writeScope = { allow: [], deny: ['P3/Fenced'] };
+      const scoped = await client.callTool({
+        name: 'move_note',
+        arguments: { from: 'P3/Moving.md', to: 'P3/Moved.md' }
+      });
+      expect(errorText(scoped)).toContain('PATH_NOT_IN_WRITE_SCOPE');
+
+      writeScope = UNRESTRICTED_SCOPE;
+      dirtyNotes.add('P3/Fenced/Ref.md');
+      const dirty = await client.callTool({
+        name: 'move_note',
+        arguments: { from: 'P3/Moving.md', to: 'P3/Moved.md' }
+      });
+      expect(errorText(dirty)).toContain('NOTE_HAS_UNSAVED_EDITS');
+
+      expect(has('P3/Moving.md')).toBe(true);
+      expect(get('P3/Fenced/Ref.md')).toBe('[[P3/Moving]]\n');
+      await client.close();
+    });
+
+    it('undoing a rename needs organize access', async () => {
+      put('P3/Undo.md', 'u\n');
+      const client = await makeClient(token);
+      const moved = await client.callTool({
+        name: 'move_note',
+        arguments: { from: 'P3/Undo.md', to: 'P3/Undone.md' }
+      });
+      const { versionId } = moved.structuredContent as { versionId: string };
+      await client.close();
+
+      organizeEnabled = false;
+      const limited = await makeClient(token);
+      const refused = await limited.callTool({
+        name: 'restore_note_version',
+        arguments: { id: versionId }
+      });
+      expect(errorText(refused)).toContain('ORGANIZE_DISABLED');
+      expect(has('P3/Undone.md')).toBe(true);
+      await limited.close();
+    });
+
+    it('delete_note refuses a linked note unless forced, and the deletion can be restored', async () => {
+      put('P3/Doomed.md', 'doomed\n');
+      put('P3/Pointer.md', '[[P3/Doomed]]\n');
+      const client = await makeClient(token);
+
+      const refused = await client.callTool({
+        name: 'delete_note',
+        arguments: { path: 'P3/Doomed.md' }
+      });
+      expect(errorText(refused)).toContain('HAS_BACKLINKS');
+      expect(errorText(refused)).toContain('P3/Pointer.md');
+
+      const dry = await client.callTool({
+        name: 'delete_note',
+        arguments: { path: 'P3/Doomed.md', force: true, dryRun: true }
+      });
+      expect(dry.structuredContent).toMatchObject({ dryRun: true });
+      expect(has('P3/Doomed.md')).toBe(true);
+
+      const deleted = await client.callTool({
+        name: 'delete_note',
+        arguments: { path: 'P3/Doomed.md', force: true }
+      });
+      expect(deleted.structuredContent).toMatchObject({
+        path: 'P3/Doomed.md',
+        brokenLinksIn: ['P3/Pointer.md']
+      });
+      expect(has('P3/Doomed.md')).toBe(false);
+
+      const { versionId } = deleted.structuredContent as { versionId: string };
+      await client.callTool({ name: 'restore_note_version', arguments: { id: versionId } });
+      expect(get('P3/Doomed.md')).toBe('doomed\n');
+      await client.close();
+    });
+
+    it('get_daily_note resolves today, yesterday, tomorrow, and dates, and reports missing notes', async () => {
+      put('2026-09-22.md', 'Yesterday entry.\n');
+      const client = await makeClient(token);
+
+      const yesterday = await client.callTool({
+        name: 'get_daily_note',
+        arguments: { date: 'yesterday' }
+      });
+      expect(yesterday.structuredContent).toMatchObject({
+        date: '2026-09-22',
+        path: '2026-09-22.md',
+        exists: true,
+        content: 'Yesterday entry.\n'
+      });
+
+      const tomorrow = await client.callTool({
+        name: 'get_daily_note',
+        arguments: { date: 'tomorrow' }
+      });
+      expect(tomorrow.structuredContent).toEqual({
+        date: '2026-09-24',
+        path: '2026-09-24.md',
+        exists: false
+      });
+
+      const today = await client.callTool({ name: 'get_daily_note', arguments: {} });
+      expect((today.structuredContent as { date: string }).date).toBe('2026-09-23');
+
+      const bad = await client.callTool({
+        name: 'get_daily_note',
+        arguments: { date: '2026-02-30' }
+      });
+      expect(errorText(bad)).toContain('INVALID_ARGUMENT');
       await client.close();
     });
   });

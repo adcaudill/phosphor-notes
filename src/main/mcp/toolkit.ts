@@ -86,6 +86,12 @@ function errorCodeFor(err: unknown): string {
         return 'SECTION_NOT_FOUND';
       case 'AmbiguousSectionError':
         return 'AMBIGUOUS_MATCH';
+      case 'HasChildNotesError':
+        return 'HAS_CHILD_NOTES';
+      case 'NoteHasBacklinksError':
+        return 'HAS_BACKLINKS';
+      case 'OrganizeDisabledError':
+        return 'ORGANIZE_DISABLED';
       default:
         return 'INTERNAL_ERROR';
     }
