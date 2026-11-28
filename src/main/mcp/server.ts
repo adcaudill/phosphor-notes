@@ -6,6 +6,7 @@ import { registerSearchTool } from './tools/search';
 import { registerTaskTools } from './tools/tasks';
 import { registerGraphTools } from './tools/graph';
 import { registerTagTools } from './tools/tags';
+import { registerFindTools } from './tools/find';
 import { registerNoteWriteTools } from './tools/notesWrite';
 import { registerTaskWriteTools } from './tools/tasksWrite';
 import { registerHistoryReadTools, registerHistoryRestoreTool } from './tools/history';
@@ -32,6 +33,7 @@ export function createPhosphorMcpServer(deps: McpDeps): McpServer {
   registerTaskTools(server, deps);
   registerGraphTools(server, deps);
   registerTagTools(server, deps);
+  registerFindTools(server, deps);
   registerDailyNoteTool(server, deps);
 
   if (deps.isWriteEnabled()) {

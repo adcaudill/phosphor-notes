@@ -32,6 +32,7 @@ describe('MCP server (integration)', () => {
   let token: string;
   let deps: McpDeps;
   let readable: boolean;
+  let graph: ReturnType<typeof buildWikiGraph>;
   let writeEnabled: boolean;
   let editEnabled: boolean;
   let organizeEnabled: boolean;
@@ -60,7 +61,7 @@ describe('MCP server (integration)', () => {
       'People/John.md': fs.readFileSync(path.join(vault, 'People', 'John.md'), 'utf-8'),
       'tagged.md': fs.readFileSync(path.join(vault, 'tagged.md'), 'utf-8')
     };
-    const graph = buildWikiGraph(fileContents, Object.keys(fileContents));
+    graph = buildWikiGraph(fileContents, Object.keys(fileContents));
 
     const tasks: Task[] = [
       {
@@ -1841,6 +1842,146 @@ describe('MCP server (integration)', () => {
       });
       expect(errorText(bad)).toContain('INVALID_ARGUMENT');
       await client.close();
+    });
+  });
+
+  describe('cross-note read tools', () => {
+    function errorText(result: unknown): string {
+      return (result as { content: Array<{ text: string }> }).content[0].text;
+    }
+    const put = (rel: string, text: string): void => {
+      fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });
+      fs.writeFileSync(path.join(vault, rel), text);
+    };
+
+    it('find_text finds every exact occurrence with line numbers, flags links, and proves absence', async () => {
+      put(
+        'FT/A.md',
+        '---\ntitle: A\n---\nMet [[ann@corp.example]] today.\nEmail ann@corp.example later.\n'
+      );
+      put('FT/B.md', 'Nothing relevant.\nANN@CORP.EXAMPLE shouted.\n');
+      const client = await makeClient(token);
+
+      const all = await client.callTool({
+        name: 'find_text',
+        arguments: { query: 'ann@corp.example', folder: 'FT' }
+      });
+      expect(all.structuredContent).toMatchObject({
+        totalMatches: 3,
+        notesWithMatches: 2,
+        notesSearched: 2,
+        truncated: false,
+        matches: [
+          { path: 'FT/A.md', line: 4, column: 7, inLink: true },
+          { path: 'FT/A.md', line: 5, column: 7, inLink: false },
+          { path: 'FT/B.md', line: 2, column: 1, inLink: false }
+        ]
+      });
+
+      const linksOnly = await client.callTool({
+        name: 'find_text',
+        arguments: { query: 'ann@corp.example', folder: 'FT', inLinks: 'only', caseSensitive: true }
+      });
+      expect((linksOnly.structuredContent as { totalMatches: number }).totalMatches).toBe(1);
+
+      // After the fix, an empty, untruncated result is proof there are none left.
+      put('FT/A.md', 'Met [[People/Ann]] today.\n');
+      put('FT/B.md', 'Nothing relevant.\n');
+      const none = await client.callTool({
+        name: 'find_text',
+        arguments: { query: 'ann@corp.example', folder: 'FT' }
+      });
+      expect(none.structuredContent).toMatchObject({
+        totalMatches: 0,
+        truncated: false,
+        matches: []
+      });
+      await client.close();
+    });
+
+    it('find_text respects wholeWord and maxResults', async () => {
+      put('FT2/W.md', 'Ann, Anne, Ann.\n');
+      const client = await makeClient(token);
+      const whole = await client.callTool({
+        name: 'find_text',
+        arguments: {
+          query: 'Ann',
+          folder: 'FT2',
+          wholeWord: true,
+          caseSensitive: true,
+          maxResults: 1
+        }
+      });
+      expect(whole.structuredContent).toMatchObject({ totalMatches: 2, truncated: true });
+      expect((whole.structuredContent as { matches: unknown[] }).matches).toHaveLength(1);
+      await client.close();
+    });
+
+    it('read_notes reads several notes at once and reports per-note errors', async () => {
+      put('RN/One.md', 'one\n');
+      put('RN/Two.md', 'two\n');
+      const client = await makeClient(token);
+      const result = await client.callTool({
+        name: 'read_notes',
+        arguments: { paths: ['RN/One.md', 'RN/Missing.md', 'RN/Two.md', '../escape.md'] }
+      });
+      const notes = (result.structuredContent as { notes: Array<Record<string, unknown>> }).notes;
+      expect(notes.map((n) => [n.path, n.content ?? n.error])).toEqual([
+        ['RN/One.md', 'one\n'],
+        ['RN/Missing.md', 'NOTE_NOT_FOUND'],
+        ['RN/Two.md', 'two\n'],
+        ['../escape.md', 'PATH_NOT_ALLOWED']
+      ]);
+      expect(typeof notes[0].hash).toBe('string');
+      await client.close();
+    });
+
+    it('lists unresolved links and gives backlinks for pages that do not exist', async () => {
+      const saved = graph;
+      put('UL/Note.md', 'x\n');
+      put('UL/Sub/Child.md', 'y\n');
+      graph = {
+        ...saved,
+        'UL/Note.md': ['bob@corp.example.md', 'People/Real.md', '2026.md'],
+        'UL/Sub/Child.md': ['UL/Sub.md', 'bob@corp.example.md'],
+        '2026.md': ['2026-09.md']
+      };
+      put('People/Real.md', 'real\n');
+      try {
+        const client = await makeClient(token);
+        const unresolved = await client.callTool({
+          name: 'list_unresolved_links',
+          arguments: { folder: 'UL' }
+        });
+        // The virtual year node and Child's implicit link to its parent (UL/Sub.md) are skipped.
+        expect(unresolved.structuredContent).toEqual({
+          unresolved: [
+            { target: 'bob@corp.example.md', linkedFrom: ['UL/Note.md', 'UL/Sub/Child.md'] }
+          ],
+          total: 1,
+          truncated: false
+        });
+
+        const missing = await client.callTool({
+          name: 'get_note_links',
+          arguments: { path: 'bob@corp.example.md' }
+        });
+        expect(missing.structuredContent).toEqual({
+          path: 'bob@corp.example.md',
+          exists: false,
+          outgoing: [],
+          backlinks: ['UL/Note.md', 'UL/Sub/Child.md']
+        });
+
+        const nowhere = await client.callTool({
+          name: 'get_note_links',
+          arguments: { path: 'Nobody.md' }
+        });
+        expect(errorText(nowhere)).toContain('NOTE_NOT_FOUND');
+        await client.close();
+      } finally {
+        graph = saved;
+      }
     });
   });
 });
