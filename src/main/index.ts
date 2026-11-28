@@ -18,6 +18,13 @@ import { decryptBuffer, isEncrypted } from './crypto';
 import { mcpController } from './mcp/controller';
 import { setupMcpIPC } from './mcp/ipcHandlers';
 
+/**
+ * PHOSPHOR_HEADLESS=1: run without ever showing the window or a Dock icon.
+ * Used by the UI probe (scripts/ui-probe), which drives a hidden instance over
+ * the DevTools protocol with its own --user-data-dir and a fixture vault.
+ */
+const HEADLESS = process.env.PHOSPHOR_HEADLESS === '1';
+
 // Suppress EPIPE errors that occur when trying to write to stdout/stderr during shutdown
 // This prevents "write EPIPE" errors when the process is closing
 process.stdout.on('error', (err: NodeJS.ErrnoException) => {
@@ -171,7 +178,9 @@ function createWindow(settings?: UserSettings): BrowserWindow {
   });
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow.show();
+    // Headless mode (the UI probe in scripts/ui-probe) renders and can be
+    // screenshotted over the DevTools protocol, but never appears on screen.
+    if (!HEADLESS) mainWindow.show();
   });
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -405,6 +414,9 @@ if (gotSingleInstanceLock) {
   app.whenReady().then(async () => {
     // Set app user model id for windows
     electronApp.setAppUserModelId('com.electron');
+
+    // Headless mode: no Dock icon either, so a probe run is invisible.
+    if (HEADLESS && process.platform === 'darwin') app.dock?.hide();
 
     // Register custom phosphor:// protocol for asset serving
     setupProtocol();

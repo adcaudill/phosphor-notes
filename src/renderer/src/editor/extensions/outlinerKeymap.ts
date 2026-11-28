@@ -449,8 +449,8 @@ export function computeNestingGuides(lines: string[]): number[][] {
 /**
  * The line's background: a 1px-wide band at each guide column.
  *
- * The band is a fixed 1px, not a fraction of `ch`. At 0.05ch (about 0.48px
- * with the default 16px Menlo) the band is narrower than a pixel, so it only
+ * The band is a fixed 1px, not a fraction of `ch`. At 0.05ch (about 0.43px
+ * with the editor's 14px Menlo) the band is narrower than a pixel, so it only
  * shows when it happens to cover a pixel's sample point - which depends on
  * where its column falls on the pixel grid (font size, display scale, the
  * editor's own offsets). Rendered offscreen at 1x, every other column drew

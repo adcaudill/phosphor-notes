@@ -6,3 +6,4 @@ out
 .eslintcache
 *.log*
 coverage/
+.ui-probe/
