@@ -14,7 +14,7 @@ export interface TextEdit {
   newText: string;
   /** Replace every occurrence instead of requiring exactly one. */
   replaceAll?: boolean;
-  /** Only match oldText where it is not part of a longer word ("Melanie" but not "Melanies"). */
+  /** Only match oldText where it is not part of a longer word ("Abigail" but not "Abigails"). */
   wholeWord?: boolean;
   /** Ignore occurrences inside [[wikilinks]], so replacing a name never rewrites a link to its page. */
   skipLinks?: boolean;
