@@ -1128,6 +1128,30 @@ function AppContent(): React.JSX.Element {
     }
   };
 
+  /** Opens a note in the editor and scrolls to a line (e.g. a task's "mentioned in" links). */
+  const openNoteAtLine = (note: string, line: number): void => {
+    setViewMode('editor');
+    if (note === currentFile) {
+      editorRef.current?.scrollToLine(line);
+      return;
+    }
+    void handleFileSelect(note).then(() => {
+      setTimeout(() => editorRef.current?.scrollToLine(line), 100);
+    });
+  };
+  const openNoteAtLineRef = useRef(openNoteAtLine);
+  useEffect(() => {
+    openNoteAtLineRef.current = openNoteAtLine;
+  });
+  useEffect(() => {
+    const onOpen = (e: Event): void => {
+      const { note, line } = (e as CustomEvent<{ note: string; line: number }>).detail ?? {};
+      if (note) openNoteAtLineRef.current(note, line ?? 1);
+    };
+    document.addEventListener('phosphor-open-note-line', onOpen);
+    return () => document.removeEventListener('phosphor-open-note-line', onOpen);
+  }, []);
+
   return (
     <div className="app-container">
       {vaultName ? (

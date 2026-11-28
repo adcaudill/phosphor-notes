@@ -28,7 +28,8 @@ import { taskAddMetadataGutter } from '../editor/extensions/taskAddMetadataGutte
 import { taskLinkExtension } from '../editor/extensions/taskLinkWidget';
 import { TaskMetadataPopover, type TaskMetadataValue } from './TaskMetadataPopover';
 import { parseTaskLine, serializeTaskLine, TASK_LINE_RE } from '../../../shared/tasks';
-import { formatTaskLink } from '../../../shared/taskLinks';
+import { formatTaskLink, TASK_LINK_RE } from '../../../shared/taskLinks';
+import { TaskDetail } from './TaskDetail';
 import type { NewTaskInput } from '../../../shared/taskOps';
 import type { TaskStatus as TaskRecordStatus } from '../../../shared/taskRecord';
 import { TaskCapture } from './TaskCapture';
@@ -108,6 +109,8 @@ export interface EditorHandle {
    * a `- [ ]` checkbox line. Returns false if there's no editor.
    */
   openTaskCapture: () => boolean;
+  /** After a task rename: rewrite that task's link titles in the open note's buffer. */
+  updateTaskLinkTitles: (id: string, title: string) => void;
 }
 
 /** The open task capture field: where it was opened, and for a conversion, the line it replaces. */
@@ -186,7 +189,9 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
           if (!viewRef.current) return false;
           openTaskCaptureRef.current?.(viewRef.current);
           return true;
-        }
+        },
+        updateTaskLinkTitles: (id: string, title: string) =>
+          updateTaskLinkTitlesRef.current(id, title)
       }),
       []
     );
@@ -201,6 +206,51 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
     const [searchAPI, setSearchAPI] = useState<ReturnType<typeof createSearchAPI> | null>(null);
     const [imageViewerOpen, setImageViewerOpen] = useState(false);
     const [imageViewerUrl, setImageViewerUrl] = useState('');
+    // Task detail: opened from a task link (title click, or Mod-Enter on its line)
+    const [taskDetail, setTaskDetail] = useState<{ id: string; rect: DOMRect | null } | null>(null);
+    const openTaskAtCursorRef = useRef<((view: EditorView) => boolean) | null>(null);
+    openTaskAtCursorRef.current = (view: EditorView): boolean => {
+      const pos = view.state.selection.main.head;
+      const line = view.state.doc.lineAt(pos);
+      // The link the cursor is in or next to, else the line's first one.
+      let found: { id: string; from: number } | null = null;
+      for (const m of line.text.matchAll(new RegExp(TASK_LINK_RE.source, 'g'))) {
+        const from = line.from + m.index;
+        if (!found || (pos >= from && pos <= from + m[0].length)) found = { id: m[1], from };
+      }
+      if (!found) return false;
+      const coords = view.coordsAtPos(found.from);
+      setTaskDetail({
+        id: found.id,
+        rect: coords ? new DOMRect(coords.left, coords.top, 0, coords.bottom - coords.top) : null
+      });
+      return true;
+    };
+
+    /** After a rename: rewrite this task's link titles in the buffer (it saves like any edit). */
+    const updateTaskLinkTitles = useCallback((id: string, title: string): void => {
+      const view = viewRef.current;
+      if (!view) return;
+      const wanted = formatTaskLink(id, title);
+      const changes: Array<{ from: number; to: number; insert: string }> = [];
+      const text = view.state.doc.toString();
+      for (const m of text.matchAll(new RegExp(TASK_LINK_RE.source, 'g'))) {
+        if (m[1] === id && m[0] !== wanted) {
+          changes.push({ from: m.index, to: m.index + m[0].length, insert: wanted });
+        }
+      }
+      if (changes.length) view.dispatch({ changes });
+    }, []);
+    const updateTaskLinkTitlesRef = useRef(updateTaskLinkTitles);
+    updateTaskLinkTitlesRef.current = updateTaskLinkTitles;
+
+    const openNoteAtLine = useCallback((note: string, line: number): void => {
+      setTaskDetail(null);
+      document.dispatchEvent(
+        new CustomEvent('phosphor-open-note-line', { detail: { note, line } })
+      );
+    }, []);
+
     // Task capture (/task, Mod-Shift-T): create a task file and insert its link
     const [taskCapture, setTaskCapture] = useState<TaskCaptureState | null>(null);
     const openTaskCaptureRef = useRef<((view: EditorView) => void) | null>(null);
@@ -349,12 +399,15 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
       // Build the keymap based on journal mode
       const baseKeymap = [
         indentWithTab,
+        {
+          // On a line with a task link: open that task. Otherwise cycle an
+          // inline checkbox task's status. Before defaultKeymap, which binds
+          // Mod-Enter to insertBlankLine and would otherwise always win.
+          key: 'Mod-Enter',
+          run: (view: EditorView) => openTaskAtCursorRef.current?.(view) || cycleTaskStatus(view)
+        } as KeyBinding,
         ...defaultKeymap,
         ...historyKeymap,
-        {
-          key: 'Mod-Enter',
-          run: cycleTaskStatus
-        } as KeyBinding,
         {
           key: 'Mod-f',
           run: () => {
@@ -661,10 +714,18 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
       // `/task` (slashCommands.ts) asks for the task capture field at the cursor
       const onTaskCapture = (): void => openTaskCaptureRef.current?.(view);
       view.dom.addEventListener('phosphor-task-capture', onTaskCapture);
+      // A task link's title was clicked (taskLinkWidget.ts): open the task
+      const onOpenTask = (e: Event): void => {
+        const id = (e as CustomEvent<{ id: string }>).detail?.id;
+        const link = (e.target as HTMLElement | null)?.closest('.cm-task-link');
+        if (id) setTaskDetail({ id, rect: link?.getBoundingClientRect() ?? null });
+      };
+      view.dom.addEventListener('phosphor-open-task', onOpenTask);
 
       // Cleanup on unmount
       return () => {
         view.dom.removeEventListener('phosphor-task-capture', onTaskCapture);
+        view.dom.removeEventListener('phosphor-open-task', onOpenTask);
         view.destroy();
         grammarLint.destroy();
       };
@@ -770,6 +831,21 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
           imageUrl={imageViewerUrl}
           onClose={() => setImageViewerOpen(false)}
         />
+        {taskDetail && (
+          <TaskDetail
+            key={taskDetail.id}
+            id={taskDetail.id}
+            variant="popover"
+            anchorRect={taskDetail.rect}
+            currentFile={currentFile}
+            onClose={() => {
+              setTaskDetail(null);
+              viewRef.current?.focus();
+            }}
+            onTitleChanged={updateTaskLinkTitles}
+            onNavigate={openNoteAtLine}
+          />
+        )}
         {taskCapture && (
           <TaskCapture
             anchorRect={taskCapture.rect}
