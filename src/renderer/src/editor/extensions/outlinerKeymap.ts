@@ -14,6 +14,7 @@ import {
   RangeSetBuilder,
   type Extension
 } from '@codemirror/state';
+import { editorColumns } from './editorColumns';
 
 /**
  * Get the indentation level of a line (number of spaces at the start)
@@ -353,13 +354,13 @@ export const outlinerHangingIndentExtension: Extension = ViewPlugin.fromClass(
           const indent = this.hangingIndentColumns(line.text);
 
           if (indent > 0) {
-            const indentValue = `${indent}ch`;
+            const indentValue = editorColumns(indent);
             builder.add(
               line.from,
               line.from,
               Decoration.line({
                 attributes: {
-                  style: `text-indent:-${indentValue};padding-left:${indentValue};`
+                  style: `text-indent:calc(-1 * ${indentValue});padding-left:${indentValue};`
                 }
               })
             );
@@ -373,13 +374,13 @@ export const outlinerHangingIndentExtension: Extension = ViewPlugin.fromClass(
     }
 
     hangingIndentColumns(text: string): number {
-      // Task lines are skipped here - their checkbox/metadata pills are
-      // rendered as inline atomic (Decoration.replace) widgets, and this
-      // negative-text-indent/padding-left combination measurably
-      // mispositions atomic inline widgets within the affected line (the
-      // checkbox and metadata pills have both shown up shifted/overlapping
-      // when this applied) even though it renders plain text correctly.
-      if (/^\s*-\s*\[[ x/]\]/.test(text)) return 0;
+      // Task lines hang under the task text, after "- [ ] ". The checkbox
+      // widget takes exactly the width of the characters it replaces, so
+      // the text stays in its source column whether or not the widget is
+      // shown. (The widgets reset `text-indent` - it's inherited, and the
+      // negative value here used to shift their contents left.)
+      const task = text.match(/^\s*-\s*\[[ x/]\]\s*/);
+      if (task) return task[0].length;
 
       // Bullet lines indent by their leading spaces plus the marker width
       const bulletMatch = text.match(/^(\s*)-\s/);
@@ -449,8 +450,11 @@ export function computeNestingGuides(lines: string[]): number[][] {
 /**
  * The line's background: a 1px-wide band at each guide column.
  *
- * The band is a fixed 1px, not a fraction of `ch`. At 0.05ch (about 0.48px
- * with the default 16px Menlo) the band is narrower than a pixel, so it only
+ * Columns are measured with editorColumns(), which includes the editor's
+ * letter-spacing, so a guide stays under its dash at any nesting depth.
+ *
+ * The band is a fixed 1px, not a fraction of `ch`. At 0.05ch (about 0.43px
+ * with the editor's 14px Menlo) the band is narrower than a pixel, so it only
  * shows when it happens to cover a pixel's sample point - which depends on
  * where its column falls on the pixel grid (font size, display scale, the
  * editor's own offsets). Rendered offscreen at 1x, every other column drew
@@ -460,8 +464,8 @@ export function computeNestingGuides(lines: string[]): number[][] {
 export function guideBackground(columns: number[]): string {
   const stops: string[] = [];
   for (const col of columns) {
-    const start = `${col}ch`;
-    const end = `calc(${col}ch + 1px)`;
+    const start = editorColumns(col);
+    const end = `calc(${start} + 1px)`;
     stops.push(`transparent ${start}`);
     stops.push(`var(--editor-nesting-guide) ${start}`);
     stops.push(`var(--editor-nesting-guide) ${end}`);

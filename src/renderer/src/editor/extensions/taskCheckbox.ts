@@ -8,6 +8,7 @@ import {
 } from '@codemirror/view';
 import { Range } from '@codemirror/state';
 import { toggleTaskLine } from '../../../../shared/tasks';
+import { editorColumns } from './editorColumns';
 
 class TaskCheckboxWidget extends WidgetType {
   constructor(
@@ -36,7 +37,7 @@ class TaskCheckboxWidget extends WidgetType {
     // following text doesn't shift when we replace the marker with the
     // widget - structural/measured, so it stays inline rather than moving
     // to the stylesheet like everything else here.
-    wrap.style.width = `${this.widthCh}ch`;
+    wrap.style.width = editorColumns(this.widthCh);
 
     // Two nested elements rather than one: the outer box's own size (set in
     // CSS as a fixed em value, independent of its content) is what

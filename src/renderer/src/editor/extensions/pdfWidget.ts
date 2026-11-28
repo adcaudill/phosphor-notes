@@ -36,7 +36,9 @@ class PdfWidget extends WidgetType {
     icon.textContent = 'PDF';
 
     const titleButton = this.buildButton(this.filename, 'cm-pdf-title');
-    titleButton.title = 'Open in default viewer';
+    // The name is cut short with an ellipsis when space is tight; the
+    // tooltip keeps the full name.
+    titleButton.title = `${this.filename} - open in default viewer`;
 
     const actions = document.createElement('div');
     actions.className = 'cm-pdf-actions';

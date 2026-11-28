@@ -83,10 +83,14 @@ describe('computeNestingGuides', () => {
 });
 
 describe('guideBackground', () => {
-  it('draws each guide as a fixed 1px band, never a sub-pixel fraction of ch', () => {
+  it('draws each guide as a fixed 1px band, never a sub-pixel fraction of a column', () => {
     const bg = guideBackground([1, 5]);
-    expect(bg).toContain('var(--editor-nesting-guide) calc(1ch + 1px)');
-    expect(bg).toContain('var(--editor-nesting-guide) calc(5ch + 1px)');
+    expect(bg).toContain(
+      'var(--editor-nesting-guide) calc(calc(1 * var(--editor-column, 1ch)) + 1px)'
+    );
+    expect(bg).toContain(
+      'var(--editor-nesting-guide) calc(calc(5 * var(--editor-column, 1ch)) + 1px)'
+    );
     expect(bg).not.toMatch(/\d\.\d+ch/);
   });
 });

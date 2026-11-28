@@ -5,38 +5,45 @@
    hardcoded hex colors that ignored dark mode/custom palettes entirely.
    Everything here reads the app's theme variables instead. */
 
-/* Both attempts to render this icon bigger than the surrounding text (a
-   larger font-size, then a transform: scale()) caused a vertical or
-   horizontal alignment bug of their own - the size mismatch itself was
-   the recurring problem. Material Symbols is designed to sit cleanly
-   inline with text at a matching font-size, so the glyph is rendered at
-   a plain 1em here, same as everything else on the line, which needs no
-   special box/overflow handling to align correctly. `justify-content:
-   center` on the wrap centers it within the full reserved "- [ ] "
-   width, rather than leaving it flush against the left edge with empty
-   space to its right before the task text. */
+/* Checkbox geometry. Measured with the UI probe (scripts/ui-probe), which
+   reports each checkbox's painted position against its text row:
+
+   - The box takes exactly the width of the characters it replaces (set
+     inline in taskCheckbox.ts) with no margins, so the task text stays in
+     its source column and the outliner's hanging indent lines wrapped rows
+     up under it.
+   - `text-indent: 0`: text-indent is inherited, and the outliner's hanging
+     indent puts a negative one on the line, which shifted the icon left.
+   - Vertical position is explicit rather than left to flex/baseline
+     alignment of the icon font (whose baseline metrics put the box ~2px
+     above the text's cap-height middle): an inline-block 1em tall whose
+     own baseline is its bottom edge (`overflow: hidden`), lowered so the
+     icon's centre lands on the middle of the capital letters. In em, so it
+     holds at any font size. The icon stays at 1em - enlarging it is what
+     broke the alignment in earlier attempts. */
 .cm-task-checkbox {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  margin-left: 0.6ch;
+  display: inline-block;
+  height: 1em;
+  line-height: 1em;
+  overflow: hidden;
+  vertical-align: -0.14em;
+  text-indent: 0;
 }
 
 .cm-task-checkbox-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 0.5ch;
-  font-size: 1em;
-  line-height: 1;
+  display: inline-block;
+  height: 1em;
+  line-height: 1em;
   cursor: pointer;
   user-select: none;
 }
 
 .cm-task-checkbox-glyph {
+  display: block;
   font-size: 1em;
-  line-height: 1;
+  line-height: 1em;
+  width: 1em;
+  height: 1em;
   color: var(--color-primary);
 }
 
@@ -56,10 +63,13 @@
   align-items: center;
   gap: 3px;
   padding: 1px 7px;
-  margin: 0 4px 0 6px;
+  margin: 0 2px;
   border-radius: 10px;
   font-size: 0.85em;
   line-height: 1;
+  /* text-indent is inherited; the outliner's negative hanging indent would
+     otherwise pull the pill's contents out of its box. */
+  text-indent: 0;
   cursor: pointer;
   user-select: none;
   vertical-align: middle;
