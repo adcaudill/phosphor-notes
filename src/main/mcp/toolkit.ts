@@ -39,7 +39,7 @@ export function toErrorResult(code: string, message: string): CallToolResult {
 }
 
 /** Maps the vaultReader/vaultPaths/vaultWriter typed errors (matched by name, to avoid a hard import) to a stable code. */
-function errorCodeFor(err: unknown): string {
+export function errorCodeFor(err: unknown): string {
   if (err instanceof Error) {
     switch (err.name) {
       case 'VaultNotOpenError':

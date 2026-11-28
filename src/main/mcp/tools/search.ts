@@ -15,8 +15,11 @@ export function registerSearchTool(server: McpServer, deps: McpDeps): void {
     {
       title: 'Search notes',
       description:
-        'Full-text search across every note in the vault. Returns matching notes with a short ' +
-        'snippet of the matching content; pass the returned `path` to read_note for the full text.',
+        'Ranked full-text search for discovering notes about a topic. Matching is fuzzy and by ' +
+        'prefix (so a note can match a word it does not literally contain), results are capped at 20 ' +
+        'notes, and the snippet is a best-effort line. It cannot prove something is absent: to find ' +
+        'every exact occurrence of a string (with line numbers), or to confirm none are left, use ' +
+        'find_text. Pass a returned `path` to read_note for the full text.',
       inputSchema: {
         query: z.string().min(1).max(200),
         limit: z.number().int().min(1).max(20).optional().default(10)

@@ -1,3 +1,5 @@
+import { findOccurrences, wikilinkSpans, overlapsAny } from './textMatch';
+
 /**
  * Exact-text find/replace edits for MCP's edit_note: pure logic, no
  * filesystem dependency. Each edit's `oldText` must match the current
@@ -12,6 +14,10 @@ export interface TextEdit {
   newText: string;
   /** Replace every occurrence instead of requiring exactly one. */
   replaceAll?: boolean;
+  /** Only match oldText where it is not part of a longer word ("Melanie" but not "Melanies"). */
+  wholeWord?: boolean;
+  /** Ignore occurrences inside [[wikilinks]], so replacing a name never rewrites a link to its page. */
+  skipLinks?: boolean;
 }
 
 /** One applied replacement, as whole lines before/after (for showing the user what changed). */
@@ -62,12 +68,11 @@ function lineNumberAt(doc: string, index: number): number {
   return line;
 }
 
-function occurrences(doc: string, needle: string): number[] {
-  const found: number[] = [];
-  for (let i = doc.indexOf(needle); i !== -1; i = doc.indexOf(needle, i + needle.length)) {
-    found.push(i);
-  }
-  return found;
+function occurrences(doc: string, needle: string, edit: TextEdit): number[] {
+  const found = findOccurrences(doc, needle, { wholeWord: edit.wholeWord });
+  if (!edit.skipLinks) return found;
+  const links = wikilinkSpans(doc);
+  return found.filter((i) => !overlapsAny(i, needle.length, links));
 }
 
 function clip(lines: string[]): string[] {
@@ -90,7 +95,7 @@ export function applyTextEdits(
     const newText = edit.newText.replace(/\r\n?/g, '\n');
     if (oldText === '') throw new EmptyOldTextError(editIndex);
 
-    const found = occurrences(current, oldText);
+    const found = occurrences(current, oldText, edit);
     if (found.length === 0) throw new TextNotFoundError(editIndex);
     if (found.length > 1 && !edit.replaceAll) {
       throw new AmbiguousTextError(
@@ -99,24 +104,42 @@ export function applyTextEdits(
       );
     }
 
-    // Replace back to front so earlier indices stay valid; report front to back.
-    const editChanges: TextChange[] = [];
-    for (const index of [...found].reverse()) {
+    // Group occurrences whose lines touch, so a line changed by several
+    // replacements is reported once, as it was before and after them all.
+    const groups: Array<{ start: number; end: number; first: number; count: number }> = [];
+    found.forEach((index, n) => {
       const lineStart = current.lastIndexOf('\n', index - 1) + 1;
-      const endOfOld = index + oldText.length;
-      const nl = current.indexOf('\n', endOfOld);
+      const nl = current.indexOf('\n', index + oldText.length);
       const lineEnd = nl === -1 ? current.length : nl;
+      const last = groups[groups.length - 1];
+      if (last && lineStart <= last.end) {
+        last.end = Math.max(last.end, lineEnd);
+        last.count++;
+      } else {
+        groups.push({ start: lineStart, end: lineEnd, first: n, count: 1 });
+      }
+    });
 
-      const next = current.slice(0, index) + newText + current.slice(endOfOld);
-      const addedEnd = lineEnd + (newText.length - oldText.length);
-      editChanges.unshift({
-        line: lineNumberAt(current, index),
-        removed: clip(current.slice(lineStart, lineEnd).split('\n')),
-        added: clip(next.slice(lineStart, addedEnd).split('\n'))
-      });
-      current = next;
-      replacements++;
+    let next = '';
+    let cursor = 0;
+    for (const index of found) {
+      next += current.slice(cursor, index) + newText;
+      cursor = index + oldText.length;
     }
+    next += current.slice(cursor);
+
+    const delta = newText.length - oldText.length;
+    const editChanges: TextChange[] = groups.map((g) => {
+      const newStart = g.start + g.first * delta;
+      const newEnd = g.end + (g.first + g.count) * delta;
+      return {
+        line: lineNumberAt(current, g.start),
+        removed: clip(current.slice(g.start, g.end).split('\n')),
+        added: clip(next.slice(newStart, newEnd).split('\n'))
+      };
+    });
+    current = next;
+    replacements += found.length;
     changes.push(...editChanges);
   });
 

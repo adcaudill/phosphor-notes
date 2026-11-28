@@ -357,9 +357,32 @@ export function insertAtSection(
   if (block.length === 0) {
     throw new InvalidArgumentError('content is empty after normalization');
   }
+  // Inserting children into an outliner bullet fills any empty placeholder
+  // bullets directly under it ("- " with no text or children of its own),
+  // rather than leaving them above or below the new content.
+  let source = parsed.lines;
+  let end = item.end;
+  if (!freeform && child) {
+    const empties = new Set(
+      parsed.items
+        .filter(
+          (it) =>
+            it.start > item.start &&
+            it.start <= item.end &&
+            it.level === item.level + 1 &&
+            it.text === '' &&
+            it.end === it.start
+        )
+        .map((it) => it.start)
+    );
+    if (empties.size > 0) {
+      source = source.filter((_, i) => !empties.has(i));
+      end -= empties.size;
+    }
+  }
   const index =
-    position === 'before' ? item.start : position === 'first_child' ? item.start + 1 : item.end + 1;
-  const lines = splice(parsed.lines, index, index, block, freeform);
+    position === 'before' ? item.start : position === 'first_child' ? item.start + 1 : end + 1;
+  const lines = splice(source, index, index, block, freeform);
   const insertedAtLine = lines.indexOf(block[0], index) + 1;
   return {
     doc: joinLines(lines),

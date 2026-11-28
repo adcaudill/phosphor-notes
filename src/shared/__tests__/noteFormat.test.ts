@@ -375,3 +375,13 @@ describe('insertUnderBullet', () => {
     expect(() => insertUnderBullet(fixture, 'Meetings', '\n\n  \n')).toThrow(InvalidArgumentError);
   });
 });
+
+describe('insertUnderBullet with an empty placeholder child', () => {
+  it('fills the placeholder instead of inserting below it', () => {
+    const doc = '---\nmode: outliner\n---\n- Meeting Notes\n    - \n- Next\n';
+    const result = insertUnderBullet(doc, 'Meeting', 'Discussed roadmap');
+    expect(result.doc).toBe(
+      '---\nmode: outliner\n---\n- Meeting Notes\n    - Discussed roadmap\n- Next\n'
+    );
+  });
+});
