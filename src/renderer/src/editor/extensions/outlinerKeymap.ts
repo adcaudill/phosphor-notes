@@ -373,8 +373,7 @@ export const outlinerHangingIndentExtension: Extension = ViewPlugin.fromClass(
     }
 
     hangingIndentColumns(text: string): number {
-      // Task lines are skipped here (see the task-widgets comment above
-      // outlinerNestingGuidesExtension) - their checkbox/metadata pills are
+      // Task lines are skipped here - their checkbox/metadata pills are
       // rendered as inline atomic (Decoration.replace) widgets, and this
       // negative-text-indent/padding-left combination measurably
       // mispositions atomic inline widgets within the affected line (the
@@ -398,74 +397,117 @@ export const outlinerHangingIndentExtension: Extension = ViewPlugin.fromClass(
   }
 );
 
-// Visual guide lines for nested outliner structure
+/**
+ * Where to draw outliner nesting guides: for each line of `lines`, the
+ * columns (in characters from the left edge) of every guide that passes
+ * through it.
+ *
+ * Each bullet that has child bullets gets a guide under its dash, running
+ * from the line after it to the last line of its subtree - child bullets
+ * (task lines included), continuation lines, and blank lines in between - so
+ * the line is unbroken from a parent down to its last descendant. A bullet
+ * with no child bullets gets no guide.
+ *
+ * Guides used to be decided line by line and were only drawn on plain bullet
+ * lines, so any task line, continuation line, or blank line inside a subtree
+ * left a gap in it.
+ */
+export function computeNestingGuides(lines: string[]): number[][] {
+  const guides: number[][] = lines.map(() => []);
+  const stack: Array<{ indent: number; start: number; last: number; hasChild: boolean }> = [];
+
+  const close = (open: {
+    indent: number;
+    start: number;
+    last: number;
+    hasChild: boolean;
+  }): void => {
+    if (!open.hasChild) return;
+    for (let i = open.start + 1; i <= open.last; i++) guides[i].push(open.indent + 1);
+  };
+
+  lines.forEach((text, i) => {
+    if (text.trim() === '') return; // blank lines take whatever guides span them
+    const width = text.length - text.trimStart().length;
+    const isBullet = /^\s*-(\s|$)/.test(text);
+
+    // A line belongs to every open bullet indented less than it; close the rest.
+    while (stack.length > 0 && stack[stack.length - 1].indent >= width) close(stack.pop()!);
+
+    for (const open of stack) open.last = i;
+    if (isBullet) {
+      if (stack.length > 0) stack[stack.length - 1].hasChild = true;
+      stack.push({ indent: width, start: i, last: i, hasChild: false });
+    }
+  });
+  while (stack.length > 0) close(stack.pop()!);
+
+  for (const columns of guides) columns.sort((a, b) => a - b);
+  return guides;
+}
+
+function guideBackground(columns: number[]): string {
+  const stops: string[] = [];
+  for (const col of columns) {
+    const start = `${col}ch`;
+    const end = `${col + 0.05}ch`; // thin line (0.05ch is about 1px)
+    stops.push(`transparent ${start}`);
+    stops.push(`var(--editor-nesting-guide) ${start}`);
+    stops.push(`var(--editor-nesting-guide) ${end}`);
+    stops.push(`transparent ${end}`);
+  }
+  return `linear-gradient(to right, ${stops.join(', ')})`;
+}
+
+// Visual guide lines for nested outliner structure. The guide is a background
+// gradient on the line element, so it doesn't affect layout - which is why it
+// can also be drawn on task lines (only the hanging indent, which changes
+// text-indent/padding, has to skip them; see hangingIndentColumns).
 export const outlinerNestingGuidesExtension: Extension = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
+    private guides: number[][] = [];
 
     constructor(view: EditorView) {
+      this.guides = this.computeGuides(view);
       this.decorations = this.build(view);
     }
 
     update(update: ViewUpdate): void {
+      if (update.docChanged) this.guides = this.computeGuides(update.view);
       if (update.docChanged || update.viewportChanged) {
         this.decorations = this.build(update.view);
       }
     }
 
+    // A guide can start far above the viewport (a parent bullet off screen),
+    // so the structure is worked out for the whole note, once per change.
+    computeGuides(view: EditorView): number[][] {
+      const lines: string[] = [];
+      for (let n = 1; n <= view.state.doc.lines; n++) lines.push(view.state.doc.line(n).text);
+      return computeNestingGuides(lines);
+    }
+
     build(view: EditorView): DecorationSet {
       const builder = new RangeSetBuilder<Decoration>();
-
       for (const { from, to } of view.visibleRanges) {
         let pos = from;
         while (pos <= to) {
           const line = view.state.doc.lineAt(pos);
-          // Task lines are excluded (see the comment on hangingIndentColumns
-          // above) - their checkbox/metadata pills are inline atomic widgets
-          // that render incorrectly when this background-gradient line
-          // decoration and the hanging-indent line decoration compound on
-          // the same line.
-          const isBulletLine = /^(\s*)-\s/.test(line.text) && !/^\s*-\s*\[[ x/]\]/.test(line.text);
-
-          if (isBulletLine) {
-            // Get the indentation level (number of spaces before the dash)
-            const indentMatch = line.text.match(/^(\s*)-/);
-            const indentLevel = indentMatch ? indentMatch[1].length : 0;
-
-            if (indentLevel > 0) {
-              // Build a single gradient that includes all guide lines for all nesting levels
-              // Each level is 4 spaces, with a guide at position level + 1
-              const gradientStops: string[] = [];
-
-              for (let level = 0; level < indentLevel; level += 4) {
-                const linePos = level + 1; // Position within the indentation area (ch units)
-                const start = `${linePos}ch`;
-                const end = `${linePos + 0.05}ch`; // Thin line (0.05ch = ~1px)
-                gradientStops.push(`transparent ${start}`);
-                gradientStops.push(`var(--editor-nesting-guide) ${start}`);
-                gradientStops.push(`var(--editor-nesting-guide) ${end}`);
-                gradientStops.push(`transparent ${end}`);
-              }
-
-              const background = `linear-gradient(to right, ${gradientStops.join(', ')})`;
-
-              builder.add(
-                line.from,
-                line.from,
-                Decoration.line({
-                  class: 'cm-nesting-guide',
-                  attributes: {
-                    style: `background: ${background};`
-                  }
-                })
-              );
-            }
+          const columns = this.guides[line.number - 1];
+          if (columns && columns.length > 0) {
+            builder.add(
+              line.from,
+              line.from,
+              Decoration.line({
+                class: 'cm-nesting-guide',
+                attributes: { style: `background: ${guideBackground(columns)};` }
+              })
+            );
           }
-
           pos = line.to + 1;
         }
       }
-
       return builder.finish();
     }
   },
