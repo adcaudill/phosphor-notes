@@ -2,6 +2,7 @@ import chokidar from 'chokidar';
 import type { FSWatcher } from 'chokidar';
 import { BrowserWindow } from 'electron';
 import * as path from 'path';
+import { isTaskFilePath } from '../shared/taskRecord';
 
 // Safe logging that ignores EPIPE errors during shutdown
 const safeLog = (...args: unknown[]): void => {
@@ -38,6 +39,20 @@ let onFileDeletedCallback: ((filename: string) => void) | null = null;
 const DEBOUNCE_MS = 300; // Wait 300ms after last change event before sending to UI
 const INTERNAL_SAVE_GRACE_MS = 500; // Ignore FS changes within 500ms of our own saves
 
+export type TaskFileCallback = (event: 'add' | 'change' | 'unlink', relPath: string) => void;
+let onTaskFileCallback: TaskFileCallback | null = null;
+
+/**
+ * Files in `_tasks/` aren't notes: they go to the task index's callback and
+ * never produce note events (vault:file-*), graph, search or task-line
+ * updates. Returns true if `relPath` was a task file (and was handled).
+ */
+function routeTaskFile(event: 'add' | 'change' | 'unlink', relPath: string): boolean {
+  if (!isTaskFilePath(relPath)) return false;
+  onTaskFileCallback?.(event, relPath.split(path.sep).join('/'));
+  return true;
+}
+
 /**
  * Start watching a vault directory for file changes.
  * Sends events to the renderer when files change, are deleted, or are added.
@@ -47,12 +62,14 @@ export function setupWatcher(
   mainWindow: BrowserWindow,
   onFileChange?: (filename: string) => void,
   onFileAdded?: (filename: string) => void,
-  onFileDeleted?: (filename: string) => void
+  onFileDeleted?: (filename: string) => void,
+  onTaskFile?: TaskFileCallback
 ): void {
   // Store the callbacks for re-indexing
   onFileChangeCallback = onFileChange || null;
   onFileAddedCallback = onFileAdded || null;
   onFileDeletedCallback = onFileDeleted || null;
+  onTaskFileCallback = onTaskFile || null;
 
   // Clean up any existing watcher
   if (watcher) {
@@ -73,6 +90,7 @@ export function setupWatcher(
 
   watcher.on('change', (filePath) => {
     const relativePath = path.relative(vaultPath, filePath);
+    if (routeTaskFile('change', relativePath)) return;
     const isInternalSave = Date.now() - lastSaveTime < INTERNAL_SAVE_GRACE_MS;
 
     if (isInternalSave) {
@@ -108,6 +126,7 @@ export function setupWatcher(
 
   watcher.on('unlink', (filePath) => {
     const relativePath = path.relative(vaultPath, filePath);
+    if (routeTaskFile('unlink', relativePath)) return;
     try {
       safeDebug('[Watcher] File deleted:', relativePath);
     } catch {
@@ -124,6 +143,7 @@ export function setupWatcher(
 
   watcher.on('add', (filePath) => {
     const relativePath = path.relative(vaultPath, filePath);
+    if (routeTaskFile('add', relativePath)) return;
     try {
       safeDebug('[Watcher] File added:', relativePath);
     } catch {

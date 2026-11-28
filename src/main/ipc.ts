@@ -21,6 +21,8 @@ import {
 } from './indexer';
 import { getGraphStats } from './graphBuilder';
 import { setupWatcher, stopWatcher, markInternalSave } from './watcher';
+import { forgetTaskFile, refreshTaskFile } from './taskIndex';
+import { TASKS_DIR, isTaskFilePath } from '../shared/taskRecord';
 import { deriveMasterKey, encryptBuffer, decryptBuffer, isEncrypted, generateSalt } from './crypto';
 import { TASK_LINE_RE, type Task } from '../shared/tasks';
 import * as vaultWriter from './vaultWriter';
@@ -252,6 +254,25 @@ async function encryptAllNotes(vaultPath: string): Promise<void> {
         } catch (err) {
           safeError('[Encryption] Failed to process _assets folder:', err);
         }
+      } else if (entry === TASKS_DIR && stat.isDirectory()) {
+        // Task files are notes as far as encryption goes
+        try {
+          for (const taskFile of await fsp.readdir(fullPath)) {
+            if (!taskFile.endsWith('.md')) continue;
+            const taskPath = path.join(fullPath, taskFile);
+            try {
+              const content = await fsp.readFile(taskPath, 'utf-8');
+              await fsp.writeFile(
+                taskPath,
+                encryptBuffer(Buffer.from(content, 'utf-8'), activeMasterKey)
+              );
+            } catch (err) {
+              safeError(`[Encryption] Failed to encrypt task ${taskFile}:`, err);
+            }
+          }
+        } catch (err) {
+          safeError('[Encryption] Failed to process _tasks folder:', err);
+        }
       } else if (!entry.startsWith('_') && stat.isFile() && entry.endsWith('.md')) {
         // Encrypt markdown files
         try {
@@ -323,8 +344,12 @@ async function scanAndEncryptUnencryptedFiles(vaultPath: string): Promise<void> 
             } catch (err) {
               safeError('[Encryption] Failed to scan _assets folder:', err);
             }
-          } else if (!entry.name.startsWith('_')) {
-            // Recurse into other non-hidden, non-underscore directories
+          } else if (
+            !entry.name.startsWith('_') ||
+            (dir === vaultPath && entry.name === TASKS_DIR)
+          ) {
+            // Recurse into other non-hidden, non-underscore directories (and
+            // the task files folder, whose files are encrypted like notes)
             await processDirectory(fullPath);
           }
         } else if (!entry.name.startsWith('_') && entry.name.endsWith('.md')) {
@@ -822,6 +847,9 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
 
           const fullPath = path.join(dir, entry.name);
           const relativePath = relativePrefix ? `${relativePrefix}/${entry.name}` : entry.name;
+
+          // Task files aren't notes (they're listed in the Tasks tab)
+          if (isTaskFilePath(relativePath)) continue;
 
           if (entry.isDirectory()) {
             // Recurse into subdirectories
@@ -1364,6 +1392,11 @@ export async function openVaultPath(vaultPath: string, mainWindow: BrowserWindow
         // Drop prediction stats and search entries for deleted files
         removeFromSearchIndex(toVaultRelative(filename));
         schedulePredictionModelUpdate(vaultPath, filename, mainWindow);
+      },
+      (event, relPath) => {
+        // Task files (_tasks/) are indexed by the task index, not as notes
+        if (event === 'unlink') forgetTaskFile(relPath);
+        else void refreshTaskFile(vaultPath, relPath);
       }
     );
   } catch (err) {

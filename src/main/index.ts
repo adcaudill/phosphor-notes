@@ -17,6 +17,8 @@ import type { UserSettings } from '../types/phosphor.d';
 import { decryptBuffer, isEncrypted } from './crypto';
 import { mcpController } from './mcp/controller';
 import { setupMcpIPC } from './mcp/ipcHandlers';
+import { startTaskIndex } from './taskIndex';
+import { setupTaskIPC } from './taskIpc';
 
 /**
  * PHOSPHOR_HEADLESS=1: run without ever showing the window or a Dock icon.
@@ -438,8 +440,13 @@ if (gotSingleInstanceLock) {
       console.error('Failed to initialize settings:', err);
     }
 
+    // Task files index: follows vault open/lock/switch from here on, so it
+    // must subscribe before the saved vault is reopened.
+    startTaskIndex();
+
     const mainWindow = createWindow(settings);
     setupIPC(mainWindow);
+    setupTaskIPC();
     createMenu(mainWindow);
 
     // Local MCP server: off by default, loads its own on-disk config and only

@@ -1,6 +1,7 @@
 import { parentPort } from 'worker_threads';
 import { extractWikilinks, getImplicitPathLinks } from '../../shared/wikilinks';
 import { extractTasksFromContent, type Task } from '../../shared/tasks';
+import { extractTaskRefs, type TaskRef } from '../../shared/taskLinks';
 
 // MiniSearch can have import issues in worker context
 // Load it dynamically to handle both ESM and CommonJS contexts
@@ -372,6 +373,8 @@ parentPort?.on(
     }
     const graph: Graph = {};
     const tasks: Task[] = [];
+    // Links to task files ([[_task:id|title]]), per note - only notes that have any.
+    const taskRefs: Record<string, TaskRef[]> = {};
     initSearch();
 
     try {
@@ -400,6 +403,9 @@ parentPort?.on(
             // Extract tasks from this file
             const fileTasks = extractTasksFromContent(content, filename);
             tasks.push(...fileTasks);
+
+            const refs = extractTaskRefs(content);
+            if (refs.length > 0) taskRefs[filename] = refs;
 
             // Add to search index
             if (searchEngine) {
@@ -434,7 +440,7 @@ parentPort?.on(
       }
 
       try {
-        parentPort?.postMessage({ type: 'graph-complete', data: { graph, tasks } });
+        parentPort?.postMessage({ type: 'graph-complete', data: { graph, tasks, taskRefs } });
       } catch (err) {
         try {
           console.error('[IndexerWorker] failed to post graph-complete', err);

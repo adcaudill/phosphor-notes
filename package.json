@@ -58,6 +58,7 @@
     "retext-simplify": "^8.0.0",
     "retext-stringify": "^4.0.0",
     "retext-syntax-urls": "^4.0.0",
+    "rrule": "^2.8.1",
     "sodium-native": "^5.2.0",
     "stopword": "^3.1.5",
     "syllable": "^5.0.1",
@@ -67,6 +68,7 @@
     "turndown-plugin-gfm": "^1.0.2",
     "unified": "^11.0.5",
     "vfile-reporter": "^8.1.1",
+    "yaml": "^2.9.1",
     "zod": "4.6.7"
   },
   "devDependencies": {
