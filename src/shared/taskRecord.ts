@@ -67,6 +67,8 @@ export interface TaskRecord {
   project?: string;
   tags: string[];
   waitingOn?: string;
+  /** Position for manual ordering in the Tasks tab (lower first); absent until the person orders it. */
+  order?: number;
   created?: string;
   updated?: string;
   /** When it was last completed (for a repeating task, the latest occurrence). */
@@ -185,6 +187,7 @@ const KNOWN_KEYS = new Set([
   'project',
   'tags',
   'waiting_on',
+  'order',
   'created',
   'updated',
   'completed',
@@ -361,6 +364,12 @@ export function parseTaskFile(text: string, fileId: string): ParseTaskResult {
     if (project) task.project = project.trim();
     const waitingOn = optionalText(fm, 'waiting_on');
     if (waitingOn) task.waitingOn = waitingOn;
+    if (fm.order !== undefined && fm.order !== null) {
+      if (typeof fm.order !== 'number' || !Number.isFinite(fm.order)) {
+        throw new TaskFileError('order must be a number');
+      }
+      task.order = fm.order;
+    }
     if (stamps.created) task.created = stamps.created;
     if (stamps.updated) task.updated = stamps.updated;
     if (stamps.completed) task.completed = stamps.completed;
@@ -388,6 +397,9 @@ export function validateTaskRecord(task: TaskRecord): void {
   }
   if (task.start !== undefined && !isValidDate(task.start)) {
     throw new TaskFileError(`invalid start date: ${task.start}`);
+  }
+  if (task.order !== undefined && !Number.isFinite(task.order)) {
+    throw new TaskFileError(`invalid order: ${task.order}`);
   }
   if (task.repeat) {
     if (!isValidRepeatRule(task.repeat.rule)) {
@@ -420,6 +432,7 @@ export function serializeTaskFile(task: TaskRecord): string {
   if (task.project) fm.project = task.project;
   if (task.tags.length > 0) fm.tags = task.tags;
   if (task.waitingOn) fm.waiting_on = task.waitingOn;
+  if (task.order !== undefined) fm.order = task.order;
   if (task.created) fm.created = task.created;
   if (task.updated) fm.updated = task.updated;
   if (task.completed) fm.completed = task.completed;

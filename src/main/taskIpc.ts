@@ -13,7 +13,8 @@ import { VaultNotOpenError } from './vaultReader';
 import { createTask, deleteTask, updateTask, type WriteOptions } from './taskStore';
 import { syncTaskLinkTitles } from './taskLinkSync';
 import { previewMigration, runMigration } from './taskMigration';
-import type { ConversionPreview, ConversionResult } from '../shared/taskViews';
+import { readSavedViews, writeSavedViews } from './taskSavedViews';
+import type { ConversionPreview, ConversionResult, SavedTaskView } from '../shared/taskViews';
 import {
   getTaskDetail,
   getTaskList,
@@ -134,6 +135,17 @@ export function setupTaskIPC(): void {
   );
   ipcMain.handle('task-records:convert', async (_, notes?: string[]): Promise<ConversionResult> =>
     runMigration(openVault(), { notes, expectedGeneration: vaultState.getGeneration() })
+  );
+
+  // Saved views (named searches) for the Tasks tab, stored in the vault.
+  ipcMain.handle('task-records:views-get', async (): Promise<SavedTaskView[]> => {
+    if (!(await vaultState.isReadable())) return [];
+    return readSavedViews(openVault());
+  });
+  ipcMain.handle(
+    'task-records:views-save',
+    async (_, views: SavedTaskView[]): Promise<SavedTaskView[]> =>
+      writeSavedViews(openVault(), views, vaultState.getGeneration())
   );
 
   ipcMain.handle('task-records:delete', async (_, id: string): Promise<void> => {

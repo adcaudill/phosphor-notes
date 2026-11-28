@@ -46,6 +46,8 @@ export interface TaskPatch {
   waitingOn?: string | null;
   notes?: string;
   checklist?: ChecklistItem[];
+  /** Manual ordering position; null removes it. */
+  order?: number | null;
 }
 
 function cleanTags(tags: string[] | undefined): string[] {
@@ -187,7 +189,8 @@ export function applyTaskPatch(
     ['start', patch.start],
     ['repeat', patch.repeat],
     ['project', patch.project],
-    ['waitingOn', patch.waitingOn]
+    ['waitingOn', patch.waitingOn],
+    ['order', patch.order]
   ];
   for (const [key, value] of optional) {
     if (value === undefined) continue;

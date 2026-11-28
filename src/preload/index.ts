@@ -9,6 +9,7 @@ import type {
 } from '../types/phosphor';
 import type { PredictionModelSnapshot } from '../shared/predictionModel';
 import type { NewTaskInput, TaskPatch } from '../shared/taskOps';
+import type { SavedTaskView } from '../shared/taskViews';
 
 const parsePredictionModel = (
   data: PredictionModelSnapshot | string | null
@@ -219,6 +220,9 @@ const api = {
     deleteComment: (id: string, at: string) =>
       ipcRenderer.invoke('task-records:delete-comment', id, at),
     delete: (id: string) => ipcRenderer.invoke('task-records:delete', id),
+    getSavedViews: () => ipcRenderer.invoke('task-records:views-get'),
+    saveSavedViews: (views: SavedTaskView[]) =>
+      ipcRenderer.invoke('task-records:views-save', views),
     conversionPreview: (notes?: string[]) =>
       ipcRenderer.invoke('task-records:conversion-preview', notes),
     convert: (notes?: string[]) => ipcRenderer.invoke('task-records:convert', notes),

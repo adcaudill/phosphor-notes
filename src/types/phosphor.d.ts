@@ -6,6 +6,7 @@ import type { NewTaskInput, TaskPatch } from '../shared/taskOps';
 import type {
   ConversionPreview,
   ConversionResult,
+  SavedTaskView,
   TaskDetail,
   TaskListSnapshot
 } from '../shared/taskViews';
@@ -112,6 +113,9 @@ export interface TaskRecordsAPI {
   editComment: (id: string, at: string, text: string) => Promise<TaskRecord>;
   deleteComment: (id: string, at: string) => Promise<TaskRecord>;
   delete: (id: string) => Promise<void>;
+  /** Saved views (named searches) for the Tasks tab. */
+  getSavedViews: () => Promise<SavedTaskView[]>;
+  saveSavedViews: (views: SavedTaskView[]) => Promise<SavedTaskView[]>;
   /** What converting inline checkbox tasks with metadata (in `notes`, or the whole vault) would do. */
   conversionPreview: (notes?: string[]) => Promise<ConversionPreview>;
   /** Converts them into task files, replacing each line with a link. Save the open note first. */

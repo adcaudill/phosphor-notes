@@ -441,3 +441,257 @@
   cursor: pointer;
   white-space: nowrap;
 }
+
+/* Project, tag and saved views in the views list */
+.task-manager-views-heading {
+  margin: 12px 8px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-secondary);
+}
+
+.task-manager-view-item {
+  position: relative;
+  display: flex;
+}
+
+.task-manager-view-item > button:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-manager-view-item .task-manager-view-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-manager-views .task-manager-view-remove {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 2px;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  opacity: 0;
+}
+
+.task-manager-view-item:hover .task-manager-view-remove,
+.task-manager-view-remove:focus-visible {
+  opacity: 1;
+}
+
+/* Saving a search */
+.task-manager-save-view {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.task-manager-save-view .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.task-manager-name-view {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.task-manager-name-view input {
+  flex: 1;
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-background);
+  color: var(--color-text-primary);
+}
+
+.task-manager-saved-query {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.task-manager-saved-query .material-symbols-outlined {
+  font-size: 15px;
+}
+
+/* Calendar strip */
+.task-manager-strip {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 10px;
+}
+
+.task-manager-strip-day {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-background);
+  color: var(--color-text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.task-manager-strip-day:hover {
+  background: var(--color-surface);
+}
+
+.task-manager-strip-day.today {
+  border-color: var(--color-primary);
+}
+
+.task-manager-strip-day.active {
+  background: rgba(var(--color-primary-rgb), 0.14);
+  color: var(--color-primary);
+}
+
+.task-manager-strip-day.drop {
+  background: rgba(var(--color-primary-rgb), 0.24);
+  border-style: dashed;
+}
+
+.task-manager-strip-day.overdue {
+  color: var(--color-error);
+}
+
+.task-manager-strip-day .material-symbols-outlined {
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.task-manager-strip-weekday {
+  font-size: 9px;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.task-manager-strip-date {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.task-manager-strip-count {
+  min-height: 14px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+/* Bulk changes */
+.task-manager-bulk {
+  position: sticky;
+  top: -14px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  font-size: 12px;
+}
+
+.task-manager-bulk strong {
+  margin-right: 4px;
+}
+
+.task-manager-bulk button,
+.task-manager-bulk select,
+.task-manager-bulk input {
+  font: inherit;
+  color: var(--color-text-primary);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
+.task-manager-bulk button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+}
+
+.task-manager-bulk button .material-symbols-outlined {
+  font-size: 15px;
+}
+
+.task-manager-bulk button.danger {
+  color: var(--color-error);
+}
+
+.task-manager-bulk input {
+  width: 110px;
+}
+
+.task-manager-bulk input.invalid {
+  border-color: var(--color-error);
+}
+
+.task-row.picked {
+  background: rgba(var(--color-primary-rgb), 0.08);
+  box-shadow: inset 3px 0 0 rgba(var(--color-primary-rgb), 0.6);
+}
+
+/* Manual ordering drop markers */
+.task-row.drop-before {
+  box-shadow: inset 0 2px 0 var(--color-primary);
+}
+
+.task-manager-group ul.drop-end {
+  box-shadow: 0 2px 0 var(--color-primary);
+}
+
+.task-manager-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(var(--color-error-rgb), 0.12);
+  color: var(--color-error);
+}
+
+.task-manager-error button {
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.task-manager-detail-hint {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
