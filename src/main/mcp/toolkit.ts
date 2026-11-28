@@ -151,10 +151,18 @@ export function withVaultGuard<Args extends unknown[], T extends Record<string, 
  */
 export function withVaultWriteGuard<TArgs, T extends Record<string, unknown>>(
   toolName: string,
-  deps: Pick<McpDeps, 'isReadable' | 'getGeneration' | 'isWriteEnabled' | 'isEditEnabled'>,
+  deps: Pick<
+    McpDeps,
+    | 'isReadable'
+    | 'getGeneration'
+    | 'isWriteEnabled'
+    | 'isEditEnabled'
+    | 'isOrganizeEnabled'
+    | 'isDeleteEnabled'
+  >,
   handler: (args: TArgs, ctx: WriteCtx) => Promise<T>,
   targetOf?: (args: TArgs) => string | undefined,
-  opts: { tier?: 'write' | 'edit' } = {}
+  opts: { tier?: 'write' | 'edit' | 'organize' | 'delete' } = {}
 ): (args: TArgs) => Promise<CallToolResult> {
   return async (args: TArgs) => {
     const record = (ok: boolean, errorCode?: string, versionId?: string): void =>
@@ -173,6 +181,20 @@ export function withVaultWriteGuard<TArgs, T extends Record<string, unknown>>(
       return toErrorResult(
         'WRITE_DISABLED',
         "Write access is turned off. Ask the user to enable it in Phosphor Notes' Settings > AI Access."
+      );
+    }
+    if (opts.tier === 'organize' && !deps.isOrganizeEnabled()) {
+      record(false, 'ORGANIZE_DISABLED');
+      return toErrorResult(
+        'ORGANIZE_DISABLED',
+        "Renaming and moving notes is turned off. Ask the user to enable it in Phosphor Notes' Settings > AI Access."
+      );
+    }
+    if (opts.tier === 'delete' && !deps.isDeleteEnabled()) {
+      record(false, 'DELETE_DISABLED');
+      return toErrorResult(
+        'DELETE_DISABLED',
+        "Deleting notes is turned off. Ask the user to enable it in Phosphor Notes' Settings > AI Access."
       );
     }
     if (opts.tier === 'edit' && !deps.isEditEnabled()) {

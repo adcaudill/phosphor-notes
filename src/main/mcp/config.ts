@@ -18,6 +18,10 @@ export interface McpConfig {
    * restore_note_version) are registered only when this is also true.
    */
   editEnabled: boolean;
+  /** On top of editEnabled: move_note (rename/move notes, rewriting links to them). */
+  organizeEnabled: boolean;
+  /** On top of editEnabled: delete_note. */
+  deleteEnabled: boolean;
   /** Folders MCP writes are limited to; empty means the whole vault. */
   writeAllowFolders: string[];
   /** Folders MCP writes may never touch; wins over writeAllowFolders. */
@@ -31,6 +35,8 @@ const DEFAULTS: McpConfig = {
   tokenCreatedAt: null,
   writeEnabled: false,
   editEnabled: false,
+  organizeEnabled: false,
+  deleteEnabled: false,
   writeAllowFolders: [],
   writeDenyFolders: []
 };
@@ -44,12 +50,16 @@ export async function loadConfig(userDataDir: string): Promise<McpConfig> {
     const raw = await fsp.readFile(getConfigPath(userDataDir), 'utf-8');
     const parsed = JSON.parse(raw) as Partial<McpConfig>;
     const writeEnabled = parsed.writeEnabled === true;
+    // Edit access is meaningless (and never honored) without write access.
+    const editEnabled = writeEnabled && parsed.editEnabled === true;
     return {
       ...DEFAULTS,
       ...parsed,
       writeEnabled,
-      // Edit access is meaningless (and never honored) without write access.
-      editEnabled: writeEnabled && parsed.editEnabled === true,
+      editEnabled,
+      // Organize and delete build on edit access, and are never honored without it.
+      organizeEnabled: editEnabled && parsed.organizeEnabled === true,
+      deleteEnabled: editEnabled && parsed.deleteEnabled === true,
       writeAllowFolders: normalizeFolderList(parsed.writeAllowFolders),
       writeDenyFolders: normalizeFolderList(parsed.writeDenyFolders)
     };

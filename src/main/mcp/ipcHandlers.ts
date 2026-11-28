@@ -31,6 +31,14 @@ export function setupMcpIPC(mainWindow: BrowserWindow): void {
     mcpController.setEditEnabled(enabled === true)
   );
 
+  ipcMain.handle('mcp:set-organize-enabled', (_, enabled: boolean) =>
+    mcpController.setOrganizeEnabled(enabled === true)
+  );
+
+  ipcMain.handle('mcp:set-delete-enabled', (_, enabled: boolean) =>
+    mcpController.setDeleteEnabled(enabled === true)
+  );
+
   ipcMain.handle('mcp:set-write-scope', (_, allow: unknown, deny: unknown) =>
     mcpController.setWriteScope(allow, deny)
   );

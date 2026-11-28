@@ -51,6 +51,10 @@ export interface McpDeps {
   isWriteEnabled(): boolean;
   /** Edit tier (in-place edits of existing text) - only ever true when isWriteEnabled() is too. */
   isEditEnabled(): boolean;
+  /** Organize tier (move_note) - only ever true when isEditEnabled() is too. */
+  isOrganizeEnabled(): boolean;
+  /** Delete tier (delete_note) - only ever true when isEditEnabled() is too. */
+  isDeleteEnabled(): boolean;
   /** The user's folder restrictions for writes. Every write method below enforces it itself. */
   getWriteScope(): WriteScope;
   getDefaultJournalMode(): Promise<NoteMode>;
@@ -171,6 +175,8 @@ export async function notifyNoteWritten(
 export interface BuildDepsOptions {
   isWriteEnabled: () => boolean;
   isEditEnabled: () => boolean;
+  isOrganizeEnabled: () => boolean;
+  isDeleteEnabled: () => boolean;
   getWriteScope: () => WriteScope;
   getMainWindow: () => BrowserWindow | null;
 }
@@ -200,6 +206,8 @@ export function buildDefaultDeps(opts: BuildDepsOptions): McpDeps {
 
     isWriteEnabled: opts.isWriteEnabled,
     isEditEnabled: opts.isEditEnabled,
+    isOrganizeEnabled: opts.isOrganizeEnabled,
+    isDeleteEnabled: opts.isDeleteEnabled,
     getWriteScope: opts.getWriteScope,
     getDefaultJournalMode: async () => {
       const settings: UserSettings = await getSettings();

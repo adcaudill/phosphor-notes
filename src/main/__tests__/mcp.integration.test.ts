@@ -33,6 +33,8 @@ describe('MCP server (integration)', () => {
   let readable: boolean;
   let writeEnabled: boolean;
   let editEnabled: boolean;
+  let organizeEnabled: boolean;
+  let deleteEnabled: boolean;
   let writeScope: WriteScope;
   const dirtyNotes = new Set<string>();
   let journalMode: NoteMode;
@@ -81,6 +83,8 @@ describe('MCP server (integration)', () => {
     readable = true;
     writeEnabled = true;
     editEnabled = true;
+    organizeEnabled = true;
+    deleteEnabled = true;
     writeScope = UNRESTRICTED_SCOPE;
     journalMode = 'outliner';
     const gate = createWriteGate({
@@ -101,6 +105,8 @@ describe('MCP server (integration)', () => {
       readNote: (relPath: string) => vaultReader.readNoteText(vault, relPath),
       isWriteEnabled: () => writeEnabled,
       isEditEnabled: () => writeEnabled && editEnabled,
+      isOrganizeEnabled: () => writeEnabled && editEnabled && organizeEnabled,
+      isDeleteEnabled: () => writeEnabled && editEnabled && deleteEnabled,
       getWriteScope: () => writeScope,
       getDefaultJournalMode: async () => journalMode,
       todayDailyNotePath: () => TODAY,
@@ -200,6 +206,8 @@ describe('MCP server (integration)', () => {
     readable = true;
     writeEnabled = true;
     editEnabled = true;
+    organizeEnabled = true;
+    deleteEnabled = true;
     writeScope = UNRESTRICTED_SCOPE;
     dirtyNotes.clear();
     journalMode = 'outliner';
@@ -1062,6 +1070,8 @@ describe('MCP server (integration)', () => {
       expect((status.structuredContent as { access: unknown }).access).toEqual({
         write: true,
         edit: false,
+        organize: false,
+        delete: false,
         writeAllowFolders: ['Inbox'],
         writeDenyFolders: ['Inbox/Private']
       });
