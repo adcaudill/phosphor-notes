@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   addMonthsClamped,
+  describeRepeat,
   intervalRule,
   isValidRepeatRule,
   monthlyOnDayRule,
@@ -122,5 +123,44 @@ describe('intervalRule (for converting +Nd/w/m/y)', () => {
     );
     expect(intervalRule(3, 'm', '2026-01-15')).toBe('FREQ=MONTHLY;INTERVAL=3;BYMONTHDAY=15');
     expect(intervalRule(1, 'y', '2026-03-03')).toBe('FREQ=YEARLY');
+  });
+});
+
+describe('describeRepeat', () => {
+  it.each([
+    ['FREQ=DAILY', 'Daily'],
+    ['FREQ=DAILY;INTERVAL=3', 'Every 3 days'],
+    ['FREQ=WEEKLY', 'Weekly'],
+    ['FREQ=WEEKLY;BYDAY=MO,TH', 'Weekly on Mon and Thu'],
+    ['FREQ=WEEKLY;INTERVAL=2;BYDAY=TU', 'Every 2 weeks on Tue'],
+    ['FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR', 'Every weekday'],
+    ['FREQ=MONTHLY;BYMONTHDAY=1', 'Monthly on the 1st'],
+    ['FREQ=MONTHLY;BYMONTHDAY=22', 'Monthly on the 22nd'],
+    ['FREQ=MONTHLY;BYMONTHDAY=-1', 'Monthly on the last day'],
+    [monthlyOnDayRule(30), 'Monthly on the 30th'],
+    [monthlyOnDayRule(31), 'Monthly on the last day'],
+    ['FREQ=MONTHLY;BYDAY=1MO', 'Monthly on the first Monday'],
+    ['FREQ=MONTHLY;BYDAY=-1FR', 'Monthly on the last Friday'],
+    ['FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1', 'Monthly on the last weekday'],
+    ['FREQ=MONTHLY;INTERVAL=3;BYMONTHDAY=15', 'Every 3 months on the 15th'],
+    ['FREQ=YEARLY;BYMONTH=3;BYMONTHDAY=3', 'Yearly on Mar 3'],
+    ['FREQ=YEARLY', 'Yearly']
+  ])('labels %s as "%s"', (rule, label) => {
+    expect(describeRepeat({ rule, from: 'due' })).toBe(label);
+  });
+
+  it('describes repeats counted from completion, and the end of a series', () => {
+    expect(describeRepeat({ rule: 'FREQ=DAILY;INTERVAL=3', from: 'completion' })).toBe(
+      'Every 3 days after done'
+    );
+    expect(describeRepeat({ rule: 'FREQ=WEEKLY', from: 'completion' })).toBe(
+      'Every week after done'
+    );
+    expect(describeRepeat({ rule: 'FREQ=DAILY', from: 'due', until: '2027-06-30' })).toBe(
+      'Daily until 2027-06-30'
+    );
+    expect(describeRepeat({ rule: 'FREQ=DAILY', from: 'due', count: 3 })).toBe('Daily (3 left)');
+    expect(describeRepeat({ rule: 'FREQ=DAILY', from: 'due', count: 1 })).toBe('Daily (last time)');
+    expect(describeRepeat({ rule: 'nonsense', from: 'due' })).toBe('Repeats');
   });
 });

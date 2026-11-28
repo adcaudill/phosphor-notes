@@ -2,6 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { extractWikilinks } from '../wikilinks';
 
 describe('extractWikilinks', () => {
+  it('ignores task links, which point at task files rather than pages', () => {
+    expect(
+      extractWikilinks('- [[_task:k3f9a2xq|Pay rent]] see [[Lease]] [[_task:m8d2c7wa]]')
+    ).toEqual(['Lease.md']);
+  });
+
   it('treats dotted names as markdown pages', () => {
     const links = extractWikilinks('See [[example.com]] for details');
     expect(links).toContain('example.com.md');

@@ -136,6 +136,95 @@
   color: var(--color-primary);
 }
 
+/* Task links: [[_task:<id>|<title>]] rendered as a live task
+   (taskLinkWidget.ts). Inline, so a long title wraps with the line and lines
+   up under itself through the outliner's hanging indent. Every part resets
+   the inherited text-indent. The checkbox uses the same 1em box and em-based
+   drop as .cm-task-checkbox above, which the UI probe measured as centred on
+   the capital letters. */
+.cm-task-link {
+  text-indent: 0;
+}
+
+.cm-task-link-check {
+  display: inline-block;
+  height: 1em;
+  line-height: 1em;
+  overflow: hidden;
+  vertical-align: -0.14em;
+  margin-right: 0.45em;
+  text-indent: 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* As a bullet's lead-in the checkbox slot is exactly the "- " columns (set
+   inline), with the glyph in the dash column. */
+.cm-task-link-bullet .cm-task-link-check {
+  margin-right: 0;
+}
+
+.cm-task-link-glyph {
+  display: block;
+  font-size: 1em;
+  line-height: 1em;
+  width: 1em;
+  height: 1em;
+  color: var(--color-primary);
+}
+
+.cm-task-link-done .cm-task-link-glyph {
+  color: var(--color-success);
+}
+
+.cm-task-link-waiting .cm-task-link-glyph {
+  color: var(--color-warning);
+}
+
+.cm-task-link-cancelled .cm-task-link-glyph,
+.cm-task-link-missing .cm-task-link-glyph,
+.cm-task-link-loading .cm-task-link-glyph {
+  color: var(--color-text-secondary);
+}
+
+.cm-task-link-missing .cm-task-link-check,
+.cm-task-link-loading .cm-task-link-check {
+  cursor: default;
+}
+
+.cm-task-link-title {
+  cursor: pointer;
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: transparent;
+  text-underline-offset: 0.2em;
+  transition: text-decoration-color 0.12s ease;
+}
+
+.cm-task-link-title:hover {
+  text-decoration-color: var(--color-text-secondary);
+}
+
+.cm-task-link-done .cm-task-link-title,
+.cm-task-link-cancelled .cm-task-link-title {
+  color: var(--color-text-secondary);
+  text-decoration: line-through;
+}
+
+.cm-task-link-missing .cm-task-link-title {
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+.cm-task-link-loading .cm-task-link-title {
+  color: var(--color-text-secondary);
+  cursor: default;
+}
+
+.cm-task-link .cm-task-pill {
+  margin-left: 0.4em;
+}
+
 /* The "+" affordance renders as a gutter marker (taskAddMetadataGutter.ts),
    not inline in the text - see that file for why. Its column only appears
    on lines that currently have a marker, so this deliberately doesn't

@@ -103,6 +103,12 @@ export interface TaskRecordsAPI {
   editComment: (id: string, at: string, text: string) => Promise<TaskRecord>;
   deleteComment: (id: string, at: string) => Promise<TaskRecord>;
   delete: (id: string) => Promise<void>;
+  /**
+   * After a rename: rewrites the link title text in every note linking to the
+   * task, except `exclude` (pass the note open in the editor - it updates its
+   * own buffer). Resolves to the notes that changed.
+   */
+  syncLinkTitles: (id: string, exclude?: string[]) => Promise<string[]>;
   /** Fired (debounced) when any task, problem file or task link changes. */
   onChanged: (cb: () => void) => () => void;
 }

@@ -20,6 +20,8 @@ export function extractWikilinks(content: string): string[] {
 
     let link = match[1].trim();
     if (!link) continue; // Skip empty matches
+    // Task links ([[_task:<id>|title]]) point at task files, not pages
+    if (link.startsWith('_task:')) continue;
 
     // Remove alias or heading parts like 'file|alias' or 'file#heading'
     link = link.split('|')[0].split('#')[0].trim();

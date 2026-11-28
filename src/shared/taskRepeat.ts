@@ -199,3 +199,128 @@ export function upcomingOccurrences(rule: string, from: string, limit = 3): stri
   const rr = new RRule({ ...RRule.parseString(rule), dtstart: toUtc(from) });
   return rr.all((_d, i) => i < limit).map(fromUtc);
 }
+
+const DAY_NAMES: Record<string, string> = {
+  MO: 'Mon',
+  TU: 'Tue',
+  WE: 'Wed',
+  TH: 'Thu',
+  FR: 'Fri',
+  SA: 'Sat',
+  SU: 'Sun'
+};
+const DAY_LONG: Record<string, string> = {
+  MO: 'Monday',
+  TU: 'Tuesday',
+  WE: 'Wednesday',
+  TH: 'Thursday',
+  FR: 'Friday',
+  SA: 'Saturday',
+  SU: 'Sunday'
+};
+const MONTH_NAMES = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec'
+];
+const UNIT_WORDS: Record<string, [string, string]> = {
+  DAILY: ['day', 'days'],
+  WEEKLY: ['week', 'weeks'],
+  MONTHLY: ['month', 'months'],
+  YEARLY: ['year', 'years']
+};
+const SIMPLE: Record<string, string> = {
+  DAILY: 'Daily',
+  WEEKLY: 'Weekly',
+  MONTHLY: 'Monthly',
+  YEARLY: 'Yearly'
+};
+const WEEKDAYS = 'MO,TU,WE,TH,FR';
+
+export function ordinal(n: number): string {
+  const rem100 = n % 100;
+  if (rem100 >= 11 && rem100 <= 13) return `${n}th`;
+  return `${n}${{ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] ?? 'th'}`;
+}
+
+function positionWord(pos: number): string {
+  if (pos === -1) return 'last';
+  if (pos === -2) return 'second to last';
+  return ['', 'first', 'second', 'third', 'fourth', 'fifth'][pos] ?? ordinal(pos);
+}
+
+/** "the 15th", "the last day", "the first Monday", "the last weekday" - or null if not a recognized monthly pattern. */
+function monthlyWhen(parts: Map<string, string>): string | null {
+  const byMonthDay = parts.get('BYMONTHDAY');
+  const byDay = parts.get('BYDAY');
+  const setPos = parts.get('BYSETPOS');
+  if (byMonthDay && !byDay) {
+    const days = byMonthDay.split(',').map(Number);
+    if (days.length === 1) return days[0] === -1 ? 'the last day' : `the ${ordinal(days[0])}`;
+    // The clamped "day N or the month's last day" pattern: 28,29,...,N with BYSETPOS=-1.
+    if (setPos === '-1' && days[0] === 28 && days.every((d, i) => d === 28 + i)) {
+      const n = days[days.length - 1];
+      return n === 31 ? 'the last day' : `the ${ordinal(n)}`;
+    }
+    return null;
+  }
+  if (byDay && !byMonthDay) {
+    if (byDay === WEEKDAYS && setPos) return `the ${positionWord(Number(setPos))} weekday`;
+    const m = /^(-?\d)([A-Z]{2})$/.exec(byDay);
+    if (m && DAY_LONG[m[2]]) return `the ${positionWord(Number(m[1]))} ${DAY_LONG[m[2]]}`;
+  }
+  return null;
+}
+
+/**
+ * A short readable label for a repeat: "Daily", "Every 2 weeks on Mon and
+ * Thu", "Monthly on the 1st", "Yearly on Mar 3", "Every 3 days after done".
+ * Falls back to "Repeats" for rules it doesn't recognize.
+ */
+export function describeRepeat(repeat: RepeatSpec): string {
+  const parts = isValidRepeatRule(repeat.rule) ? ruleParts(repeat.rule) : null;
+  if (!parts) return 'Repeats';
+  const freq = parts.get('FREQ') ?? '';
+  const n = Number(parts.get('INTERVAL') ?? '1');
+  const [one, many] = UNIT_WORDS[freq] ?? ['time', 'times'];
+  const every = n === 1 ? SIMPLE[freq] : `Every ${n} ${many}`;
+
+  let label: string;
+  if (repeat.from === 'completion') {
+    label = n === 1 ? `Every ${one} after done` : `Every ${n} ${many} after done`;
+  } else if (freq === 'WEEKLY' && parts.get('BYDAY')) {
+    const byDay = parts.get('BYDAY') as string;
+    if (byDay === WEEKDAYS && n === 1) label = 'Every weekday';
+    else {
+      const names = byDay.split(',').map((d) => DAY_NAMES[d] ?? d);
+      const list =
+        names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0];
+      label = `${every} on ${list}`;
+    }
+  } else if (freq === 'DAILY' && parts.get('BYDAY') === WEEKDAYS) {
+    label = 'Every weekday';
+  } else if (freq === 'MONTHLY') {
+    const when = monthlyWhen(parts);
+    label = when ? `${every} on ${when}` : every;
+  } else if (freq === 'YEARLY' && parts.get('BYMONTH') && parts.get('BYMONTHDAY')) {
+    const month = MONTH_NAMES[Number(parts.get('BYMONTH')) - 1];
+    label = month ? `${every} on ${month} ${parts.get('BYMONTHDAY')}` : every;
+  } else {
+    label = every;
+  }
+
+  if (repeat.until) label += ` until ${repeat.until}`;
+  if (repeat.count !== undefined) {
+    label += repeat.count === 1 ? ' (last time)' : ` (${repeat.count} left)`;
+  }
+  return label;
+}

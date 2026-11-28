@@ -10,7 +10,8 @@ import {
 // 1. Define the Style
 // We add a CSS class 'cm-wiki-link' to the matches
 const wikiLinkDecorator = new MatchDecorator({
-  regexp: /\[\[(.*?)\]\]/g,
+  // Not task links ([[_task:id|title]]): those render as task widgets (taskLinkWidget.ts)
+  regexp: /\[\[(?!_task:)(.*?)\]\]/g,
   decoration: (match) => {
     // 'match[1]' is the text inside the brackets
     return Decoration.mark({
