@@ -6,7 +6,7 @@
  *   report.json / report.txt   every rendered line's geometry and styles
  *
  *   npm run ui:probe -- [fixtures...] [--build] [--scale 2] [--width 1000] [--height 700]
- *                       [--theme dark|light] [--window] [--eval "<js>"]
+ *                       [--theme dark|light] [--window] [--cursor <line>] [--eval "<js>"]
  *                       [--out .ui-probe]
  *
  * Fixtures are names in scripts/ui-probe/fixtures (without .md) or paths to
@@ -31,6 +31,7 @@ interface Args {
   height: number;
   theme: string;
   evalExpr?: string;
+  cursor?: number;
   out: string;
 }
 
@@ -59,6 +60,7 @@ function parseArgs(argv: string[]): Args {
     else if (a === '--height') args.height = Number(value());
     else if (a === '--theme') args.theme = value();
     else if (a === '--eval') args.evalExpr = value();
+    else if (a === '--cursor') args.cursor = Number(value());
     else if (a === '--out') args.out = path.resolve(value());
     else if (a.startsWith('--')) throw new Error(`Unknown option ${a}`);
     else args.fixtures.push(a);
@@ -99,6 +101,9 @@ async function main(): Promise<void> {
       settings: { theme: args.theme }
     });
     try {
+      // Put the cursor at the end of a rendered line (1-based, as in the report):
+      // that line then shows its raw markdown instead of widgets.
+      if (args.cursor) await probe.placeCursorOnLine(args.cursor);
       const shots = [await probe.screenshot(path.join(outDir, `editor@${args.scale}x.png`))];
       if (args.window) {
         shots.push(

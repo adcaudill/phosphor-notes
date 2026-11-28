@@ -8,6 +8,9 @@ mode: outliner
         - [x] Book the room ✓ 2026-01-05 09:30:00
         - [/] Draft the agenda 🔼
         - [ ] Renew the subscription 🔺 📅 2026-03-01 🔁 +1y
+        - [ ] A task with children
+            - Child of a task
+            - [ ] Subtask of a task
         - Plain child bullet between tasks
             - [ ] Nested task under a plain bullet
     - Planning session

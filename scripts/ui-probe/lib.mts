@@ -52,16 +52,54 @@ export interface LineReport {
   guideColumns: number[];
   /** x where each visual (wrapped) row's first character starts, relative to the content edge. */
   rowStarts: number[];
-  widgets: Array<{ cls: string; left: number; top: number; width: number; height: number }>;
+  /** y of each visual row's text baseline (viewport px). */
+  rowBaselines: number[];
+  widgets: WidgetReport[];
+  /** Human-readable collisions: widget vs text, widget vs widget, widget outside its line box. */
+  overlaps: string[];
+}
+
+export interface WidgetReport {
+  kind: 'checkbox' | 'pill' | 'widget';
+  cls: string;
+  /** Text inside the widget (pill label, or the icon's ligature name). */
+  label: string;
+  /** Element box: x relative to the content edge, y in viewport px. */
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  width: number;
+  height: number;
+  /** Baseline, cap-height middle, and x-height middle of the text row the widget sits on. */
+  rowBaseline: number | null;
+  rowCapMiddle: number | null;
+  rowXMiddle: number | null;
+  /**
+   * The painted pixels' bounding box (same coordinates as the element box),
+   * measured from a screenshot - for an icon, the drawing itself, not its
+   * font box.
+   */
+  ink?: { left: number; right: number; top: number; bottom: number } | null;
+  /**
+   * Ink center minus the row's cap-height middle, in px: negative = drawn
+   * higher than the capital letters' middle, positive = lower.
+   */
+  inkOffsetFromCapMiddle?: number | null;
 }
 
 export interface EditorReport {
-  /** Width of one `ch` in the editor font, in CSS px. */
+  /** One character column in the body font: the "0" advance plus letter-spacing, in CSS px. */
   chPx: number;
+  /** Body font cap height and x-height, in CSS px. */
+  capHeight: number;
+  xHeight: number;
   fontFamily: string;
   fontSize: string;
   lineHeight: string;
   contentLeft: number;
+  /** px of the editor past the window's right edge (0 when it fits). */
+  editorOverflow: number;
   scale: number;
   lines: LineReport[];
 }
@@ -75,6 +113,8 @@ export interface Probe {
   editorReport(): Promise<EditorReport>;
   /** Click at viewport coordinates, or at the center of the first element matching a selector. */
   click(target: { x: number; y: number } | string): Promise<void>;
+  /** Click at the end of the nth rendered editor line (1-based), putting the cursor there. */
+  placeCursorOnLine(index: number): Promise<void>;
   /** Insert text at the cursor, as typing would. */
   type(text: string): Promise<void>;
   /** Press a key, e.g. "Enter", "Tab", "Backspace", "ArrowDown", optionally with modifiers. */
@@ -127,20 +167,40 @@ const KEYS: Record<string, { code: string; keyCode: number; text?: string }> = {
 
 const MODIFIER_BITS = { Alt: 1, Control: 2, Meta: 4, Shift: 8 } as const;
 
-/** Runs in the renderer: measures every rendered .cm-line. Kept as a string so it needs no bundling. */
+/**
+ * Runs in the renderer: measures every rendered .cm-line. Kept as a string so
+ * it needs no bundling. All x values are CSS px from the content's left edge;
+ * y values are viewport CSS px.
+ */
 const REPORT_SCRIPT = `(() => {
   const content = document.querySelector('.cm-content');
   if (!content) return null;
-  const contentLeft = content.getBoundingClientRect().left;
-  const probe = document.createElement('span');
-  probe.textContent = '0';
-  probe.style.position = 'absolute';
-  probe.style.visibility = 'hidden';
-  content.appendChild(probe);
-  const chPx = probe.getBoundingClientRect().width;
-  probe.remove();
-  const cs = getComputedStyle(content);
+  // x origin: the left edge of the line boxes, i.e. source column 0 when a line has no padding.
+  const contentLeft = (content.querySelector('.cm-line') || content).getBoundingClientRect().left;
   const round = (n) => Math.round(n * 10) / 10;
+  const firstLine = content.querySelector('.cm-line');
+  const lineStyle = getComputedStyle(firstLine || content);
+
+  // Font metrics per font string (headings use a different size than body text).
+  const canvas = document.createElement('canvas').getContext('2d');
+  const metricsCache = new Map();
+  const metricsFor = (el) => {
+    const s = getComputedStyle(el);
+    const font = s.fontStyle + ' ' + s.fontWeight + ' ' + s.fontSize + ' ' + s.fontFamily;
+    if (!metricsCache.has(font)) {
+      canvas.font = font;
+      const H = canvas.measureText('H');
+      metricsCache.set(font, {
+        ascent: H.fontBoundingBoxAscent,
+        descent: H.fontBoundingBoxDescent,
+        capHeight: H.actualBoundingBoxAscent,
+        xHeight: canvas.measureText('x').actualBoundingBoxAscent,
+        ch: canvas.measureText('0').width
+      });
+    }
+    return metricsCache.get(font);
+  };
+  const body = metricsFor(firstLine || content);
 
   const lines = [...content.querySelectorAll('.cm-line')].map((el, i) => {
     const box = el.getBoundingClientRect();
@@ -151,11 +211,14 @@ const REPORT_SCRIPT = `(() => {
     });
     clone.querySelectorAll('img.cm-widgetBuffer').forEach((b) => b.remove());
 
-    // Where each visual row starts: the first non-whitespace character on each row.
+    // Visual rows from the text's own character boxes (widgets excluded):
+    // where each row starts, its baseline, and the text segments on it.
     const rows = new Map();
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      if (node.parentElement && node.parentElement.closest('[contenteditable=false]')) continue;
+      const parent = node.parentElement;
+      if (!parent || parent.closest('[contenteditable=false]')) continue;
+      const m = metricsFor(parent);
       const text = node.textContent || '';
       for (let k = 0; k < text.length; k++) {
         if (/\\s/.test(text[k])) continue;
@@ -164,13 +227,85 @@ const REPORT_SCRIPT = `(() => {
         r.setEnd(node, k + 1);
         const rect = r.getClientRects()[0];
         if (!rect) continue;
-        const rowKey = Math.round(rect.top);
-        if (!rows.has(rowKey) || rect.left < rows.get(rowKey)) rows.set(rowKey, rect.left);
+        const key = Math.round(rect.top + rect.height / 2);
+        const baseline = rect.top + (rect.height - (m.ascent + m.descent)) / 2 + m.ascent;
+        let row = [...rows.values()].find((v) => Math.abs(v.mid - key) < 4);
+        if (!row) {
+          row = { mid: key, start: Infinity, baseline, capHeight: m.capHeight, xHeight: m.xHeight, segs: [] };
+          rows.set(key, row);
+        }
+        if (rect.left < row.start) {
+          row.start = rect.left;
+          row.baseline = baseline;
+          row.capHeight = m.capHeight;
+          row.xHeight = m.xHeight;
+        }
+        const last = row.segs[row.segs.length - 1];
+        if (last && rect.left - last.right < m.ch * 0.6 && rect.left >= last.left) {
+          last.right = Math.max(last.right, rect.right);
+          last.top = Math.min(last.top, rect.top);
+          last.bottom = Math.max(last.bottom, rect.bottom);
+        } else {
+          row.segs.push({ left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom });
+        }
       }
     }
-    const rowStarts = [...rows.entries()].sort((a, b) => a[0] - b[0]).map(([, x]) => round(x - contentLeft));
+    const rowList = [...rows.values()].sort((a, b) => a.mid - b.mid);
 
-    const guideColumns = [...(el.style.background || '').matchAll(/var\\(--editor-nesting-guide\\) (?:calc\\()?([\\d.]+)ch/g)]
+    const widgets = [...el.querySelectorAll('[contenteditable=false]')].map((w) => {
+      const b = w.getBoundingClientRect();
+      const cls = w.className || w.tagName.toLowerCase();
+      const kind = /cm-task-checkbox/.test(cls) ? 'checkbox' : /cm-task-pill/.test(cls) ? 'pill' : 'widget';
+      // The row this widget sits on: the one whose middle is closest to the widget's middle.
+      const mid = b.top + b.height / 2;
+      const lh = parseFloat(style.lineHeight) || box.height;
+      let row = rowList.reduce((best, r) => (!best || Math.abs(r.mid - mid) < Math.abs(best.mid - mid) ? r : best), null);
+      // A row with only widgets on it (e.g. a pill wrapped onto its own row)
+      // has no text to measure: derive it from the first row, a line-height per row.
+      if (row && Math.abs(row.mid - mid) > lh / 2) {
+        const k = Math.round((mid - rowList[0].mid) / lh);
+        row = { ...rowList[0], baseline: rowList[0].baseline + k * lh };
+      }
+      return {
+        kind,
+        cls,
+        label: ((w.querySelector('.cm-task-pill-label') || w).textContent || '').trim().slice(0, 40),
+        left: round(b.left - contentLeft),
+        right: round(b.right - contentLeft),
+        top: round(b.top),
+        bottom: round(b.bottom),
+        width: round(b.width),
+        height: round(b.height),
+        // The row's baseline, for judging vertical alignment.
+        rowBaseline: row ? round(row.baseline) : null,
+        rowCapMiddle: row ? round(row.baseline - row.capHeight / 2) : null,
+        rowXMiddle: row ? round(row.baseline - row.xHeight / 2) : null,
+        // Box of the glyph's own element (pills: the pill box; checkbox: the icon).
+        _raw: { x: b.left, y: b.top, w: b.width, h: b.height }
+      };
+    });
+
+    // Overlaps: widget vs text on the same row, widget vs widget, and
+    // widgets sticking out of their line's box.
+    const overlaps = [];
+    const hit = (a, b) =>
+      Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 &&
+      Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
+    widgets.forEach((w, wi) => {
+      const abs = { left: w._raw.x, right: w._raw.x + w._raw.w, top: w._raw.y, bottom: w._raw.y + w._raw.h };
+      for (const r of rowList) for (const s of r.segs) {
+        if (hit(abs, s)) overlaps.push(w.kind + ' "' + w.label + '" overlaps text at x=' + round(s.left - contentLeft) + '..' + round(s.right - contentLeft));
+      }
+      widgets.slice(wi + 1).forEach((o) => {
+        const ob = { left: o._raw.x, right: o._raw.x + o._raw.w, top: o._raw.y, bottom: o._raw.y + o._raw.h };
+        if (hit(abs, ob)) overlaps.push(w.kind + ' "' + w.label + '" overlaps ' + o.kind + ' "' + o.label + '"');
+      });
+      if (abs.top < box.top - 1 || abs.bottom > box.bottom + 1) {
+        overlaps.push(w.kind + ' "' + w.label + '" sticks out of its line box (' + round(abs.top - box.top) + ', ' + round(abs.bottom - box.bottom) + ')');
+      }
+    });
+
+    const guideColumns = [...(el.style.background || '').matchAll(/var\\(--editor-nesting-guide\\) (?:calc\\()*([\\d.]+)(?:ch| \\*)/g)]
       .map((m) => Number(m[1]))
       .filter((v, k, all) => all.indexOf(v) === k);
 
@@ -185,29 +320,81 @@ const REPORT_SCRIPT = `(() => {
       paddingLeft: round(parseFloat(style.paddingLeft)),
       textIndent: round(parseFloat(style.textIndent)),
       guideColumns,
-      rowStarts,
-      widgets: [...el.querySelectorAll('[contenteditable=false]')].map((w) => {
-        const b = w.getBoundingClientRect();
-        return {
-          cls: w.className || w.tagName.toLowerCase(),
-          left: round(b.left - contentLeft),
-          top: round(b.top),
-          width: round(b.width),
-          height: round(b.height)
-        };
-      })
+      rowStarts: rowList.map((r) => round(r.start - contentLeft)),
+      rowBaselines: rowList.map((r) => round(r.baseline)),
+      widgets,
+      overlaps
     };
   });
 
   return {
-    chPx: round(chPx),
-    fontFamily: cs.fontFamily,
-    fontSize: cs.fontSize,
-    lineHeight: cs.lineHeight,
+    chPx: round((body.ch + (parseFloat(lineStyle.letterSpacing) || 0)) * 100) / 100,
+    capHeight: round(body.capHeight),
+    xHeight: round(body.xHeight),
+    fontFamily: lineStyle.fontFamily,
+    fontSize: lineStyle.fontSize,
+    lineHeight: lineStyle.lineHeight,
     contentLeft: round(contentLeft),
+    // The editor can be laid out wider than the window (the app has minimum
+    // widths); anything past the right edge is missing from screenshots.
+    editorOverflow: round(Math.max(0, (document.querySelector('.cm-editor')?.getBoundingClientRect().right || 0) - innerWidth)),
     lines
   };
 })()`;
+
+/**
+ * Runs in the renderer: given a viewport screenshot (base64 PNG) and a list
+ * of CSS-px rects, returns the bounding box of the painted "ink" inside each
+ * rect - pixels that differ from the rect's dominant (background) color.
+ * That's what a glyph actually looks like on screen, which its element box
+ * doesn't tell you (an icon font's box includes padding around the drawing).
+ */
+const INK_FN = `async (b64, rects, scale) => {
+  const img = new Image();
+  img.src = 'data:image/png;base64,' + b64;
+  await img.decode();
+  const c = document.createElement('canvas');
+  c.width = img.width;
+  c.height = img.height;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0);
+  return rects.map((r) => {
+    // Only measure what is fully on screen: a widget scrolled out of view, or
+    // cut off by the window edge, would give a partial, misleading box.
+    if (r.x < 0 || r.y < 0 || r.x + r.w > innerWidth || r.y + r.h > innerHeight) return null;
+    const x0 = Math.max(0, Math.floor(r.x * scale));
+    const y0 = Math.max(0, Math.floor(r.y * scale));
+    const w = Math.min(c.width - x0, Math.ceil(r.w * scale));
+    const h = Math.min(c.height - y0, Math.ceil(r.h * scale));
+    if (w <= 0 || h <= 0) return null;
+    const d = ctx.getImageData(x0, y0, w, h).data;
+    const counts = new Map();
+    for (let i = 0; i < d.length; i += 4) {
+      const k = (d[i] << 16) | (d[i + 1] << 8) | d[i + 2];
+      counts.set(k, (counts.get(k) || 0) + 1);
+    }
+    let bg = 0, best = -1;
+    for (const [k, n] of counts) if (n > best) { best = n; bg = k; }
+    const br = bg >> 16, bgG = (bg >> 8) & 255, bb = bg & 255;
+    let minX = Infinity, minY = Infinity, maxX = -1, maxY = -1;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      if (Math.abs(d[i] - br) + Math.abs(d[i + 1] - bgG) + Math.abs(d[i + 2] - bb) > 90) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+    if (maxX < 0) return null;
+    return {
+      left: (x0 + minX) / scale,
+      right: (x0 + maxX + 1) / scale,
+      top: (y0 + minY) / scale,
+      bottom: (y0 + maxY + 1) / scale
+    };
+  });
+}`;
 
 export async function launchProbe(opts: ProbeOptions): Promise<Probe> {
   const mainJs = path.join(opts.repo, 'out', 'main', 'index.js');
@@ -382,6 +569,52 @@ export async function launchProbe(opts: ProbeOptions): Promise<Probe> {
       async editorReport() {
         const report = await evaluate<Omit<EditorReport, 'scale'> | null>(REPORT_SCRIPT);
         if (!report) throw new Error('No editor on screen');
+
+        // Measure what the widgets actually painted, from a screenshot. The
+        // ink of a checkbox is searched in its box widened to the full line
+        // height, so a glyph drawn outside its own box is still found.
+        type RawWidget = WidgetReport & { _raw: { x: number; y: number; w: number; h: number } };
+        const all = report.lines.flatMap((l) =>
+          (l.widgets as RawWidget[]).map((w) => ({ w, line: l }))
+        );
+        const rowHeight = parseFloat(report.lineHeight) || 22;
+        const rects = all.map(({ w, line }) =>
+          w.kind === 'checkbox'
+            ? {
+                x: w._raw.x,
+                // its own row, clipped to its own line (not the neighbours' guides)
+                y: Math.max(line.top, w._raw.y - (rowHeight - w._raw.h) / 2),
+                w: w._raw.w,
+                h: Math.min(
+                  rowHeight,
+                  line.top + line.height - Math.max(line.top, w._raw.y - (rowHeight - w._raw.h) / 2)
+                )
+              }
+            : { x: w._raw.x, y: w._raw.y, w: w._raw.w, h: w._raw.h }
+        );
+        if (rects.length > 0) {
+          const shot = await send<{ data: string }>('Page.captureScreenshot', { format: 'png' });
+          const inks = await evaluate<Array<WidgetReport['ink']>>(
+            `(${INK_FN})(${JSON.stringify(shot.data)}, ${JSON.stringify(rects)}, ${scale})`
+          );
+          all.forEach(({ w }, k) => {
+            const ink = inks[k];
+            const left = report.contentLeft;
+            w.ink = ink
+              ? {
+                  left: Math.round((ink.left - left) * 10) / 10,
+                  right: Math.round((ink.right - left) * 10) / 10,
+                  top: Math.round(ink.top * 10) / 10,
+                  bottom: Math.round(ink.bottom * 10) / 10
+                }
+              : null;
+            w.inkOffsetFromCapMiddle =
+              ink && w.rowCapMiddle !== null
+                ? Math.round(((ink.top + ink.bottom) / 2 - w.rowCapMiddle) * 10) / 10
+                : null;
+          });
+        }
+        for (const { w } of all) delete (w as Partial<RawWidget>)._raw;
         return { ...report, scale };
       },
 
@@ -404,6 +637,20 @@ export async function launchProbe(opts: ProbeOptions): Promise<Probe> {
             clickCount: 1
           });
         }
+      },
+
+      async placeCursorOnLine(index) {
+        const point = await evaluate<{ x: number; y: number } | null>(
+          `(() => {
+            const line = document.querySelectorAll('.cm-content .cm-line')[${index - 1}];
+            if (!line) return null;
+            const r = line.getBoundingClientRect();
+            return { x: r.right - 2, y: r.bottom - 6 };
+          })()`
+        );
+        if (!point) throw new Error(`No rendered line ${index}`);
+        await probe.click(point);
+        await sleep(300);
       },
 
       async type(text) {
@@ -447,22 +694,58 @@ export async function launchProbe(opts: ProbeOptions): Promise<Probe> {
 
 /** A compact, line-per-row text rendering of a report - quick to read in a terminal or a chat. */
 export function formatReport(report: EditorReport): string {
+  const ch = report.chPx;
+  const col = (px: number): string => `${Math.round((px / ch) * 100) / 100}c`;
   const out = [
-    `font ${report.fontSize} ${report.fontFamily} | ch=${report.chPx}px | line-height ${report.lineHeight} | scale ${report.scale}x`,
-    'line | left pad indent | rows start at (px from content edge) | guides (ch) | widgets | text'
+    `font ${report.fontSize} ${report.fontFamily} | column=${ch}px cap=${report.capHeight}px x=${report.xHeight}px | line-height ${report.lineHeight} | scale ${report.scale}x`,
+    'x positions are from the content edge, also in character columns ("c", letter-spacing included). "ink" is what was painted;',
+    'checkbox "dy" = ink center minus the cap-height middle of its row (negative = too high).',
+    '',
+    'line | pad indent | rows start at | guides (col) | text'
   ];
+  if (report.editorOverflow > 0) {
+    out.splice(
+      1,
+      0,
+      `!! the editor is ${report.editorOverflow}px wider than the window: its right side is cut off in screenshots (use a larger --width)`
+    );
+  }
   for (const l of report.lines) {
-    const widgets = l.widgets.map((w) => `${w.cls.split(' ')[0]}@${w.left}+${w.width}`).join(' ');
     out.push(
       [
         String(l.index).padStart(4),
-        `${l.left} ${l.paddingLeft} ${l.textIndent}`.padEnd(14),
-        `[${l.rowStarts.join(', ')}]`.padEnd(22),
+        `${l.paddingLeft} ${l.textIndent}`.padEnd(13),
+        `[${l.rowStarts.map(col).join(', ')}]`.padEnd(18),
         `[${l.guideColumns.join(',')}]`.padEnd(10),
-        widgets.padEnd(30),
         JSON.stringify(l.text)
       ].join(' | ')
     );
+    for (const w of l.widgets) {
+      const ink = w.ink
+        ? ` ink ${col(w.ink.left)}..${col(w.ink.right)}`
+        : ' (not fully on screen: ink not measured)';
+      const dy =
+        w.kind === 'checkbox' && w.inkOffsetFromCapMiddle != null
+          ? ` dy=${w.inkOffsetFromCapMiddle > 0 ? '+' : ''}${w.inkOffsetFromCapMiddle}px`
+          : '';
+      const vert =
+        w.kind === 'pill' && w.rowCapMiddle != null
+          ? ` box-mid-vs-cap-mid=${Math.round(((w.top + w.bottom) / 2 - w.rowCapMiddle) * 10) / 10}px`
+          : '';
+      out.push(
+        `       ${w.kind} "${w.label}" box ${col(w.left)}..${col(w.right)} h=${w.height}${ink}${dy}${vert}`
+      );
+    }
+    // Every line should be a whole number of rows tall - a widget that's
+    // taller than the text (or sits too far up/down) makes its line taller.
+    const lh = parseFloat(report.lineHeight);
+    const rowsTall = Math.max(1, Math.round(l.height / lh));
+    if (lh && Math.abs(l.height - rowsTall * lh) > 0.5) {
+      out.push(
+        `       !! line is ${l.height}px tall, not a whole number of ${report.lineHeight} rows`
+      );
+    }
+    for (const o of l.overlaps) out.push(`       !! ${o}`);
   }
   return out.join('\n');
 }
