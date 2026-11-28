@@ -8,7 +8,7 @@ import {
   useCallback
 } from 'react';
 import { EditorState } from '@codemirror/state';
-import { EditorView, keymap, KeyBinding } from '@codemirror/view';
+import { EditorView, keymap, KeyBinding, lineNumbers } from '@codemirror/view';
 import { foldGutter, foldKeymap } from '@codemirror/language';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
@@ -49,6 +49,7 @@ import { createCombinedAutocompleteExtension } from '../editor/extensions/autoco
 import {
   extractFrontmatter,
   reconstructDocument,
+  frontmatterLineCount,
   type Frontmatter
 } from '../utils/frontmatterUtils';
 import { createQuickTypeExtension } from '../editor/extensions/quickType';
@@ -299,6 +300,15 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
             : []), // outliner behavior + wrapped indent + nesting guides
           EditorView.lineWrapping, // Soft wrap long lines
           markdown(), // Markdown syntax support
+          // Line numbers (optional). The editor shows only the note's content,
+          // so offset by the frontmatter to number lines as they are in the file.
+          ...(settings.showLineNumbers
+            ? [
+                lineNumbers({
+                  formatNumber: (n) => String(n + frontmatterLineCount(frontmatterRef.current))
+                })
+              ]
+            : []),
           foldGutter(),
           markdownLanguage.data.of({
             closeBrackets: { brackets: ['(', '[', '{', '`', '```', '*', '_'] }
@@ -577,6 +587,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
       settings.checkIntensify,
       settings.enableSmartTypography,
       settings.enableTypewriterScrolling,
+      settings.showLineNumbers,
       currentFile,
       wikiPageSuggestions
     ]); // Re-create editor when file, mode, or grammar settings change (intentionally omit content to avoid resets on every keystroke)

@@ -3,7 +3,8 @@ import {
   extractFrontmatter,
   isDailyNote,
   extractDateFromFilename,
-  generateDefaultFrontmatter
+  generateDefaultFrontmatter,
+  frontmatterLineCount
 } from '../frontmatterUtils';
 
 describe('extractFrontmatter', () => {
@@ -96,5 +97,20 @@ describe('generateDefaultFrontmatter', () => {
     const frontmatter = generateDefaultFrontmatter('My-Note.md');
     expect(frontmatter).toContain('title: My-Note');
     expect(frontmatter).not.toContain('.md');
+  });
+});
+
+describe('frontmatterLineCount', () => {
+  it('counts the frontmatter lines that precede the editor content', () => {
+    const doc = '---\ntitle: Note\nmode: outliner\n---\n- First line\n- Second line';
+    const { frontmatter, content } = extractFrontmatter(doc);
+    const offset = frontmatterLineCount(frontmatter);
+    expect(offset).toBe(4);
+    // Editor line 1 is file line offset + 1.
+    expect(doc.split('\n')[offset]).toBe(content.split('\n')[0]);
+  });
+
+  it('is 0 without frontmatter', () => {
+    expect(frontmatterLineCount(extractFrontmatter('- Just content').frontmatter)).toBe(0);
   });
 });

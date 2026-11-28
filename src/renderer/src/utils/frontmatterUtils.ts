@@ -123,6 +123,16 @@ function parseFrontmatter(raw: string): Record<string, unknown> {
 }
 
 /**
+ * How many lines of the file come before the editor's first line: the
+ * editor shows only the content, with the frontmatter split off (see
+ * extractFrontmatter), so add this to an editor line number to get the line
+ * number in the file.
+ */
+export function frontmatterLineCount(frontmatter: Frontmatter | null): number {
+  return frontmatter ? frontmatter.raw.split('\n').length : 0;
+}
+
+/**
  * Reconstruct a document with frontmatter and content
  * Only adds frontmatter if it's not already present in the content
  */
