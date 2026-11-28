@@ -21,18 +21,18 @@ describe('computeNestingGuides', () => {
     // on every task row, leaving gaps between plain sibling bullets.
     expect(
       show([
-        '- Monthly Cloud Security Checkin',
+        '- Weekly team sync',
         '    - [ ] Follow up on findings',
         '    - [x] Send notes',
-        '    - Chat about Orca/CloudSec',
+        '    - Planning session',
         '        - [ ] Book a demo',
         '        - Pricing'
       ])
     ).toEqual([
-      '- Monthly Cloud Security Checkin => ',
+      '- Weekly team sync => ',
       '    - [ ] Follow up on findings => 1',
       '    - [x] Send notes => 1',
-      '    - Chat about Orca/CloudSec => 1',
+      '    - Planning session => 1',
       '        - [ ] Book a demo => 1,5',
       '        - Pricing => 1,5'
     ]);

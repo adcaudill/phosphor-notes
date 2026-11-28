@@ -21,7 +21,7 @@ function isWordChar(ch: string | undefined): boolean {
 /**
  * Start offsets of every non-overlapping occurrence of `needle` in `haystack`.
  * Whole-word checks look at the characters around each candidate, so
- * "Melanie" doesn't match inside "Melanies" (but does match "Melanie's").
+ * "Abigail" doesn't match inside "Abigails" (but does match "Abigail's").
  */
 export function findOccurrences(
   haystack: string,

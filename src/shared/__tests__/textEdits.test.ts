@@ -77,33 +77,33 @@ describe('applyTextEdits', () => {
   });
 
   it('reports a line changed by several replacements once, with its final text', () => {
-    const result = applyTextEdits('ImprovOn and ImprovOn again\nother\n', [
-      { oldText: 'ImprovOn', newText: 'Improv On', replaceAll: true }
+    const result = applyTextEdits('SampleCo and SampleCo again\nother\n', [
+      { oldText: 'SampleCo', newText: 'Sample Co', replaceAll: true }
     ]);
     expect(result.replacements).toBe(2);
     expect(result.changes).toEqual([
       {
         line: 1,
-        removed: ['ImprovOn and ImprovOn again'],
-        added: ['Improv On and Improv On again']
+        removed: ['SampleCo and SampleCo again'],
+        added: ['Sample Co and Sample Co again']
       }
     ]);
   });
 
   it('wholeWord and skipLinks make replaceAll safe around longer words and links', () => {
-    const doc = 'Melanie met Melanies team. See [[People/Melanie Dworak]]. Melanie agreed.\n';
+    const doc = 'Abigail met Abigails team. See [[People/Abigail Stone]]. Abigail agreed.\n';
     const result = applyTextEdits(doc, [
       {
-        oldText: 'Melanie',
-        newText: '[[People/Melanie Dworak|Melanie]]',
+        oldText: 'Abigail',
+        newText: '[[People/Abigail Stone|Abigail]]',
         replaceAll: true,
         wholeWord: true,
         skipLinks: true
       }
     ]);
     expect(result.doc).toBe(
-      '[[People/Melanie Dworak|Melanie]] met Melanies team. See [[People/Melanie Dworak]]. ' +
-        '[[People/Melanie Dworak|Melanie]] agreed.\n'
+      '[[People/Abigail Stone|Abigail]] met Abigails team. See [[People/Abigail Stone]]. ' +
+        '[[People/Abigail Stone|Abigail]] agreed.\n'
     );
     expect(result.replacements).toBe(2);
     expect(result.changes).toHaveLength(1);
