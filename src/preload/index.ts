@@ -114,6 +114,11 @@ const api = {
     ipcRenderer.on('vault:file-deleted', handler);
     return () => ipcRenderer.removeListener('vault:file-deleted', handler);
   },
+  onFileRenamed: (cb: (from: string, to: string) => void) => {
+    const handler = (_event: IpcRendererEvent, from: string, to: string): void => cb(from, to);
+    ipcRenderer.on('vault:file-renamed', handler);
+    return () => ipcRenderer.removeListener('vault:file-renamed', handler);
+  },
 
   // Event subscription for vault file additions
   onFileAdded: (cb: (filename: string) => void) => {
@@ -234,6 +239,9 @@ const api = {
   mcpSetEnabled: (enabled: boolean) => ipcRenderer.invoke('mcp:set-enabled', enabled),
   mcpSetWriteEnabled: (enabled: boolean) => ipcRenderer.invoke('mcp:set-write-enabled', enabled),
   mcpSetEditEnabled: (enabled: boolean) => ipcRenderer.invoke('mcp:set-edit-enabled', enabled),
+  mcpSetOrganizeEnabled: (enabled: boolean) =>
+    ipcRenderer.invoke('mcp:set-organize-enabled', enabled),
+  mcpSetDeleteEnabled: (enabled: boolean) => ipcRenderer.invoke('mcp:set-delete-enabled', enabled),
   mcpSetWriteScope: (allow: string[], deny: string[]) =>
     ipcRenderer.invoke('mcp:set-write-scope', allow, deny),
   mcpSetPort: (port: number) => ipcRenderer.invoke('mcp:set-port', port),

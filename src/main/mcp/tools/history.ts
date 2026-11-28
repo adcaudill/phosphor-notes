@@ -3,6 +3,17 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpDeps } from '../deps';
 import { withVaultGuard, withVaultWriteGuard } from '../toolkit';
 import { editCommonInput } from './notesEdit';
+import { contentHash } from '../../contentHash';
+
+/** Restoring a rename moves a note, which needs organize access on top of edit. */
+export class OrganizeDisabledError extends Error {
+  constructor() {
+    super(
+      "That version records a rename; undoing it moves the note back, which needs renaming and moving notes to be enabled in Phosphor Notes' Settings > AI Access."
+    );
+    this.name = 'OrganizeDisabledError';
+  }
+}
 
 const versionSchema = z.object({
   id: z.string(),
@@ -121,6 +132,26 @@ export function registerHistoryRestoreTool(server: McpServer, deps: McpDeps): vo
         { id, expectedHash, dryRun }: { id: string; expectedHash?: string; dryRun?: boolean },
         ctx
       ) => {
+        const { entry } = await deps.readVersion(id);
+        if (entry.kind === 'rename') {
+          // Undoing a rename moves the note back (rewriting its links back too),
+          // so it needs the same access as move_note.
+          if (!deps.isOrganizeEnabled()) throw new OrganizeDisabledError();
+          const moved = await deps.moveNote(entry.path, entry.fromPath!, ctx, {
+            includeChildren: entry.includeChildren,
+            expectedHash,
+            dryRun
+          });
+          const finalPath = moved.dryRun ? entry.path : entry.fromPath!;
+          return {
+            path: entry.fromPath!,
+            restoredFrom: id,
+            versionId: moved.versionId,
+            created: false,
+            hash: contentHash(await deps.readNote(finalPath)),
+            dryRun: moved.dryRun === true
+          };
+        }
         const result = await deps.restoreVersion(id, ctx, { expectedHash, dryRun });
         return {
           path: result.path,

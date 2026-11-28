@@ -19,8 +19,8 @@ const WRITE_DISCLOSURE =
   '  - create new notes (and replace a note if they explicitly ask to),\n' +
   '  - add text to the end of existing notes or under an existing bullet,\n' +
   '  - add, complete, update, and delete tasks (new tasks go to today’s daily note by default).\n\n' +
-  'They cannot delete, rename, or move notes, edit other text already in a note (unless you also ' +
-  'allow editing below), or unlock the vault. Changes happen immediately without asking you each ' +
+  'They cannot edit other text already in a note, or delete, rename, or move notes (unless you ' +
+  'also allow those below), or unlock the vault. Changes happen immediately without asking you each ' +
   'time, but Phosphor keeps the previous version of every note an AI app changes, so you can ' +
   'revert it from "Recent AI changes" below. AI apps are refused if you have unsaved edits open ' +
   'in the same note. Content written into an encrypted vault is encrypted like any other note.\n\n' +
@@ -35,9 +35,25 @@ const EDIT_DISCLOSURE =
   '  - change frontmatter (title, tags, and other properties),\n' +
   '  - restore an earlier version of a note they changed.\n\n' +
   'Phosphor keeps the previous version of every note an AI app changes (see "Recent AI changes" ' +
-  'below), so any change can be reverted. AI apps still cannot delete, rename, or move whole ' +
-  'notes, and they are refused if you have unsaved edits open in the same note.\n\n' +
+  'below), so any change can be reverted. Deleting, renaming, and moving whole notes need their ' +
+  'own permission below, and AI apps are refused if you have unsaved edits open in the same note.\n\n' +
   'Allow AI apps to edit existing text?';
+
+const ORGANIZE_DISCLOSURE =
+  'This lets connected AI apps rename notes and move them to other folders. Links to a moved ' +
+  'note are updated across your vault, exactly as when you rename or move a note yourself, and ' +
+  'a note’s child notes can be moved along with it.\n\n' +
+  'AI apps never overwrite an existing note, and every rename can be reverted from "Recent AI ' +
+  'changes" below, which also restores the links it updated. Your folder limits apply to the ' +
+  'note, its destination, and every note whose links would change.\n\n' +
+  'Allow AI apps to rename and move notes?';
+
+const DELETE_DISCLOSURE =
+  'This lets connected AI apps delete notes. A deleted note goes to your system Trash, and ' +
+  'Phosphor also keeps a copy you can restore from "Recent AI changes" below for 30 days.\n\n' +
+  'AI apps are refused if other notes link to the note (unless they explicitly ask to delete it ' +
+  'anyway), if it is outside the folders you allow, or if you have unsaved edits open in it.\n\n' +
+  'Allow AI apps to delete notes?';
 
 function parseFolderList(text: string): string[] {
   return text
@@ -160,6 +176,24 @@ export const McpSettingsPanel: React.FC = () => {
     }
   };
 
+  const handleTierToggle = async (tier: 'organize' | 'delete', checked: boolean): Promise<void> => {
+    if (checked && !window.confirm(tier === 'organize' ? ORGANIZE_DISCLOSURE : DELETE_DISCLOSURE)) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const next =
+        tier === 'organize'
+          ? await window.phosphor.mcpSetOrganizeEnabled(checked)
+          : await window.phosphor.mcpSetDeleteEnabled(checked);
+      setStatus(next);
+    } catch (err) {
+      console.error(`Failed to toggle MCP ${tier} access:`, err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleScopeBlur = async (): Promise<void> => {
     if (!status) return;
     const allow = parseFolderList(allowDraft);
@@ -185,7 +219,16 @@ export const McpSettingsPanel: React.FC = () => {
   };
 
   const handleRevert = async (version: McpNoteVersion): Promise<void> => {
-    if (
+    const when = new Date(version.ts).toLocaleString();
+    const question =
+      version.kind === 'rename'
+        ? `Move "${version.path}" back to "${version.fromPath}" (renamed by ${version.tool}, ${when})?\n\nLinks to it are updated back as well.`
+        : version.kind === 'delete'
+          ? `Restore "${version.path}", deleted by ${version.tool} (${when})?`
+          : null;
+    if (question !== null) {
+      if (!window.confirm(question)) return;
+    } else if (
       !window.confirm(
         `Revert "${version.path}" to how it was before this change (${version.tool}, ` +
           `${new Date(version.ts).toLocaleString()})?\n\nIts current content will be saved first, so ` +
@@ -271,7 +314,9 @@ export const McpSettingsPanel: React.FC = () => {
         Let AI apps that support the Model Context Protocol (Claude Desktop, Claude Code, etc.)
         connect to this vault over a local, token-authenticated connection. Off by default.{' '}
         {status.editEnabled
-          ? 'Read, write, and edit: connected AI apps can create notes, add to them, and edit existing text, but cannot delete, rename, or move notes, or unlock anything.'
+          ? `Read, write, and edit: connected AI apps can create notes, add to them, and edit existing text${
+              status.organizeEnabled ? ', rename and move notes' : ''
+            }${status.deleteEnabled ? ', delete notes' : ''}, but cannot unlock anything.`
           : status.writeEnabled
             ? 'Read and write: connected AI apps can create notes and append to existing ones, but cannot edit existing text, delete, rename, or unlock anything.'
             : 'Read-only: connected AI apps can read but not change your vault.'}
@@ -321,6 +366,38 @@ export const McpSettingsPanel: React.FC = () => {
       </div>
 
       {status.writeEnabled && (
+        <>
+          <div className="setting-item setting-checkbox mcp-subsetting mcp-subsetting-nested-2">
+            <label htmlFor="mcp-organize-enabled">
+              <input
+                id="mcp-organize-enabled"
+                type="checkbox"
+                checked={status.organizeEnabled}
+                disabled={busy || !status.editEnabled}
+                onChange={(e) => handleTierToggle('organize', e.target.checked)}
+              />
+              Also allow renaming and moving notes (links to them are updated)
+            </label>
+          </div>
+          <div className="setting-item setting-checkbox mcp-subsetting mcp-subsetting-nested-2">
+            <label htmlFor="mcp-delete-enabled">
+              <input
+                id="mcp-delete-enabled"
+                type="checkbox"
+                checked={status.deleteEnabled}
+                disabled={busy || !status.editEnabled}
+                onChange={(e) => handleTierToggle('delete', e.target.checked)}
+              />
+              Also allow deleting notes (to the Trash, restorable from Recent AI changes)
+            </label>
+            {!status.editEnabled && (
+              <p className="setting-hint">Allow editing existing text first.</p>
+            )}
+          </div>
+        </>
+      )}
+
+      {status.writeEnabled && (
         <div className="setting-item mcp-subsetting">
           <label htmlFor="mcp-allow-folders">Only allow changes in these folders</label>
           <textarea
@@ -364,7 +441,13 @@ export const McpSettingsPanel: React.FC = () => {
           <span>
             Access:{' '}
             {status.editEnabled
-              ? 'read, write, and edit'
+              ? [
+                  'read, write, edit',
+                  status.organizeEnabled && 'organize',
+                  status.deleteEnabled && 'delete'
+                ]
+                  .filter(Boolean)
+                  .join(', ')
               : status.writeEnabled
                 ? 'read and write'
                 : 'read-only'}
@@ -453,7 +536,13 @@ export const McpSettingsPanel: React.FC = () => {
                   <span className="mcp-activity-time">{new Date(version.ts).toLocaleString()}</span>
                   <span className="mcp-activity-tool">
                     {version.tool}
-                    <span className="mcp-activity-target"> {version.path}</span>
+                    <span className="mcp-activity-target">
+                      {version.kind === 'rename'
+                        ? ` ${version.fromPath} → ${version.path}`
+                        : version.kind === 'delete'
+                          ? ` deleted ${version.path}`
+                          : ` ${version.path}`}
+                    </span>
                   </span>
                   <button
                     type="button"

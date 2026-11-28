@@ -587,6 +587,19 @@ function AppContent(): React.JSX.Element {
       setFilesVersion((v) => v + 1);
     });
 
+    // A note was renamed or moved (by the app itself or an AI app). If it's the
+    // open note, follow it to its new path rather than treating it as deleted.
+    const unsubscribeFileRenamed = window.phosphor.onFileRenamed?.((from: string, to: string) => {
+      if (latestRef.current.currentFile === from) {
+        // Update the ref now too: a change event for the same note (e.g. its own
+        // links rewritten) can arrive before the next render refreshes it.
+        latestRef.current = { ...latestRef.current, currentFile: to };
+        setCurrentFile(to);
+      }
+      setFileHistory((prev) => prev.map((f) => (f === from ? to : f)));
+      setFilesVersion((v) => v + 1);
+    });
+
     // Listen for app quit check and respond with unsaved status.
     // This deliberately always reports "no unsaved changes", which is what the
     // original handler effectively did (it captured the first render's isDirty,
@@ -629,6 +642,7 @@ function AppContent(): React.JSX.Element {
       if (unsubscribeFileChanged) unsubscribeFileChanged();
       if (unsubscribeFileDeleted) unsubscribeFileDeleted();
       if (unsubscribeFileAdded) unsubscribeFileAdded();
+      if (unsubscribeFileRenamed) unsubscribeFileRenamed();
       if (unsubscribeCheckUnsaved) unsubscribeCheckUnsaved();
       if (unsubscribePreferences) unsubscribePreferences();
       if (unsubscribeAbout) unsubscribeAbout();

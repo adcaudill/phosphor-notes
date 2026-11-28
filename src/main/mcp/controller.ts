@@ -27,6 +27,8 @@ class McpController {
     tokenCreatedAt: null,
     writeEnabled: false,
     editEnabled: false,
+    organizeEnabled: false,
+    deleteEnabled: false,
     writeAllowFolders: [],
     writeDenyFolders: []
   };
@@ -72,6 +74,8 @@ class McpController {
       vaultReadable: await vaultState.isReadable(),
       writeEnabled: this.isWriteEnabled(),
       editEnabled: this.isEditEnabled(),
+      organizeEnabled: this.isOrganizeEnabled(),
+      deleteEnabled: this.isDeleteEnabled(),
       writeAllowFolders: [...this.config.writeAllowFolders],
       writeDenyFolders: [...this.config.writeDenyFolders]
     };
@@ -80,6 +84,10 @@ class McpController {
   private isWriteEnabled = (): boolean => this.config.enabled && this.config.writeEnabled;
 
   private isEditEnabled = (): boolean => this.isWriteEnabled() && this.config.editEnabled;
+
+  private isOrganizeEnabled = (): boolean => this.isEditEnabled() && this.config.organizeEnabled;
+
+  private isDeleteEnabled = (): boolean => this.isEditEnabled() && this.config.deleteEnabled;
 
   private getWriteScope = (): WriteScope => ({
     allow: this.config.writeAllowFolders,
@@ -96,9 +104,9 @@ class McpController {
   async disable(): Promise<McpStatus> {
     this.config.enabled = false;
     // Re-enabling read access later must never silently restore write (or
-    // edit) access without a fresh confirmation from the user.
+    // any higher) access without a fresh confirmation from the user.
     this.config.writeEnabled = false;
-    this.config.editEnabled = false;
+    this.clearEditAndAbove();
     await this.persist();
     await this.stopListening();
     return this.getStatus();
@@ -112,8 +120,8 @@ class McpController {
     this.config.writeEnabled = enabled;
     if (!enabled) {
       // Same rule as disable(): turning write access back on later must not
-      // silently bring edit access back with it.
-      this.config.editEnabled = false;
+      // silently bring edit (or organize/delete) access back with it.
+      this.clearEditAndAbove();
     }
     await this.persist();
     this.notify();
@@ -126,9 +134,37 @@ class McpController {
       return this.getStatus();
     }
     this.config.editEnabled = enabled;
+    if (!enabled) {
+      this.config.organizeEnabled = false;
+      this.config.deleteEnabled = false;
+    }
     await this.persist();
     this.notify();
     return this.getStatus();
+  }
+
+  /** Refused (config/status unchanged) unless edit access is already on. */
+  async setOrganizeEnabled(enabled: boolean): Promise<McpStatus> {
+    if (enabled && !this.isEditEnabled()) return this.getStatus();
+    this.config.organizeEnabled = enabled;
+    await this.persist();
+    this.notify();
+    return this.getStatus();
+  }
+
+  /** Refused (config/status unchanged) unless edit access is already on. */
+  async setDeleteEnabled(enabled: boolean): Promise<McpStatus> {
+    if (enabled && !this.isEditEnabled()) return this.getStatus();
+    this.config.deleteEnabled = enabled;
+    await this.persist();
+    this.notify();
+    return this.getStatus();
+  }
+
+  private clearEditAndAbove(): void {
+    this.config.editEnabled = false;
+    this.config.organizeEnabled = false;
+    this.config.deleteEnabled = false;
   }
 
   async setWriteScope(allow: unknown, deny: unknown): Promise<McpStatus> {
@@ -189,6 +225,8 @@ class McpController {
           buildDefaultDeps({
             isWriteEnabled: this.isWriteEnabled,
             isEditEnabled: this.isEditEnabled,
+            isOrganizeEnabled: this.isOrganizeEnabled,
+            isDeleteEnabled: this.isDeleteEnabled,
             getWriteScope: this.getWriteScope,
             getMainWindow: this.getMainWindow
           })

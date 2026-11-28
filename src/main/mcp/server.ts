@@ -11,6 +11,11 @@ import { registerTaskWriteTools } from './tools/tasksWrite';
 import { registerHistoryReadTools, registerHistoryRestoreTool } from './tools/history';
 import { registerNoteEditTools } from './tools/notesEdit';
 import { registerSectionInsertTool, registerSectionEditTools } from './tools/sections';
+import {
+  registerDailyNoteTool,
+  registerMoveNoteTool,
+  registerDeleteNoteTool
+} from './tools/organize';
 
 /**
  * Builds a fresh, fully-configured MCP server. Called once per request in
@@ -27,6 +32,7 @@ export function createPhosphorMcpServer(deps: McpDeps): McpServer {
   registerTaskTools(server, deps);
   registerGraphTools(server, deps);
   registerTagTools(server, deps);
+  registerDailyNoteTool(server, deps);
 
   if (deps.isWriteEnabled()) {
     registerNoteWriteTools(server, deps);
@@ -38,6 +44,9 @@ export function createPhosphorMcpServer(deps: McpDeps): McpServer {
       registerHistoryRestoreTool(server, deps);
       registerNoteEditTools(server, deps);
       registerSectionEditTools(server, deps);
+
+      if (deps.isOrganizeEnabled()) registerMoveNoteTool(server, deps);
+      if (deps.isDeleteEnabled()) registerDeleteNoteTool(server, deps);
     }
   }
 

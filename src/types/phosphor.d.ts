@@ -23,6 +23,10 @@ export interface McpStatus {
   writeEnabled: boolean;
   /** A third opt-in on top of write access: editing/removing existing text in place. True only when the server, write access, and edit access are all on. */
   editEnabled: boolean;
+  /** On top of edit access: renaming and moving notes. */
+  organizeEnabled: boolean;
+  /** On top of edit access: deleting notes. */
+  deleteEnabled: boolean;
   /** Folders AI writes are limited to (empty = whole vault). */
   writeAllowFolders: string[];
   /** Folders AI writes may never touch (wins over writeAllowFolders). */
@@ -52,6 +56,10 @@ export interface McpNoteVersion {
   tool: string;
   summary?: string;
   size: number;
+  /** 'content' (default): the note's content was replaced. 'delete': the note was deleted. 'rename': it moved from fromPath to path. */
+  kind?: 'content' | 'rename' | 'delete';
+  fromPath?: string;
+  opId?: string;
 }
 
 export interface McpClientConfig {
@@ -101,6 +109,8 @@ export interface PhosphorAPI {
   onMenuEvent: (eventName: string, cb: (...args: unknown[]) => void) => () => void;
   onFileChanged: (cb: (filename: string) => void) => () => void;
   onFileDeleted: (cb: (filename: string) => void) => () => void;
+  /** A note was renamed or moved (by the app or an AI app); its content is unchanged. */
+  onFileRenamed: (cb: (from: string, to: string) => void) => () => void;
   onFileAdded: (cb: (filename: string) => void) => () => void;
   onCheckUnsavedChanges: (cb: (hasUnsaved: boolean) => boolean) => () => void;
   /** Answers main's pre-MCP-write check: is `relPath` open in the editor with unsaved edits? */
@@ -163,6 +173,8 @@ export interface PhosphorAPI {
   /** Refused (status unchanged) if the server itself is disabled - enable it first. */
   mcpSetWriteEnabled: (enabled: boolean) => Promise<McpStatus>;
   mcpSetEditEnabled: (enabled: boolean) => Promise<McpStatus>;
+  mcpSetOrganizeEnabled: (enabled: boolean) => Promise<McpStatus>;
+  mcpSetDeleteEnabled: (enabled: boolean) => Promise<McpStatus>;
   mcpSetWriteScope: (allow: string[], deny: string[]) => Promise<McpStatus>;
   mcpSetPort: (port: number) => Promise<McpStatus>;
   /** Generates a new token and returns the plaintext ONCE - only its hash is persisted. */

@@ -1,4 +1,5 @@
-import { app, type BrowserWindow } from 'electron';
+import { app, shell, type BrowserWindow } from 'electron';
+import { promises as fsp } from 'fs';
 import * as vaultState from '../vaultState';
 import {
   getLastGraph,
@@ -22,6 +23,8 @@ import type { WikiGraph } from '../graphBuilder';
 import type { WriteScope } from './scope';
 import { createWriteGate } from './writeGate';
 import { queryNoteDirty } from './rendererQuery';
+import { IndexNotReadyError } from './toolkit';
+import { findLinkCandidates, afterNoteRenamed, afterNoteDeleted } from '../noteOps';
 
 /** Passed by withVaultWriteGuard to every write: the vault generation captured before the call, and which tool is writing (recorded in note history). */
 export interface WriteCtx {
@@ -51,6 +54,10 @@ export interface McpDeps {
   isWriteEnabled(): boolean;
   /** Edit tier (in-place edits of existing text) - only ever true when isWriteEnabled() is too. */
   isEditEnabled(): boolean;
+  /** Organize tier (move_note) - only ever true when isEditEnabled() is too. */
+  isOrganizeEnabled(): boolean;
+  /** Delete tier (delete_note) - only ever true when isEditEnabled() is too. */
+  isDeleteEnabled(): boolean;
   /** The user's folder restrictions for writes. Every write method below enforces it itself. */
   getWriteScope(): WriteScope;
   getDefaultJournalMode(): Promise<NoteMode>;
@@ -93,6 +100,26 @@ export interface McpDeps {
     ctx: WriteCtx,
     opts?: { expectedHash?: string; dryRun?: boolean }
   ): Promise<vaultWriter.RestoreVersionResult>;
+
+  /**
+   * Rename/move a note (organize tier), rewriting links to it. Enforces the
+   * write gate on the note, its destination, any child notes, and every note
+   * whose links change.
+   */
+  moveNote(
+    from: string,
+    to: string,
+    ctx: WriteCtx,
+    opts?: { includeChildren?: boolean; expectedHash?: string; dryRun?: boolean }
+  ): Promise<vaultWriter.RenameNoteResult>;
+  /** Delete a note (delete tier): saved to history, then moved to the OS trash. */
+  deleteNote(
+    relPath: string,
+    ctx: WriteCtx,
+    opts?: { expectedHash?: string; dryRun?: boolean }
+  ): Promise<vaultWriter.DeleteNoteResult>;
+  /** Notes that link to `relPath` (itself excluded), or null if the link graph is not built yet. */
+  findBacklinks(relPath: string): string[] | null;
 
   /**
    * General in-place edit of an existing note (edit tier): `transform` gets the
@@ -171,6 +198,8 @@ export async function notifyNoteWritten(
 export interface BuildDepsOptions {
   isWriteEnabled: () => boolean;
   isEditEnabled: () => boolean;
+  isOrganizeEnabled: () => boolean;
+  isDeleteEnabled: () => boolean;
   getWriteScope: () => WriteScope;
   getMainWindow: () => BrowserWindow | null;
 }
@@ -200,6 +229,8 @@ export function buildDefaultDeps(opts: BuildDepsOptions): McpDeps {
 
     isWriteEnabled: opts.isWriteEnabled,
     isEditEnabled: opts.isEditEnabled,
+    isOrganizeEnabled: opts.isOrganizeEnabled,
+    isDeleteEnabled: opts.isDeleteEnabled,
     getWriteScope: opts.getWriteScope,
     getDefaultJournalMode: async () => {
       const settings: UserSettings = await getSettings();
@@ -304,6 +335,55 @@ export function buildDefaultDeps(opts: BuildDepsOptions): McpDeps {
         );
       }
       return result;
+    },
+
+    moveNote: async (from, to, ctx, moveOpts) => {
+      const vp = requireVaultPath();
+      const dryRun = moveOpts?.dryRun;
+      const result = await vaultWriter.renameNote(vp, from, to, {
+        expectedGeneration: ctx.generation,
+        includeChildren: moveOpts?.includeChildren,
+        expectedHash: moveOpts?.expectedHash,
+        dryRun,
+        history: { tool: ctx.tool },
+        // Without the link graph there is no way to know which notes to fix up.
+        linkCandidates: (moved) => {
+          const candidates = findLinkCandidates(moved);
+          if (candidates === null) throw new IndexNotReadyError();
+          return candidates;
+        },
+        beforeWrite: (relPath) => gate.check(relPath, { dryRun }),
+        canCreateParent: gate.canCreateParent
+      });
+      if (!result.dryRun) await afterNoteRenamed(vp, result, opts.getMainWindow());
+      return result;
+    },
+
+    deleteNote: async (relPath, ctx, deleteOpts) => {
+      const vp = requireVaultPath();
+      await gate.check(relPath, { dryRun: deleteOpts?.dryRun });
+      const result = await vaultWriter.deleteNote(vp, relPath, {
+        expectedGeneration: ctx.generation,
+        expectedHash: deleteOpts?.expectedHash,
+        dryRun: deleteOpts?.dryRun,
+        history: { tool: ctx.tool },
+        trash: async (absPath) => {
+          try {
+            await shell.trashItem(absPath);
+          } catch (err) {
+            // Still recoverable: the content was saved to note history first.
+            console.warn('[MCP] trashItem failed, deleting instead:', err);
+            await fsp.unlink(absPath);
+          }
+        }
+      });
+      if (!result.dryRun) await afterNoteDeleted(vp, relPath, opts.getMainWindow());
+      return result;
+    },
+
+    findBacklinks: (relPath) => {
+      const candidates = findLinkCandidates([relPath]);
+      return candidates === null ? null : candidates.filter((p) => p !== relPath);
     },
 
     restoreVersion: async (id, ctx, restoreOpts) => {

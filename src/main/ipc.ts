@@ -19,7 +19,7 @@ import {
   resetIndexState,
   TASKS_CACHE_VERSION
 } from './indexer';
-import { getBacklinks, getGraphStats } from './graphBuilder';
+import { getGraphStats } from './graphBuilder';
 import { setupWatcher, stopWatcher, markInternalSave } from './watcher';
 import { deriveMasterKey, encryptBuffer, decryptBuffer, isEncrypted, generateSalt } from './crypto';
 import { TASK_LINE_RE, type Task } from '../shared/tasks';
@@ -36,6 +36,7 @@ import sodium from 'sodium-native';
 import * as vaultState from './vaultState';
 import { validateAndResolvePath } from './vaultPaths';
 import { ensureParentFilesExist } from './vaultWriter';
+import { findLinkCandidates, afterNoteRenamed, afterNoteDeleted } from './noteOps';
 
 // Safe logging that ignores EPIPE errors during shutdown
 const safeLog = (msg: string): void => {
@@ -919,6 +920,83 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
     }
   });
 
+  /**
+   * Renames or moves a note on the user's behalf (the app's own Rename and Move),
+   * rewriting links to it - the same renameNote that backs MCP's move_note, with
+   * the app's prompts for child notes and an existing destination. Returns the
+   * new path, or false if cancelled or it failed (after telling the user why).
+   */
+  async function renameFromApp(from: string, to: string): Promise<string | false> {
+    if (!activeVaultPath || !mainWindow) throw new Error('No vault selected');
+    const vaultPath = activeVaultPath;
+    const win = mainWindow;
+    let children: { includeChildren?: boolean; leaveChildren?: boolean } = {};
+
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        const result = await vaultWriter.renameNote(vaultPath, from, to, {
+          expectedGeneration: vaultState.getGeneration(),
+          linkCandidates: (moved) => findLinkCandidates(moved) ?? [],
+          ...children
+        });
+        await afterNoteRenamed(vaultPath, result, win);
+        if (result.linksFailed.length > 0) {
+          safeWarn('Some links could not be updated after renaming:', result.linksFailed);
+        }
+        return to;
+      } catch (err) {
+        if (
+          err instanceof vaultWriter.HasChildNotesError &&
+          !children.includeChildren &&
+          !children.leaveChildren
+        ) {
+          const count = err.children.length;
+          const choice = await dialog.showMessageBox(win, {
+            type: 'question',
+            buttons: ['Move With Child Notes', 'Move Only This Note', 'Cancel'],
+            defaultId: 0,
+            cancelId: 2,
+            message: `${from} has ${count} child note${count === 1 ? '' : 's'}.`,
+            detail:
+              'Moving them too keeps them under this note and updates links to them. ' +
+              'Moving only this note leaves them where they are.'
+          });
+          if (choice.response === 2) return false;
+          children = choice.response === 0 ? { includeChildren: true } : { leaveChildren: true };
+          continue;
+        }
+        if (err instanceof vaultWriter.NoteAlreadyExistsError && !err.relPath.endsWith('/')) {
+          const overwrite = await dialog.showMessageBox(win, {
+            type: 'warning',
+            buttons: ['Overwrite', 'Cancel'],
+            defaultId: 1,
+            cancelId: 1,
+            message: `${err.relPath} already exists. Overwrite?`,
+            detail: 'The existing note will be moved to the Trash.'
+          });
+          if (overwrite.response !== 0) return false;
+          const targetAbs = validateAndResolvePath(vaultPath, err.relPath);
+          try {
+            await shell.trashItem(targetAbs);
+          } catch (trashErr) {
+            safeWarn('trashItem failed, falling back to unlink:', trashErr);
+            await fsp.unlink(targetAbs);
+          }
+          await afterNoteDeleted(vaultPath, err.relPath, win);
+          continue;
+        }
+        safeError('Failed to rename note:', err);
+        await dialog.showMessageBox(win, {
+          type: 'error',
+          message: `Could not move ${from}`,
+          detail: err instanceof Error ? err.message : String(err)
+        });
+        return false;
+      }
+    }
+    return false;
+  }
+
   // Move note: choose a destination folder within the vault and update backlinks
   ipcMain.handle('note:move', async (_, filename: string) => {
     if (!activeVaultPath || !mainWindow) throw new Error('No vault selected');
@@ -949,124 +1027,12 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
 
     const relativeDest = path.relative(resolvedVault, resolvedChosen).replace(/\\/g, '/');
     const destPrefix = relativeDest ? `${relativeDest}/` : '';
-    const baseName = path.basename(normalized);
-    const newRelative = `${destPrefix}${baseName}`;
+    const newRelative = `${destPrefix}${path.basename(normalized)}`;
 
     if (newRelative === normalized) return normalized;
-
-    const srcPath = validateAndResolvePath(activeVaultPath, normalized);
-    const targetPath = validateAndResolvePath(activeVaultPath, newRelative);
-
-    // Ensure target dir exists
-    await fsp.mkdir(path.dirname(targetPath), { recursive: true });
-
-    // Update backlinks using in-memory graph
-    try {
-      const graph = getLastGraph();
-      const backlinks = graph ? getBacklinks(graph, normalized) : [];
-
-      const escapeForRegex = (s: string): string => s.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
-      const oldNoExt = normalized.replace(/\.md$/i, '');
-      const newNoExt = newRelative.replace(/\.md$/i, '');
-      const wikiRegex = new RegExp(
-        `\\[\\[\\s*(${escapeForRegex(oldNoExt)})(?:\\.md)?(\\|[^\\]]*)?\\s*\\]\\]`,
-        'g'
-      );
-
-      for (const back of backlinks) {
-        try {
-          const backPath = validateAndResolvePath(activeVaultPath, back);
-          const buffer = await fsp.readFile(backPath);
-          let contentStr: string;
-          if (activeMasterKey && isEncrypted(buffer)) {
-            try {
-              const decrypted = decryptBuffer(buffer, activeMasterKey);
-              contentStr = decrypted.toString('utf-8');
-            } catch {
-              contentStr = buffer.toString('utf-8');
-            }
-          } else {
-            contentStr = buffer.toString('utf-8');
-          }
-
-          const newContent = contentStr.replace(wikiRegex, (_m, _p1, p2) => {
-            const alias = p2 || '';
-            return `[[${newNoExt}${alias}]]`;
-          });
-
-          if (newContent !== contentStr) {
-            let outBuf: Buffer;
-            if (activeMasterKey) {
-              outBuf = encryptBuffer(Buffer.from(newContent, 'utf-8'), activeMasterKey);
-            } else {
-              outBuf = Buffer.from(newContent, 'utf-8');
-            }
-            await fsp.writeFile(backPath, outBuf);
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('vault:file-changed', back);
-            }
-            try {
-              await updateGraphForChangedFile(activeVaultPath, back, mainWindow);
-              await updateTasksForFile(activeVaultPath, back, mainWindow);
-              await updateSearchIndexForFile(activeVaultPath, back);
-            } catch (err) {
-              safeWarn('Failed to update graph/tasks for backlink after move', err);
-            }
-          }
-        } catch (err) {
-          safeWarn('Failed to update backlink file during move:', err);
-        }
-      }
-    } catch (err) {
-      safeWarn('Failed to update backlinks during move:', err);
-    }
-
-    // Perform move
-    try {
-      try {
-        await fsp.access(targetPath);
-        const overwrite = await dialog.showMessageBox(mainWindow, {
-          type: 'warning',
-          buttons: ['Overwrite', 'Cancel'],
-          defaultId: 1,
-          message: `${newRelative} already exists. Overwrite?`
-        });
-        if (overwrite.response !== 0) return false;
-      } catch {
-        // target doesn't exist
-      }
-
-      await fsp.rename(srcPath, targetPath);
-
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('vault:file-deleted', normalized);
-        mainWindow.webContents.send('vault:file-added', newRelative);
-      }
-
-      try {
-        await updateGraphForFile(activeVaultPath, newRelative, mainWindow);
-        await updateTasksForFile(activeVaultPath, newRelative, mainWindow);
-        removeFromSearchIndex(normalized);
-        await updateSearchIndexForFile(activeVaultPath, newRelative);
-      } catch (err) {
-        safeWarn('Failed to update graph/tasks for moved file', err);
-      }
-
-      // Remove old file from MRU so user doesn't accidentally recreate it
-      try {
-        await removeFromMRU(activeVaultPath, normalized);
-      } catch (err) {
-        safeWarn('Failed to remove old file from MRU after move', err);
-      }
-
-      return newRelative;
-    } catch (err) {
-      safeError('Failed to move file:', err);
-      return false;
-    }
+    return renameFromApp(normalized, newRelative);
   });
 
-  // Rename note: update links, rename file within vault
   ipcMain.handle('note:rename', async (_, oldFilename: string, newFilename: string) => {
     if (!activeVaultPath || !mainWindow) throw new Error('No vault selected');
 
@@ -1085,118 +1051,7 @@ export function setupIPC(mainWindowArg: BrowserWindow): void {
     if (!normalizedOld || !normalizedNew) throw new Error('Invalid filename(s)');
 
     if (normalizedOld === normalizedNew) return normalizedNew;
-
-    const srcPath = validateAndResolvePath(activeVaultPath, normalizedOld);
-    const targetPath = validateAndResolvePath(activeVaultPath, normalizedNew);
-
-    // Ensure target dir exists
-    await fsp.mkdir(path.dirname(targetPath), { recursive: true });
-
-    // Update backlinks using in-memory graph
-    try {
-      const graph = getLastGraph();
-      const backlinks = graph ? getBacklinks(graph, normalizedOld) : [];
-
-      const escapeForRegex = (s: string): string => s.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
-      const oldNoExt = normalizedOld.replace(/\.md$/i, '');
-      const newNoExt = normalizedNew.replace(/\.md$/i, '');
-      const wikiRegex = new RegExp(
-        `\\[\\[\\s*(${escapeForRegex(oldNoExt)})(?:\\.md)?(\\|[^\\]]*)?\\s*\\]\\]`,
-        'g'
-      );
-
-      for (const back of backlinks) {
-        try {
-          const backPath = validateAndResolvePath(activeVaultPath, back);
-          const buffer = await fsp.readFile(backPath);
-          let contentStr: string;
-          if (activeMasterKey && isEncrypted(buffer)) {
-            try {
-              const decrypted = decryptBuffer(buffer, activeMasterKey);
-              contentStr = decrypted.toString('utf-8');
-            } catch {
-              contentStr = buffer.toString('utf-8');
-            }
-          } else {
-            contentStr = buffer.toString('utf-8');
-          }
-
-          const newContent = contentStr.replace(wikiRegex, (_m, _p1, p2) => {
-            const alias = p2 || '';
-            return `[[${newNoExt}${alias}]]`;
-          });
-
-          if (newContent !== contentStr) {
-            let outBuf: Buffer;
-            if (activeMasterKey) {
-              outBuf = encryptBuffer(Buffer.from(newContent, 'utf-8'), activeMasterKey);
-            } else {
-              outBuf = Buffer.from(newContent, 'utf-8');
-            }
-            await fsp.writeFile(backPath, outBuf);
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('vault:file-changed', back);
-            }
-            try {
-              await updateGraphForChangedFile(activeVaultPath, back, mainWindow);
-              await updateTasksForFile(activeVaultPath, back, mainWindow);
-              await updateSearchIndexForFile(activeVaultPath, back);
-            } catch (err) {
-              safeWarn('Failed to update graph/tasks for backlink after rename', err);
-            }
-          }
-        } catch (err) {
-          safeWarn('Failed to update backlink file during rename:', err);
-        }
-      }
-    } catch (err) {
-      safeWarn('Failed to update backlinks during rename:', err);
-    }
-
-    // Perform rename
-    try {
-      try {
-        await fsp.access(targetPath);
-        const overwrite = await dialog.showMessageBox(mainWindow, {
-          type: 'warning',
-          buttons: ['Overwrite', 'Cancel'],
-          defaultId: 1,
-          message: `${normalizedNew} already exists. Overwrite?`
-        });
-        if (overwrite.response !== 0) return false;
-      } catch {
-        // target doesn't exist
-      }
-
-      await fsp.rename(srcPath, targetPath);
-
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('vault:file-deleted', normalizedOld);
-        mainWindow.webContents.send('vault:file-added', normalizedNew);
-      }
-
-      try {
-        await updateGraphForFile(activeVaultPath, normalizedNew, mainWindow);
-        await updateTasksForFile(activeVaultPath, normalizedNew, mainWindow);
-        removeFromSearchIndex(normalizedOld);
-        await updateSearchIndexForFile(activeVaultPath, normalizedNew);
-      } catch (err) {
-        safeWarn('Failed to update graph/tasks for renamed file', err);
-      }
-
-      // Update MRU: remove old and add new
-      try {
-        await removeFromMRU(activeVaultPath, normalizedOld);
-        await updateMRU(activeVaultPath, normalizedNew);
-      } catch (err) {
-        safeWarn('Failed to update MRU after rename', err);
-      }
-
-      return normalizedNew;
-    } catch (err) {
-      safeError('Failed to rename file:', err);
-      return false;
-    }
+    return renameFromApp(normalizedOld, normalizedNew);
   });
 
   // ============ ENCRYPTION HANDLERS ============

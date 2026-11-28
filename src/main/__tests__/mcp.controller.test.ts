@@ -197,4 +197,50 @@ describe('mcpController', () => {
     await mcpController.init(userDataDir);
     expect((await mcpController.getStatus()).editEnabled).toBe(false);
   });
+
+  it('organize and delete access require edit access, and turning edit off clears both', async () => {
+    await mcpController.init(userDataDir);
+    await mcpController.setPort(await getEphemeralPort());
+    await mcpController.enable();
+    await mcpController.setWriteEnabled(true);
+
+    // Refused while edit access is off.
+    expect((await mcpController.setOrganizeEnabled(true)).organizeEnabled).toBe(false);
+    expect((await mcpController.setDeleteEnabled(true)).deleteEnabled).toBe(false);
+
+    await mcpController.setEditEnabled(true);
+    await mcpController.setOrganizeEnabled(true);
+    const both = await mcpController.setDeleteEnabled(true);
+    expect(both).toMatchObject({ editEnabled: true, organizeEnabled: true, deleteEnabled: true });
+
+    // Turning edit off (or anything below it) clears both, so they never come back silently.
+    await mcpController.setEditEnabled(false);
+    expect(await mcpController.setEditEnabled(true)).toMatchObject({
+      organizeEnabled: false,
+      deleteEnabled: false
+    });
+    await mcpController.setOrganizeEnabled(true);
+    await mcpController.setWriteEnabled(false);
+    await mcpController.setWriteEnabled(true);
+    expect((await mcpController.setEditEnabled(true)).organizeEnabled).toBe(false);
+  });
+
+  it('never loads organize or delete access from disk without edit access', async () => {
+    fs.mkdirSync(path.dirname(getConfigPath(userDataDir)), { recursive: true });
+    fs.writeFileSync(
+      getConfigPath(userDataDir),
+      JSON.stringify({
+        enabled: false,
+        writeEnabled: true,
+        editEnabled: false,
+        organizeEnabled: true,
+        deleteEnabled: true
+      })
+    );
+    await mcpController.init(userDataDir);
+    expect(await mcpController.getStatus()).toMatchObject({
+      organizeEnabled: false,
+      deleteEnabled: false
+    });
+  });
 });
