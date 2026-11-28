@@ -856,7 +856,12 @@ body {
   padding-bottom: 45vh !important;
   font-size: var(--font-size-base);
   line-height: 1.6;
-  letter-spacing: 0.3px;
+  --editor-letter-spacing: 0.3px;
+  letter-spacing: var(--editor-letter-spacing);
+  /* One character column, including the letter-spacing. Anything positioned
+     by column (hanging indents, nesting guides, task checkboxes) uses this
+     via editorColumns() - plain ch would drift left by the spacing per column. */
+  --editor-column: calc(1ch + var(--editor-letter-spacing));
 }
 
 .cm-line {
