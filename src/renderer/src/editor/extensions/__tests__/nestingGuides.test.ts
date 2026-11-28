@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeNestingGuides } from '../outlinerKeymap';
+import { computeNestingGuides, guideBackground } from '../outlinerKeymap';
 
 /** Guides per line, as "line text => columns", for readable expectations. */
 function show(lines: string[]): string[] {
@@ -79,5 +79,14 @@ describe('computeNestingGuides', () => {
       '    - D => 1',
       '- E => '
     ]);
+  });
+});
+
+describe('guideBackground', () => {
+  it('draws each guide as a fixed 1px band, never a sub-pixel fraction of ch', () => {
+    const bg = guideBackground([1, 5]);
+    expect(bg).toContain('var(--editor-nesting-guide) calc(1ch + 1px)');
+    expect(bg).toContain('var(--editor-nesting-guide) calc(5ch + 1px)');
+    expect(bg).not.toMatch(/\d\.\d+ch/);
   });
 });

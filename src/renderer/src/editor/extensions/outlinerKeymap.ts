@@ -446,11 +446,22 @@ export function computeNestingGuides(lines: string[]): number[][] {
   return guides;
 }
 
-function guideBackground(columns: number[]): string {
+/**
+ * The line's background: a 1px-wide band at each guide column.
+ *
+ * The band is a fixed 1px, not a fraction of `ch`. At 0.05ch (about 0.48px
+ * with the default 16px Menlo) the band is narrower than a pixel, so it only
+ * shows when it happens to cover a pixel's sample point - which depends on
+ * where its column falls on the pixel grid (font size, display scale, the
+ * editor's own offsets). Rendered offscreen at 1x, every other column drew
+ * nothing at all, which is why some nesting levels had a guide and others
+ * didn't. A 1px band always covers a sample point.
+ */
+export function guideBackground(columns: number[]): string {
   const stops: string[] = [];
   for (const col of columns) {
     const start = `${col}ch`;
-    const end = `${col + 0.05}ch`; // thin line (0.05ch is about 1px)
+    const end = `calc(${col}ch + 1px)`;
     stops.push(`transparent ${start}`);
     stops.push(`var(--editor-nesting-guide) ${start}`);
     stops.push(`var(--editor-nesting-guide) ${end}`);
