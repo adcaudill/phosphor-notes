@@ -75,4 +75,47 @@ describe('applyTextEdits', () => {
   it('does not count overlapping occurrences twice', () => {
     expect(applyTextEdits('aaa', [{ oldText: 'aa', newText: 'b' }]).doc).toBe('ba');
   });
+
+  it('reports a line changed by several replacements once, with its final text', () => {
+    const result = applyTextEdits('ImprovOn and ImprovOn again\nother\n', [
+      { oldText: 'ImprovOn', newText: 'Improv On', replaceAll: true }
+    ]);
+    expect(result.replacements).toBe(2);
+    expect(result.changes).toEqual([
+      {
+        line: 1,
+        removed: ['ImprovOn and ImprovOn again'],
+        added: ['Improv On and Improv On again']
+      }
+    ]);
+  });
+
+  it('wholeWord and skipLinks make replaceAll safe around longer words and links', () => {
+    const doc = 'Melanie met Melanies team. See [[People/Melanie Dworak]]. Melanie agreed.\n';
+    const result = applyTextEdits(doc, [
+      {
+        oldText: 'Melanie',
+        newText: '[[People/Melanie Dworak|Melanie]]',
+        replaceAll: true,
+        wholeWord: true,
+        skipLinks: true
+      }
+    ]);
+    expect(result.doc).toBe(
+      '[[People/Melanie Dworak|Melanie]] met Melanies team. See [[People/Melanie Dworak]]. ' +
+        '[[People/Melanie Dworak|Melanie]] agreed.\n'
+    );
+    expect(result.replacements).toBe(2);
+    expect(result.changes).toHaveLength(1);
+  });
+
+  it('counts only eligible matches when deciding whether oldText is ambiguous', () => {
+    const doc = 'Ann and [[Ann]]\n';
+    expect(() => applyTextEdits(doc, [{ oldText: 'Ann', newText: 'Anne' }])).toThrow(
+      AmbiguousTextError
+    );
+    expect(applyTextEdits(doc, [{ oldText: 'Ann', newText: 'Anne', skipLinks: true }]).doc).toBe(
+      'Anne and [[Ann]]\n'
+    );
+  });
 });

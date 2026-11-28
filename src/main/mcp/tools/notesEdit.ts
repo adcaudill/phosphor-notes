@@ -53,7 +53,10 @@ export function registerNoteEditTools(server: McpServer, deps: McpDeps): void {
         'and either all apply or none do. Text is written exactly as given - no outliner ' +
         're-formatting - so match the note\'s existing style (e.g. "- " bullets indented 4 spaces ' +
         'per level in outliner notes). The previous content is saved as a version (versionId), so ' +
-        'the edit can be undone with restore_note_version. Returns the changed lines and the new hash.',
+        'the edit can be undone with restore_note_version. Returns the changed lines and the new hash. ' +
+        'For replaceAll on a name or word, set wholeWord (so "Ann" does not match "Anne") and ' +
+        'skipLinks (so existing [[links]] containing it are left alone); only matches that pass ' +
+        'those filters count toward uniqueness. Use find_text first to see every occurrence.',
       inputSchema: {
         path: z.string().describe('Vault-relative path, e.g. "Projects/Plan.md"'),
         edits: z
@@ -61,7 +64,12 @@ export function registerNoteEditTools(server: McpServer, deps: McpDeps): void {
             z.object({
               oldText: z.string().min(1).max(100_000),
               newText: z.string().max(100_000),
-              replaceAll: z.boolean().optional()
+              replaceAll: z.boolean().optional(),
+              wholeWord: z
+                .boolean()
+                .optional()
+                .describe('Skip matches that are part of a longer word.'),
+              skipLinks: z.boolean().optional().describe('Skip matches inside [[wikilinks]].')
             })
           )
           .min(1)
