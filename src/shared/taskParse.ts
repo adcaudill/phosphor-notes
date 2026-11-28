@@ -532,6 +532,42 @@ export function parseTaskInput(input: string, opts: ParseOptions = {}): ParsedTa
   return result;
 }
 
+/**
+ * A date field on its own ("fri", "dec 4", "tomorrow at 3pm", "2026-12-01"):
+ * the date (with a time if one was given), or null if it doesn't read as one.
+ * Unlike free text, any date reading counts here - "sat" in a date field
+ * means Saturday.
+ */
+export function parseDatePhrase(text: string, opts: ParseOptions = {}): string | null {
+  const t = text.trim();
+  if (!t) return null;
+  const parser = opts.dateOrder === 'dmy' ? chrono.en.GB : chrono.en;
+  const r = parser.parse(t, opts.now ?? new Date(), { forwardDate: true })[0];
+  if (!r) return null;
+  const time = r.start.isCertain('hour')
+    ? `T${pad(r.start.get('hour') ?? 0)}:${pad(r.start.get('minute') ?? 0)}`
+    : '';
+  return componentsDate(r.start) + time;
+}
+
+/**
+ * A repeat field on its own ("monthly on the 15th", "every mon and thu",
+ * "2 weeks", "every 3 days after done"). `due` anchors repeats that need a
+ * day ("monthly" -> on the due date's day). Returns the repeat and the first
+ * due date it implies, or null if it doesn't read as a repeat.
+ */
+export function parseRepeatPhrase(
+  text: string,
+  opts: ParseOptions & { due?: string } = {}
+): { repeat: TaskRepeat; due: string } | null {
+  let t = text.trim();
+  if (!t) return null;
+  // "2 weeks" / "other day" / "month on the 1st" -> "every ..."
+  if (/^(?:\d+\s+|other\s+)?(?:day|week|month|year)s?\b/i.test(t)) t = `every ${t}`;
+  const parsed = parseTaskInput(opts.due ? `${t} due ${opts.due}` : t, opts);
+  return parsed.repeat && parsed.due ? { repeat: parsed.repeat, due: parsed.due } : null;
+}
+
 /** The fields for creating a task from parsed input (status waiting when someone is waited on). */
 export function toNewTaskInput(parsed: ParsedTaskInput): NewTaskInput {
   const input: NewTaskInput = { title: parsed.title, tags: parsed.tags };

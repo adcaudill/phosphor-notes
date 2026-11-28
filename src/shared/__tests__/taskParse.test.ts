@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { parseTaskInput, toNewTaskInput, type ParsedTaskInput } from '../taskParse';
+import {
+  parseDatePhrase,
+  parseRepeatPhrase,
+  parseTaskInput,
+  toNewTaskInput,
+  type ParsedTaskInput
+} from '../taskParse';
 
 // Saturday 28 November 2026, 09:00 local.
 const NOW = new Date(2026, 10, 28, 9, 0, 0);
@@ -215,5 +221,49 @@ describe('parseTaskInput: tokens', () => {
         project: 'Home'
       }
     );
+  });
+});
+
+describe('field phrases (task detail fields)', () => {
+  it('reads a date field, including words that are ambiguous in free text', () => {
+    expect(parseDatePhrase('sat', { now: NOW })).toBe('2026-11-28');
+    expect(parseDatePhrase('Dec 1, 2026', { now: NOW })).toBe('2026-12-01');
+    expect(parseDatePhrase('Feb 10, 2027 14:30', { now: NOW })).toBe('2027-02-10T14:30');
+    expect(parseDatePhrase('2026-12-01', { now: NOW })).toBe('2026-12-01');
+    expect(parseDatePhrase('next week', { now: NOW })).toBe('2026-12-05');
+    expect(parseDatePhrase('', { now: NOW })).toBeNull();
+    expect(parseDatePhrase('whenever', { now: NOW })).toBeNull();
+  });
+
+  it('reads a repeat field, anchored on the task due date', () => {
+    expect(parseRepeatPhrase('monthly', { now: NOW, due: '2026-12-15' })).toEqual({
+      repeat: { rule: 'FREQ=MONTHLY;BYMONTHDAY=15', from: 'due' },
+      due: '2026-12-15'
+    });
+    expect(parseRepeatPhrase('2 weeks', { now: NOW })?.repeat).toEqual({
+      rule: 'FREQ=WEEKLY;INTERVAL=2',
+      from: 'due'
+    });
+    expect(parseRepeatPhrase('every mon and thu', { now: NOW })).toEqual({
+      repeat: { rule: 'FREQ=WEEKLY;BYDAY=MO,TH', from: 'due' },
+      due: '2026-11-30'
+    });
+    expect(parseRepeatPhrase('nonsense', { now: NOW })).toBeNull();
+  });
+
+  it.each([
+    'Daily',
+    'Weekly on Mon',
+    'Every 2 weeks on Mon and Thu',
+    'Every weekday',
+    'Monthly on the 1st',
+    'Monthly on the last day',
+    'Monthly on the first Monday',
+    'Monthly on the last weekday',
+    'Every 3 months on the 15th',
+    'Yearly on Mar 3',
+    'Every 3 days after done'
+  ])('reads its own label back: %s', (label) => {
+    expect(parseRepeatPhrase(label, { now: NOW, due: '2026-12-01' })).not.toBeNull();
   });
 });
