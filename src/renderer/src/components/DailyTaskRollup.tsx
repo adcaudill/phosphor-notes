@@ -1,49 +1,48 @@
 import React, { useState } from 'react';
-import type { Task } from '../../../shared/tasks';
-import { todayString, isPastDate, isTodayDate } from '../../../shared/tasks';
+import { localDate } from '../../../shared/taskRecord';
+import { dueNow } from '../../../shared/taskQuery';
+import { useTaskRecords } from '../tasks/taskRecordsStore';
+import { friendlyDueLabel } from '../utils/taskDisplay';
 import { isDailyNote } from '../utils/frontmatterUtils';
+import { TaskDetail } from './TaskDetail';
 import '../styles/DailyTaskRollup.css';
 
 interface DailyTaskRollupProps {
   currentFile: string | null;
-  tasks: Task[];
-  onToggleStatus: (task: Task) => void;
-  onTaskClick: (filename: string, line: number) => void;
+  /** After a rename in the popover: update the task's link titles in the open note's buffer. */
+  onTitleChanged?: (id: string, title: string) => void;
+  onNavigate: (note: string, line: number) => void;
 }
 
 /**
  * A small collapsible "what's due" block shown at the top of the editor
  * when the open note is a daily journal - the point where the app owner
- * already looks every day, so it's the most direct way to connect "tasks"
- * and "notes and tasks live together" without a separate view. Lists
- * overdue and due-today tasks vault-wide (not just ones written in this
- * note), with the same inline status-cycling as the Tasks view.
+ * already looks every day. Lists overdue and due-today tasks (task files,
+ * vault-wide); the checkbox completes one, and the title opens it.
  */
 export function DailyTaskRollup({
   currentFile,
-  tasks,
-  onToggleStatus,
-  onTaskClick
+  onTitleChanged,
+  onNavigate
 }: DailyTaskRollupProps): React.JSX.Element | null {
+  const { tasks } = useTaskRecords();
   const [collapsed, setCollapsed] = useState(false);
   // Not persisted anywhere on purpose - App.tsx remounts this component
   // (via a `key={currentFile}` on it) whenever the open file changes, so
   // dismissing it here only lasts until the next time this file is loaded.
   const [dismissed, setDismissed] = useState(false);
+  const [open, setOpen] = useState<{ id: string; rect: DOMRect } | null>(null);
 
   if (!currentFile || !isDailyNote(currentFile) || dismissed) return null;
 
-  const today = todayString();
-  const relevant = tasks.filter(
-    (t) =>
-      t.status !== 'done' &&
-      t.dueDate &&
-      (isPastDate(t.dueDate, today) || isTodayDate(t.dueDate, today))
-  );
-  if (relevant.length === 0) return null;
+  const today = localDate();
+  const relevant = dueNow(tasks, today);
+  // Keep the popover for a task completed from inside it.
+  if (relevant.length === 0 && !open) return null;
 
-  const sorted = [...relevant].sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''));
-  const overdueCount = sorted.filter((t) => t.dueDate && isPastDate(t.dueDate, today)).length;
+  const sorted = [...relevant].sort((a, b) => (a.due ?? '').localeCompare(b.due ?? ''));
+  const overdueCount = sorted.filter((t) => (t.due ?? '').slice(0, 10) < today).length;
+  const api = window.phosphor.taskRecords;
 
   return (
     <div className="daily-task-rollup-container">
@@ -77,35 +76,59 @@ export function DailyTaskRollup({
             <span className="material-symbols-outlined">close</span>
           </span>
         </button>
-        {!collapsed && (
+        {!collapsed && sorted.length > 0 && (
           <div className="daily-task-rollup-list">
-            {sorted.map((task) => (
-              <div
-                key={`${task.file}-${task.line}`}
-                className={`daily-task-rollup-item task-${task.status} ${task.dueDate && isPastDate(task.dueDate, today) ? 'overdue' : ''}`}
-                onClick={() => onTaskClick(task.file, task.line)}
-              >
-                <span
-                  className="task-status-icon"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleStatus(task);
-                  }}
-                  title="Cycle status"
+            {sorted.map((task) => {
+              const overdue = (task.due ?? '').slice(0, 10) < today;
+              return (
+                <div
+                  key={task.id}
+                  className={`daily-task-rollup-item task-${task.status} ${overdue ? 'overdue' : ''}`}
+                  onClick={(e) =>
+                    setOpen({ id: task.id, rect: e.currentTarget.getBoundingClientRect() })
+                  }
                 >
-                  <span className="material-symbols-outlined">
-                    {task.status === 'todo' ? 'check_box_outline_blank' : 'indeterminate_check_box'}
+                  <span
+                    className="task-status-icon"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      api
+                        .complete(task.id)
+                        .catch((err) => console.error('[Tasks] complete failed', err));
+                    }}
+                    title="Complete"
+                  >
+                    <span className="material-symbols-outlined">
+                      {task.status === 'doing'
+                        ? 'indeterminate_check_box'
+                        : 'check_box_outline_blank'}
+                    </span>
                   </span>
-                </span>
-                <span className="daily-task-rollup-text">{task.text}</span>
-                {task.file !== currentFile && (
-                  <span className="daily-task-rollup-file">{task.file}</span>
-                )}
-              </div>
-            ))}
+                  <span className="daily-task-rollup-text">{task.title}</span>
+                  {task.due && (
+                    <span className="daily-task-rollup-file">
+                      {friendlyDueLabel(task.due, today).text}
+                    </span>
+                  )}
+                  {task.project && <span className="daily-task-rollup-file">{task.project}</span>}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
+      {open && (
+        <TaskDetail
+          key={open.id}
+          id={open.id}
+          variant="popover"
+          anchorRect={open.rect}
+          currentFile={currentFile}
+          onClose={() => setOpen(null)}
+          onTitleChanged={onTitleChanged}
+          onNavigate={onNavigate}
+        />
+      )}
     </div>
   );
 }

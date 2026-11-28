@@ -99,7 +99,25 @@ Keys: **D**, **S**, **R**, **J** and **T** jump to Due, Start, Repeat, Project a
 | Logbook | Done and cancelled, by completion day |
 | All | Everything |
 
-Group by due date, project, priority, status or tag, and sort by due date, priority, newest, recently changed or title. Select a task to see its details beside the list.
+Below these, the list has a view for each **project** and each **tag** that has open tasks, and your **saved views**. A task added in a project or tag view gets that project or tag.
+
+Group by due date, project, priority, status or tag, and sort by due date, priority, newest, recently changed, title, or **Manual**. Select a task to see its details beside the list.
+
+### Calendar strip
+
+Today and Upcoming show the next two weeks across the top, with how many tasks are due each day (and how many are overdue). Click a day to see just its tasks - a task added then is due that day. Drag tasks onto a day to reschedule them; a task's time of day is kept.
+
+### Changing several tasks at once
+
+⌘-click tasks to pick them, ⇧-click to pick a range, or press **X** on the selected task. A bar appears to complete them, set their due date (`fri`, `dec 4`, or `none`), priority, status or project, add a tag, or delete them. Space completes every picked task; Esc clears the picks.
+
+### Manual order
+
+Choose **Sort › Manual**, then drag tasks into the order you want, or move the selected task with **⌥↑** / **⌥↓**. Tasks are ordered within their group; tasks you haven't ordered come after the ordered ones, by due date.
+
+### Saved views
+
+Type a search, then click **Save** to keep it as a view in the list, with its grouping and sorting. Saved in a project or tag view, it stays limited to that project or tag. Changing a saved view's grouping or sorting updates it; hover over it in the list to delete it. Saved views are stored in your vault (`_tasks/.views.json`), so they move with it.
 
 ### Search and filters
 
@@ -128,10 +146,16 @@ For example, `#bills due:<7d` finds bills due within a week.
 | Enter | Open the task |
 | E | Edit the title |
 | D / S / R / T | Edit due, start, repeat, tags |
+| X | Pick the task (for changing several at once) |
+| ⌥↑ / ⌥↓ | Move the task (Manual sorting) |
 | N | New task |
 | / | Search |
 | G then I, T, U, A, W, S, L, C | Go to Inbox, Today, Upcoming, Anytime, Waiting, Scheduled, Logbook, Checklist items |
 | ? | Show the shortcuts |
+
+## Today in your daily note
+
+When you open today's daily note, a box at the top lists tasks that are overdue or due today. Tick one to complete it, or click it to open its details. The Tasks button in the sidebar shows the same count.
 
 ## Checklist items
 

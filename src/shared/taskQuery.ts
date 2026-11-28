@@ -35,6 +35,23 @@ export function isOpen(t: { status: TaskStatus }): boolean {
 
 const dueDate = (t: TaskSummary): string | undefined => t.due?.slice(0, 10);
 
+/**
+ * Open tasks due today or overdue - not waiting, not starting later. The
+ * daily-note rollup and the Tasks badge in the sidebar.
+ */
+export function dueNow(tasks: TaskSummary[], today: string): TaskSummary[] {
+  return tasks.filter((t) => {
+    const due = dueDate(t);
+    return (
+      isOpen(t) &&
+      t.status !== 'waiting' &&
+      due !== undefined &&
+      due <= today &&
+      !(t.start && t.start > today)
+    );
+  });
+}
+
 /** True if the task belongs in a built-in view. */
 export function inView(t: TaskSummary, view: TaskViewId, today: string): boolean {
   const due = dueDate(t);
@@ -211,7 +228,48 @@ export function parseTaskFilter(query: string): TaskFilter {
 // ---------------------------------------------------------------------------
 // Sorting and grouping
 
-export type TaskSort = 'due' | 'priority' | 'created' | 'updated' | 'title';
+export type TaskSort = 'manual' | 'due' | 'priority' | 'created' | 'updated' | 'title';
+
+const ORDER_STEP = 1024;
+
+/**
+ * The order values to write so that the task at `from` ends up at `to` in
+ * `list` (both indexes into `list`, in its current order). When the list
+ * already has distinct order values, only the moved task changes (it takes a
+ * value between its new neighbours); otherwise the whole list is numbered
+ * once, in its new order.
+ */
+export function planReorder(
+  list: Array<{ id: string; order?: number }>,
+  from: number,
+  to: number
+): Array<{ id: string; order: number }> {
+  if (from === to || from < 0 || to < 0 || from >= list.length || to >= list.length) return [];
+  const moved = [...list];
+  const [item] = moved.splice(from, 1);
+  moved.splice(to, 0, item);
+
+  const orders = list.map((t) => t.order);
+  const distinct =
+    orders.every((o) => typeof o === 'number' && Number.isFinite(o)) &&
+    new Set(orders).size === orders.length &&
+    orders.every((o, i) => i === 0 || (o as number) > (orders[i - 1] as number));
+  if (distinct) {
+    const before = moved[to - 1]?.order;
+    const after = moved[to + 1]?.order;
+    const value =
+      before === undefined
+        ? (after as number) - ORDER_STEP
+        : after === undefined
+          ? before + ORDER_STEP
+          : (before + after) / 2;
+    // Midpoints eventually run out of room; renumber then instead.
+    if (before === undefined || after === undefined || (value !== before && value !== after)) {
+      return [{ id: item.id, order: value }];
+    }
+  }
+  return moved.map((t, i) => ({ id: t.id, order: (i + 1) * ORDER_STEP }));
+}
 export type TaskGroup = 'none' | 'due' | 'project' | 'priority' | 'status' | 'tag';
 
 const STATUS_ORDER: Record<TaskStatus, number> = {
@@ -234,6 +292,12 @@ function comparePriority(a: TaskSummary, b: TaskSummary): number {
 export function sortTasks(tasks: TaskSummary[], sort: TaskSort, view?: TaskViewId): TaskSummary[] {
   const byTitle = (a: TaskSummary, b: TaskSummary): number => a.title.localeCompare(b.title);
   const cmp: Record<TaskSort, (a: TaskSummary, b: TaskSummary) => number> = {
+    // Ordered tasks first, in their order; the rest after, by due date.
+    manual: (a, b) =>
+      (a.order ?? Infinity) - (b.order ?? Infinity) ||
+      compareDue(a, b) ||
+      comparePriority(a, b) ||
+      byTitle(a, b),
     due: (a, b) => compareDue(a, b) || comparePriority(a, b) || byTitle(a, b),
     priority: (a, b) => comparePriority(a, b) || compareDue(a, b) || byTitle(a, b),
     created: (a, b) => (b.created ?? '').localeCompare(a.created ?? '') || byTitle(a, b),

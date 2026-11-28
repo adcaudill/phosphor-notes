@@ -25,9 +25,14 @@ code), `--scale <n>` (device scale, default 2 = Retina), `--width`/`--height`
 defaults), `--set <setting>=<value>` (any other setting, e.g.
 `--set showLineNumbers=true`; repeatable), `--window` (also capture
 the whole window), `--cursor <line>` (click at the end of that rendered line
-first, so it shows raw markdown as it does while you edit it), `--eval "<js>"`
-(print the result of an expression in the renderer), `--out <dir>` (default
-`.ui-probe/`).
+first, so it shows raw markdown as it does while you edit it), `--run "<js>"`
+(run JS in the renderer before the screenshots, e.g. to open another view:
+`--run "document.querySelector('[title^=Tasks]').click()" --window`),
+`--eval "<js>"` (print the result of an expression in the renderer, after the
+screenshots), `--out <dir>` (default `.ui-probe/`).
+
+The vault also gets the task files in `fixtures/_tasks`, so the Tasks tab and
+the daily-note task rollup have something to show.
 
 The note under test becomes today's daily note, which is what the app opens.
 

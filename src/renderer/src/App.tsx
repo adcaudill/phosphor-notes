@@ -12,6 +12,7 @@ import { GraphStatsModal } from './components/GraphStatsModal';
 import DailyNav from './components/DailyNav';
 import Holiday from './components/Holiday';
 import { DailyTaskRollup } from './components/DailyTaskRollup';
+import { dueNow } from '../../shared/taskQuery';
 import { TasksView } from './components/TasksView';
 import { EncryptionModal } from './components/EncryptionModal';
 import { AboutModal } from './components/AboutModal';
@@ -26,14 +27,12 @@ import {
   formatTaskLine,
   serializeTaskLine,
   toggleTaskLine,
-  TASK_LINE_RE,
-  todayString,
-  isPastDate,
-  isTodayDate
+  TASK_LINE_RE
 } from '../../shared/tasks';
 import { formatAppend, detectNoteMode } from '../../shared/noteFormat';
 import type { TaskMetadataValue } from './components/TaskMetadataPopover';
-import { startTaskRecordsSync } from './tasks/taskRecordsStore';
+import { startTaskRecordsSync, useTaskRecords } from './tasks/taskRecordsStore';
+import { localDate } from '../../shared/taskRecord';
 import { TaskCapture } from './components/TaskCapture';
 import { TaskManager } from './components/TaskManager';
 import { TaskConversionDialog } from './components/TaskConversionDialog';
@@ -121,15 +120,9 @@ function AppContent(): React.JSX.Element {
     });
     return Array.from(unique).sort((a, b) => a.localeCompare(b));
   }, [graph]);
-  const taskAlertCount = useMemo(() => {
-    const today = todayString();
-    return tasks.filter(
-      (t) =>
-        t.status !== 'done' &&
-        t.dueDate &&
-        (isPastDate(t.dueDate, today) || isTodayDate(t.dueDate, today))
-    ).length;
-  }, [tasks]);
+  // Overdue and due-today task files, for the Tasks badge in the sidebar.
+  const { tasks: taskRecords } = useTaskRecords();
+  const taskAlertCount = useMemo(() => dueNow(taskRecords, localDate()).length, [taskRecords]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1256,19 +1249,10 @@ function AppContent(): React.JSX.Element {
                     // meant to last until the next time this file is opened.
                     key={currentFile}
                     currentFile={currentFile}
-                    tasks={tasks}
-                    onToggleStatus={handleTaskToggleStatus}
-                    onTaskClick={(filename, lineNumber) => {
-                      if (filename === currentFile) {
-                        editorRef.current?.scrollToLine(lineNumber);
-                      } else {
-                        handleFileSelect(filename).then(() => {
-                          setTimeout(() => {
-                            editorRef.current?.scrollToLine(lineNumber);
-                          }, 100);
-                        });
-                      }
-                    }}
+                    onTitleChanged={(id, title) =>
+                      editorRef.current?.updateTaskLinkTitles(id, title)
+                    }
+                    onNavigate={openNoteAtLine}
                   />
                 )}
                 {conflict && (

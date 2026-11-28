@@ -60,3 +60,13 @@ export interface ConversionResult {
   /** Groups the note history entries this run made. */
   opId: string;
 }
+
+/** A saved search in the Tasks tab (stored in the vault). */
+export interface SavedTaskView {
+  id: string;
+  name: string;
+  /** The search box text: free text and filters. */
+  query: string;
+  group?: 'none' | 'due' | 'project' | 'priority' | 'status' | 'tag';
+  sort?: 'manual' | 'due' | 'priority' | 'created' | 'updated' | 'title';
+}

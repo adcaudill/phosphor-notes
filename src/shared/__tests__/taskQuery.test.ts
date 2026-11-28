@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
+  dueNow,
   groupTasks,
   inView,
   parseTaskFilter,
+  planReorder,
   sortTasks,
   viewCounts,
   type TaskViewId
@@ -68,6 +70,15 @@ describe('views', () => {
     ['logbook', ['Book the room', 'Old plan']]
   ])('%s', (view, expected) => {
     expect(ids(view)).toEqual(expected);
+  });
+
+  it('dueNow lists open tasks due today or overdue, not waiting or deferred', () => {
+    const deferred = task({ title: 'Later start', due: '2026-11-27', start: '2026-12-01' });
+    const waitingDue = task({ title: 'Waiting, due', due: '2026-11-27', status: 'waiting' });
+    expect(dueNow([...ALL, deferred, waitingDue], TODAY).map((t) => t.title)).toEqual([
+      'Overdue bill',
+      'Call Alice'
+    ]);
   });
 
   it('counts each view', () => {
@@ -160,6 +171,35 @@ describe('sorting and grouping', () => {
       ['#a', 1],
       ['#b', 1],
       ['No tags', 1]
+    ]);
+  });
+});
+
+describe('manual ordering', () => {
+  it('sorts ordered tasks first, the rest by due date', () => {
+    const a = task({ title: 'A', order: 2048 });
+    const b = task({ title: 'B', order: 1024 });
+    const c = task({ title: 'C', due: '2026-12-01' });
+    expect(sortTasks([a, c, b], 'manual').map((t) => t.title)).toEqual(['B', 'A', 'C']);
+  });
+
+  it('moves one task between its new neighbours when the list is already ordered', () => {
+    const list = [
+      { id: 'a', order: 1024 },
+      { id: 'b', order: 2048 },
+      { id: 'c', order: 3072 }
+    ];
+    expect(planReorder(list, 2, 0)).toEqual([{ id: 'c', order: 0 }]);
+    expect(planReorder(list, 0, 1)).toEqual([{ id: 'a', order: 2560 }]);
+    expect(planReorder(list, 0, 2)).toEqual([{ id: 'a', order: 4096 }]);
+    expect(planReorder(list, 1, 1)).toEqual([]);
+  });
+
+  it('numbers the whole list when it is not ordered yet', () => {
+    expect(planReorder([{ id: 'a' }, { id: 'b', order: 5 }, { id: 'c' }], 2, 0)).toEqual([
+      { id: 'c', order: 1024 },
+      { id: 'a', order: 2048 },
+      { id: 'b', order: 3072 }
     ]);
   });
 });

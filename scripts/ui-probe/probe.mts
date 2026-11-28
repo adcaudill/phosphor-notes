@@ -7,12 +7,17 @@
  *
  *   npm run ui:probe -- [fixtures...] [--build] [--scale 2] [--width 1000] [--height 700]
  *                       [--theme dark|light] [--font-size 16] [--line-height 1.5]
- *                       [--set <setting>=<value>] [--window] [--cursor <line>] [--eval "<js>"]
+ *                       [--set <setting>=<value>] [--window] [--cursor <line>]
+ *                       [--run "<js>"] [--eval "<js>"]
  *                       [--out .ui-probe]
  *
  * Fixtures are names in scripts/ui-probe/fixtures (without .md) or paths to
  * Markdown files; with none given, every bundled fixture is rendered. See
  * scripts/ui-probe/README.md.
+ *
+ * --run evaluates JS in the app before the screenshots (e.g. to open the
+ * Tasks tab: `--run "document.querySelector('[title^=Tasks]').click()"`);
+ * --eval evaluates JS after them and prints the result.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -36,6 +41,7 @@ interface Args {
   /** Other settings, from --set key=value. */
   settings: Record<string, unknown>;
   evalExpr?: string;
+  runExpr?: string;
   cursor?: number;
   out: string;
 }
@@ -79,6 +85,7 @@ function parseArgs(argv: string[]): Args {
       }
       args.settings[key] = parsed;
     } else if (a === '--eval') args.evalExpr = value();
+    else if (a === '--run') args.runExpr = value();
     else if (a === '--cursor') args.cursor = Number(value());
     else if (a === '--out') args.out = path.resolve(value());
     else if (a.startsWith('--')) throw new Error(`Unknown option ${a}`);
@@ -128,6 +135,11 @@ async function main(): Promise<void> {
       // Put the cursor at the end of a rendered line (1-based, as in the report):
       // that line then shows its raw markdown instead of widgets.
       if (args.cursor) await probe.placeCursorOnLine(args.cursor);
+      if (args.runExpr) {
+        await probe.evaluate(`(async () => { ${args.runExpr} })()`);
+        // Let React render and the layout settle.
+        await new Promise((r) => setTimeout(r, 400));
+      }
       const shots = [await probe.screenshot(path.join(outDir, `editor@${args.scale}x.png`))];
       if (args.window) {
         shots.push(
