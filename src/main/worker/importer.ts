@@ -64,7 +64,7 @@ function convertISODateToLongForm(isoDate: string): string {
 /**
  * Decode and transform namespaced filenames
  * "Project.App.Design" -> "Project/App/Design" (dots are namespace separators)
- * "People%2Flena.trussell@agilebits.com" -> "People/lena.trussell@agilebits.com" (%2F is path separator, dots are part of name)
+ * "People%2Fjane.doe@example.com" -> "People/jane.doe@example.com" (%2F is path separator, dots are part of name)
  * "C%2B%2B" -> "C++"
  */
 function transformNamespacedPath(filename: string): string {
@@ -96,7 +96,7 @@ function extractTitle(transformedName: string): string {
 
 /**
  * Rewrite alias-based wikilinks to canonical titles
- * Example: [[People/rachel.yarnold@agilebits.com]] -> [[People/Rachel Yarnold]]
+ * Example: [[People/jane.doe@example.com]] -> [[People/Jane Doe]]
  */
 function rewriteAliasLinks(content: string, aliasMappings: Record<string, string>): string {
   let result = content;

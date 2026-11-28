@@ -3,7 +3,7 @@ import { queryTokens, stripFrontmatter } from '../worker/indexer';
 
 describe('queryTokens', () => {
   it('splits a compound query like an email address into its component tokens', () => {
-    expect(queryTokens('jon@iomergent.com')).toEqual(['jon', 'iomergent', 'com']);
+    expect(queryTokens('pat@contoso.example')).toEqual(['pat', 'contoso', 'example']);
   });
 
   it('lowercases and drops empty tokens', () => {

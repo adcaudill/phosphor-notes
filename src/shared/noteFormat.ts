@@ -266,7 +266,7 @@ function isEmptyLeafBullet(parsed: ParsedOutlinerLine[], i: number, level: numbe
  * Inserts `addition` as new children (appended after any existing ones) of
  * a specific existing bullet, found by a case-insensitive substring match
  * against each bullet's own text (marker and checkbox stripped - matching
- * "IOmergent" against a bullet reading `- [[IOmergent]]` needs no special
+ * "Acme" against a bullet reading `- [[Acme]]` needs no special
  * wikilink handling, since the bracketed text already contains it as a
  * plain substring). Only applies to outliner notes.
  *

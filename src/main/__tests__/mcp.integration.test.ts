@@ -739,7 +739,7 @@ describe('MCP server (integration)', () => {
     it('inserts under an existing bullet, after its existing children, end-to-end', async () => {
       fs.writeFileSync(
         path.join(vault, 'Nested.md'),
-        '---\nmode: outliner\n---\n- [[IOmergent]]\n    - Meetings\n        - Standup\n- Personal\n'
+        '---\nmode: outliner\n---\n- [[Acme]]\n    - Meetings\n        - Standup\n- Personal\n'
       );
       const client = await makeClient(token);
       const result = await client.callTool({
@@ -754,7 +754,7 @@ describe('MCP server (integration)', () => {
       });
       expect(fs.readFileSync(path.join(vault, 'Nested.md'), 'utf-8')).toBe(
         '---\nmode: outliner\n---\n' +
-          '- [[IOmergent]]\n' +
+          '- [[Acme]]\n' +
           '    - Meetings\n' +
           '        - Standup\n' +
           '        - Planning session\n' +

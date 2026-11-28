@@ -263,7 +263,7 @@ describe('localDailyNoteFilename', () => {
 describe('insertUnderBullet', () => {
   const fixture =
     '---\nmode: outliner\n---\n' +
-    '- [[IOmergent]]\n' +
+    '- [[Acme]]\n' +
     '    - Meetings\n' +
     '        - Standup notes\n' +
     '    - Followups\n' +
@@ -274,7 +274,7 @@ describe('insertUnderBullet', () => {
     const result = insertUnderBullet(fixture, 'Meetings', 'New meeting');
     expect(result.doc).toBe(
       '---\nmode: outliner\n---\n' +
-        '- [[IOmergent]]\n' +
+        '- [[Acme]]\n' +
         '    - Meetings\n' +
         '        - Standup notes\n' +
         '        - New meeting\n' +
@@ -291,7 +291,7 @@ describe('insertUnderBullet', () => {
     const result = insertUnderBullet(fixture, 'Followups', 'New sub');
     expect(result.doc).toBe(
       '---\nmode: outliner\n---\n' +
-        '- [[IOmergent]]\n' +
+        '- [[Acme]]\n' +
         '    - Meetings\n' +
         '        - Standup notes\n' +
         '    - Followups\n' +
@@ -309,10 +309,10 @@ describe('insertUnderBullet', () => {
   });
 
   it('does not extend the children block across a top-level wikilink bullet with no relation', () => {
-    // "[[IOmergent]]" is matched by a substring of its own bracketed text,
+    // "[[Acme]]" is matched by a substring of its own bracketed text,
     // with no special wikilink stripping needed.
-    const result = insertUnderBullet(fixture, 'IOmergent', 'New top item');
-    // IOmergent's children run through "Followups" (its last level-1 child);
+    const result = insertUnderBullet(fixture, 'Acme', 'New top item');
+    // Acme's children run through "Followups" (its last level-1 child);
     // "Personal" is a sibling at level 0, so insertion lands right before it,
     // as a new level-1 child (baseLevel = parentLevel(0) + 1 = 4 spaces).
     expect(result.doc).toContain('    - Followups\n    - New top item\n- Personal\n');

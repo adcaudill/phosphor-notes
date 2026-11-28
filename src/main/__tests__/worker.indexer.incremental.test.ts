@@ -33,11 +33,11 @@ describe('upsertSearchDoc / removeSearchDoc (real MiniSearch)', () => {
   it('replaces stale content so old text no longer matches and stored content is current', () => {
     const engine = buildIndex();
     upsertSearchDoc(engine, '2026-09-24.md', 'Met with [[MissionWire]] team');
-    upsertSearchDoc(engine, '2026-09-24.md', 'Met with [[MissionWired]] team about Valence');
+    upsertSearchDoc(engine, '2026-09-24.md', 'Met with [[Northwind]] team about Fabrikam');
 
-    expect(filenames(engine, 'Valence')).toEqual(['2026-09-24.md']);
-    const [hit] = engine.search('MissionWired', { prefix: true, combineWith: 'AND' });
-    expect(hit.content).toContain('[[MissionWired]]');
+    expect(filenames(engine, 'Fabrikam')).toEqual(['2026-09-24.md']);
+    const [hit] = engine.search('Northwind', { prefix: true, combineWith: 'AND' });
+    expect(hit.content).toContain('[[Northwind]]');
     // No duplicate documents for the same id
     expect(engine.search('team', { prefix: true })).toHaveLength(1);
   });
@@ -91,7 +91,7 @@ describe('indexer worker message handling', () => {
   }
 
   it('applies index-file and remove-file after the initial batch', async () => {
-    await handler([{ filename: '2026-09-30.md', content: 'Morning: M3 gets Valence' }]);
+    await handler([{ filename: '2026-09-30.md', content: 'Morning: M3 gets Fabrikam' }]);
     expect(await search('Freshservice')).toEqual([]);
 
     await handler({ type: 'index-file', filename: '2026-10-01.md', content: 'Freshservice call' });
@@ -100,7 +100,7 @@ describe('indexer worker message handling', () => {
     await handler({
       type: 'index-file',
       filename: '2026-09-30.md',
-      content: 'Morning: M3 gets Valence\nAfternoon: 4b report'
+      content: 'Morning: M3 gets Fabrikam\nAfternoon: 4b report'
     });
     expect(await search('4b report')).toEqual(['2026-09-30.md']);
 
@@ -109,14 +109,14 @@ describe('indexer worker message handling', () => {
   });
 
   it('queues updates that arrive before the initial batch and replays them after it', async () => {
-    await handler({ type: 'index-file', filename: 'new.md', content: 'Interop notes' });
+    await handler({ type: 'index-file', filename: 'new.md', content: 'Contoso notes' });
     await handler({ type: 'remove-file', filename: 'old.md' });
     await handler([
       { filename: 'old.md', content: 'LastPass' },
       { filename: 'other.md', content: 'unrelated' }
     ]);
 
-    expect(await search('Interop')).toEqual(['new.md']);
+    expect(await search('Contoso')).toEqual(['new.md']);
     expect(await search('LastPass')).toEqual([]);
   });
 });

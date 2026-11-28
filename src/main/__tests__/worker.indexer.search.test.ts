@@ -27,20 +27,20 @@ describe("search combineWith (matches the app's real index config)", () => {
         id: '1',
         filename: 'People/Jon.md',
         title: 'Jon',
-        content: 'Contact: jon@iomergent.com',
+        content: 'Contact: pat@contoso.example',
         tags: []
       },
       {
         id: '2',
-        filename: 'Nuts.com.md',
-        title: 'Nuts.com',
+        filename: 'Northwind.example.md',
+        title: 'Northwind.example',
         content: 'A grocery order.',
         tags: []
       },
       {
         id: '3',
-        filename: 'Monday.com.md',
-        title: 'Monday.com',
+        filename: 'Fabrikam.example.md',
+        title: 'Fabrikam.example',
         content: 'Project tracker notes.',
         tags: []
       }
@@ -50,16 +50,18 @@ describe("search combineWith (matches the app's real index config)", () => {
 
   it('OR-combine (the GUI default) matches unrelated notes sharing only one token', () => {
     const index = buildIndex();
-    const results = index.search('jon@iomergent.com', { prefix: true, combineWith: 'OR' });
+    const results = index.search('pat@contoso.example', { prefix: true, combineWith: 'OR' });
     const filenames = results.map((r) => r.filename);
-    // This is the reported bug: "Nuts.com"/"Monday.com" match on the bare
+    // This is the reported bug: "Northwind.example"/"Fabrikam.example" match on the bare
     // "com" token alone under OR-combine + prefix matching.
-    expect(filenames).toEqual(expect.arrayContaining(['Nuts.com.md', 'Monday.com.md']));
+    expect(filenames).toEqual(
+      expect.arrayContaining(['Northwind.example.md', 'Fabrikam.example.md'])
+    );
   });
 
   it('AND-combine (what search_notes now requests) excludes single-token matches', () => {
     const index = buildIndex();
-    const results = index.search('jon@iomergent.com', { prefix: true, combineWith: 'AND' });
+    const results = index.search('pat@contoso.example', { prefix: true, combineWith: 'AND' });
     const filenames = results.map((r) => r.filename);
     expect(filenames).toEqual(['People/Jon.md']);
   });
