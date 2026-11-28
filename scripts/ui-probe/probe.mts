@@ -6,7 +6,8 @@
  *   report.json / report.txt   every rendered line's geometry and styles
  *
  *   npm run ui:probe -- [fixtures...] [--build] [--scale 2] [--width 1000] [--height 700]
- *                       [--theme dark|light] [--window] [--cursor <line>] [--eval "<js>"]
+ *                       [--theme dark|light] [--font-size 16] [--line-height 1.5]
+ *                       [--window] [--cursor <line>] [--eval "<js>"]
  *                       [--out .ui-probe]
  *
  * Fixtures are names in scripts/ui-probe/fixtures (without .md) or paths to
@@ -30,6 +31,8 @@ interface Args {
   width: number;
   height: number;
   theme: string;
+  fontSize?: number;
+  lineHeight?: number;
   evalExpr?: string;
   cursor?: number;
   out: string;
@@ -59,6 +62,8 @@ function parseArgs(argv: string[]): Args {
     else if (a === '--width') args.width = Number(value());
     else if (a === '--height') args.height = Number(value());
     else if (a === '--theme') args.theme = value();
+    else if (a === '--font-size') args.fontSize = Number(value());
+    else if (a === '--line-height') args.lineHeight = Number(value());
     else if (a === '--eval') args.evalExpr = value();
     else if (a === '--cursor') args.cursor = Number(value());
     else if (a === '--out') args.out = path.resolve(value());
@@ -98,7 +103,11 @@ async function main(): Promise<void> {
       width: args.width,
       height: args.height,
       scale: args.scale,
-      settings: { theme: args.theme }
+      settings: {
+        theme: args.theme,
+        ...(args.fontSize ? { editorFontSize: args.fontSize } : {}),
+        ...(args.lineHeight ? { lineHeight: args.lineHeight } : {})
+      }
     });
     try {
       // Put the cursor at the end of a rendered line (1-based, as in the report):

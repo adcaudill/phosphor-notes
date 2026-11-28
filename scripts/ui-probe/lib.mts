@@ -146,6 +146,7 @@ function localDate(d: Date): string {
 const PROBE_SETTINGS: Record<string, unknown> = {
   theme: 'dark',
   editorFontSize: 16,
+  lineHeight: 1.5,
   enableTypewriterScrolling: false,
   enableParagraphDimming: false,
   windowBounds: { width: 1200, height: 800 }
@@ -362,10 +363,12 @@ const INK_FN = `async (b64, rects, scale) => {
     // Only measure what is fully on screen: a widget scrolled out of view, or
     // cut off by the window edge, would give a partial, misleading box.
     if (r.x < 0 || r.y < 0 || r.x + r.w > innerWidth || r.y + r.h > innerHeight) return null;
-    const x0 = Math.max(0, Math.floor(r.x * scale));
-    const y0 = Math.max(0, Math.floor(r.y * scale));
-    const w = Math.min(c.width - x0, Math.ceil(r.w * scale));
-    const h = Math.min(c.height - y0, Math.ceil(r.h * scale));
+    // Round inward, so a fractional edge never takes in a pixel row of the
+    // neighbouring line (e.g. its nesting guides).
+    const x0 = Math.max(0, Math.ceil(r.x * scale));
+    const y0 = Math.max(0, Math.ceil(r.y * scale));
+    const w = Math.min(c.width - x0, Math.floor((r.x + r.w) * scale) - x0);
+    const h = Math.min(c.height - y0, Math.floor((r.y + r.h) * scale) - y0);
     if (w <= 0 || h <= 0) return null;
     const d = ctx.getImageData(x0, y0, w, h).data;
     const counts = new Map();
@@ -570,28 +573,13 @@ export async function launchProbe(opts: ProbeOptions): Promise<Probe> {
         const report = await evaluate<Omit<EditorReport, 'scale'> | null>(REPORT_SCRIPT);
         if (!report) throw new Error('No editor on screen');
 
-        // Measure what the widgets actually painted, from a screenshot. The
-        // ink of a checkbox is searched in its box widened to the full line
-        // height, so a glyph drawn outside its own box is still found.
+        // Measure what the widgets actually painted, from a screenshot,
+        // within each widget's own box. (The checkbox clips its drawing to
+        // its box - overflow: hidden - so nothing it paints is outside it,
+        // and a wider search picks up neighbouring lines' nesting guides.)
         type RawWidget = WidgetReport & { _raw: { x: number; y: number; w: number; h: number } };
-        const all = report.lines.flatMap((l) =>
-          (l.widgets as RawWidget[]).map((w) => ({ w, line: l }))
-        );
-        const rowHeight = parseFloat(report.lineHeight) || 22;
-        const rects = all.map(({ w, line }) =>
-          w.kind === 'checkbox'
-            ? {
-                x: w._raw.x,
-                // its own row, clipped to its own line (not the neighbours' guides)
-                y: Math.max(line.top, w._raw.y - (rowHeight - w._raw.h) / 2),
-                w: w._raw.w,
-                h: Math.min(
-                  rowHeight,
-                  line.top + line.height - Math.max(line.top, w._raw.y - (rowHeight - w._raw.h) / 2)
-                )
-              }
-            : { x: w._raw.x, y: w._raw.y, w: w._raw.w, h: w._raw.h }
-        );
+        const all = report.lines.flatMap((l) => (l.widgets as RawWidget[]).map((w) => ({ w })));
+        const rects = all.map(({ w }) => ({ x: w._raw.x, y: w._raw.y, w: w._raw.w, h: w._raw.h }));
         if (rects.length > 0) {
           const shot = await send<{ data: string }>('Page.captureScreenshot', { format: 'png' });
           const inks = await evaluate<Array<WidgetReport['ink']>>(
