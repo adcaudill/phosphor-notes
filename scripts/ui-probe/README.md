@@ -81,5 +81,7 @@ Run it with `node my-script.mts`.
 ## Fixtures
 
 `fixtures/*.md` hold generic sample notes covering the layouts that have
-caused trouble. Add one for any new layout bug, using made-up content only
+caused trouble. `fixtures/_assets/` is copied into every run's vault as its
+`_assets` folder, so `![[embeds]]` resolve: generated test images (a wide
+and a small PNG) and a one-page PDF. Add one for any new layout bug, using made-up content only
 (this is a public repo - never real notes).

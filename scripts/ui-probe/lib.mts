@@ -24,6 +24,11 @@ export interface ProbeOptions {
   note: string;
   /** Extra notes to put in the vault, by vault-relative path. */
   otherNotes?: Record<string, string>;
+  /**
+   * Folder copied to the vault's `_assets` (where ![[embeds]] are served
+   * from). Defaults to scripts/ui-probe/fixtures/_assets.
+   */
+  assetsDir?: string;
   /** Settings merged over stable probe defaults (theme, font size, ...). */
   settings?: Record<string, unknown>;
   /** Viewport size in CSS pixels. Default 1000x700. */
@@ -306,6 +311,28 @@ const REPORT_SCRIPT = `(() => {
       }
     });
 
+    // Text inside a widget broken mid-word: a word whose characters land on
+    // more than one row means the widget was squeezed narrower than its
+    // content (e.g. a button label wrapping letter by letter).
+    for (const wEl of el.querySelectorAll('[contenteditable=false]')) {
+      const tw = document.createTreeWalker(wEl, NodeFilter.SHOW_TEXT);
+      for (let node = tw.nextNode(); node; node = tw.nextNode()) {
+        const parentEl = node.parentElement;
+        // Icon fonts render a ligature name (e.g. "check_box") as one glyph.
+        if (!parentEl || /material-symbols/.test(parentEl.className)) continue;
+        const text = node.textContent || '';
+        for (const m of text.matchAll(/\\S+/g)) {
+          const r = document.createRange();
+          r.setStart(node, m.index);
+          r.setEnd(node, m.index + m[0].length);
+          const tops = new Set([...r.getClientRects()].filter((c) => c.width > 0).map((c) => Math.round(c.top)));
+          if (tops.size > 1) {
+            overlaps.push('text in ' + (wEl.className || 'widget').split(' ')[0] + ' breaks mid-word: "' + m[0] + '" spans ' + tops.size + ' rows');
+          }
+        }
+      }
+    }
+
     const guideColumns = [...(el.style.background || '').matchAll(/var\\(--editor-nesting-guide\\) (?:calc\\()*([\\d.]+)(?:ch| \\*)/g)]
       .map((m) => Number(m[1]))
       .filter((v, k, all) => all.indexOf(v) === k);
@@ -416,6 +443,9 @@ export async function launchProbe(opts: ProbeOptions): Promise<Probe> {
     fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });
     fs.writeFileSync(path.join(vault, rel), text);
   }
+  const assets =
+    opts.assetsDir ?? path.join(opts.repo, 'scripts', 'ui-probe', 'fixtures', '_assets');
+  if (fs.existsSync(assets)) fs.cpSync(assets, path.join(vault, '_assets'), { recursive: true });
   fs.writeFileSync(
     path.join(profile, '.phosphor', 'config.json'),
     JSON.stringify({ lastVault: vault })
@@ -724,11 +754,13 @@ export function formatReport(report: EditorReport): string {
         `       ${w.kind} "${w.label}" box ${col(w.left)}..${col(w.right)} h=${w.height}${ink}${dy}${vert}`
       );
     }
-    // Every line should be a whole number of rows tall - a widget that's
-    // taller than the text (or sits too far up/down) makes its line taller.
+    // Every line should be a whole number of rows tall - an inline widget
+    // that's too tall (or sits too far up/down) makes its line taller. Lines
+    // holding a block-sized widget (an image or PDF embed) are tall by design.
     const lh = parseFloat(report.lineHeight);
     const rowsTall = Math.max(1, Math.round(l.height / lh));
-    if (lh && Math.abs(l.height - rowsTall * lh) > 0.5) {
+    const hasBlockWidget = l.widgets.some((w) => w.height > lh * 1.5);
+    if (lh && !hasBlockWidget && Math.abs(l.height - rowsTall * lh) > 0.5) {
       out.push(
         `       !! line is ${l.height}px tall, not a whole number of ${report.lineHeight} rows`
       );
