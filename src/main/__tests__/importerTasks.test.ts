@@ -39,7 +39,11 @@ describe('convertLogseqTasks', () => {
     ['WAITING', ['- WAITING On reply'], '- [ ] On reply @status(waiting)'],
     ['CANCELLED', ['- CANCELLED Old plan'], '- [x] Old plan @status(cancelled)'],
     ['NOW and DONE', ['- NOW Writing', '- DONE Shipped'], '- [/] Writing\n- [x] Shipped'],
-    ['TODO in the middle of a line', ['- Notes - TODO is a word here'], '- Notes - TODO is a word here'],
+    [
+      'TODO in the middle of a line',
+      ['- Notes - TODO is a word here'],
+      '- Notes - TODO is a word here'
+    ],
     [
       'an inline DEADLINE',
       ['- TODO Submit DEADLINE: <2026-12-10 Thu> report'],
