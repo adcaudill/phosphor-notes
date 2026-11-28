@@ -184,6 +184,21 @@ function AppContent(): React.JSX.Element {
     html.setAttribute('data-theme-mode', effectiveTheme);
   }, [settings.theme, settings.colorPalette]);
 
+  // Apply the editor font size and line height (read by .cm-content in main.css)
+  useEffect(() => {
+    const style = document.documentElement.style;
+    if (Number.isFinite(settings.editorFontSize) && settings.editorFontSize > 0) {
+      style.setProperty('--editor-font-size', `${settings.editorFontSize}px`);
+    } else {
+      style.removeProperty('--editor-font-size');
+    }
+    if (Number.isFinite(settings.lineHeight) && settings.lineHeight > 0) {
+      style.setProperty('--editor-line-height', String(settings.lineHeight));
+    } else {
+      style.removeProperty('--editor-line-height');
+    }
+  }, [settings.editorFontSize, settings.lineHeight]);
+
   // Sync feature toggles with settings. Adjusted during render rather than in an
   // effect, to avoid an extra render pass:
   // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes

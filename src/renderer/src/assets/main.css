@@ -854,8 +854,9 @@ body {
 .cm-content {
   padding-top: 40px !important;
   padding-bottom: 45vh !important;
-  font-size: var(--font-size-base);
-  line-height: 1.6;
+  /* From the Font Size / Line Height settings (set on :root by App.tsx). */
+  font-size: var(--editor-font-size, var(--font-size-base));
+  line-height: var(--editor-line-height, 1.6);
   --editor-letter-spacing: 0.3px;
   letter-spacing: var(--editor-letter-spacing);
   /* One character column, including the letter-spacing. Anything positioned
