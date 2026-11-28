@@ -5,6 +5,7 @@ import * as vaultState from '../vaultState';
 import * as vaultWriter from '../vaultWriter';
 import * as noteHistory from '../noteHistory';
 import { notifyNoteWritten } from './deps';
+import { findLinkCandidates, afterNoteRenamed } from '../noteOps';
 import type { McpClientConfig } from '../../types/phosphor.d';
 
 /**
@@ -53,9 +54,14 @@ export function setupMcpIPC(mainWindow: BrowserWindow): void {
   ipcMain.handle('mcp:list-versions', async (_, limit?: number) => {
     const vaultPath = vaultState.getVaultPath();
     if (!vaultPath) return [];
-    return noteHistory.listVersions(vaultPath, {
-      limit: typeof limit === 'number' && limit > 0 ? Math.min(limit, 200) : 30
-    });
+    const max = typeof limit === 'number' && limit > 0 ? Math.min(limit, 200) : 30;
+    // A rename and the link rewrites it caused share an opId; show the rename
+    // as one row (reverting it puts the links back too) rather than one per note.
+    const all = await noteHistory.listVersions(vaultPath, { limit: 1000 });
+    const renameOps = new Set(all.filter((v) => v.kind === 'rename' && v.opId).map((v) => v.opId));
+    return all
+      .filter((v) => v.kind === 'rename' || !v.opId || !renameOps.has(v.opId))
+      .slice(0, max);
   });
 
   // Revert from Settings: a user action, so the MCP write scope doesn't apply,
@@ -63,6 +69,18 @@ export function setupMcpIPC(mainWindow: BrowserWindow): void {
   ipcMain.handle('mcp:restore-version', async (_, id: string) => {
     const vaultPath = vaultState.getVaultPath();
     if (!vaultPath) throw new Error('No vault is open');
+    const { entry } = await noteHistory.readVersion(vaultPath, String(id));
+    if (entry.kind === 'rename' && entry.fromPath) {
+      // Undo a rename by moving the note back, which also puts its links back.
+      const moved = await vaultWriter.renameNote(vaultPath, entry.path, entry.fromPath, {
+        expectedGeneration: vaultState.getGeneration(),
+        includeChildren: entry.includeChildren,
+        linkCandidates: (paths) => findLinkCandidates(paths) ?? [],
+        history: { tool: 'revert (app)' }
+      });
+      await afterNoteRenamed(vaultPath, moved, mainWindow);
+      return { path: moved.to, versionId: moved.versionId };
+    }
     const result = await vaultWriter.restoreVersion(vaultPath, String(id), {
       expectedGeneration: vaultState.getGeneration(),
       history: { tool: 'revert (app)' }

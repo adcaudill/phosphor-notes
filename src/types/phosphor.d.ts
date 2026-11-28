@@ -56,6 +56,10 @@ export interface McpNoteVersion {
   tool: string;
   summary?: string;
   size: number;
+  /** 'content' (default): the note's content was replaced. 'delete': the note was deleted. 'rename': it moved from fromPath to path. */
+  kind?: 'content' | 'rename' | 'delete';
+  fromPath?: string;
+  opId?: string;
 }
 
 export interface McpClientConfig {

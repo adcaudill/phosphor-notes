@@ -219,7 +219,16 @@ export const McpSettingsPanel: React.FC = () => {
   };
 
   const handleRevert = async (version: McpNoteVersion): Promise<void> => {
-    if (
+    const when = new Date(version.ts).toLocaleString();
+    const question =
+      version.kind === 'rename'
+        ? `Move "${version.path}" back to "${version.fromPath}" (renamed by ${version.tool}, ${when})?\n\nLinks to it are updated back as well.`
+        : version.kind === 'delete'
+          ? `Restore "${version.path}", deleted by ${version.tool} (${when})?`
+          : null;
+    if (question !== null) {
+      if (!window.confirm(question)) return;
+    } else if (
       !window.confirm(
         `Revert "${version.path}" to how it was before this change (${version.tool}, ` +
           `${new Date(version.ts).toLocaleString()})?\n\nIts current content will be saved first, so ` +
@@ -527,7 +536,13 @@ export const McpSettingsPanel: React.FC = () => {
                   <span className="mcp-activity-time">{new Date(version.ts).toLocaleString()}</span>
                   <span className="mcp-activity-tool">
                     {version.tool}
-                    <span className="mcp-activity-target"> {version.path}</span>
+                    <span className="mcp-activity-target">
+                      {version.kind === 'rename'
+                        ? ` ${version.fromPath} → ${version.path}`
+                        : version.kind === 'delete'
+                          ? ` deleted ${version.path}`
+                          : ` ${version.path}`}
+                    </span>
                   </span>
                   <button
                     type="button"
